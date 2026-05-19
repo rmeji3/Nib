@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nib — Read documents with grounded AI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" />
+  <link rel="stylesheet" href="landing.css" />
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <a class="brand" href="#">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <path d="M4 20 L18 6 L20 8 L8 22 L4 24 Z" fill="currentColor"/>
+        <path d="M4 20 L8 22" stroke="currentColor" stroke-width="1.4" opacity=".4"/>
+      </svg>
+    </span>
+    <span class="brand-name">Nib</span>
+  </a>
+  <div class="nav-links">
+    <a href="#product">Product</a>
+    <a href="#how">How it works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#changelog">Changelog</a>
+  </div>
+  <div class="nav-cta">
+    <a class="link" href="#">Sign in</a>
+    <a class="btn primary" href="#">Try Nib free</a>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────── -->
+<header class="hero">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="hero-glow a"></div>
+    <div class="hero-glow b"></div>
+    <div class="hero-glow c"></div>
+  </div>
+
+  <div class="hero-inner">
+    <div class="eyebrow">
+      <span class="eyebrow-dot"></span>
+      Nib 1.0 · grounded multimodal reading
+    </div>
+
+    <h1 class="hero-title">
+      The PDF reader that <em>actually</em> reads&nbsp;back.
+    </h1>
+
+    <p class="hero-sub">
+      A calm, professional document reader with a research-grade AI built in.
+      Ask anything &mdash; about a chart, a table, a buried footnote &mdash;
+      and get answers grounded in the exact page, with citations you can
+      click to verify.
+    </p>
+
+    <div class="hero-cta">
+      <a class="btn primary lg" href="index.html">
+        Open the reader
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+      </a>
+      <a class="btn ghost lg" href="#how">
+        See how it works
+      </a>
+    </div>
+
+    <div class="hero-meta">
+      <span><b>SOC 2</b> Type II</span>
+      <span class="dot">·</span>
+      <span><b>Region-locked</b> processing</span>
+      <span class="dot">·</span>
+      <span><b>Never trains</b> on your documents</span>
+    </div>
+  </div>
+
+  <!-- Hero product preview -->
+  <div class="hero-preview" aria-label="Nib product preview">
+    <div class="window">
+      <div class="window-chrome">
+        <div class="window-dots"><i></i><i></i><i></i></div>
+        <div class="window-url">nib.app/d/hl-tr-2025-014</div>
+        <div class="window-spacer"></div>
+      </div>
+      <div class="window-body">
+        <!-- left: paper page -->
+        <div class="preview-paper">
+          <div class="pp-h1">Adaptive Liquid Cooling</div>
+          <div class="pp-h2">for High-Density GPU Clusters</div>
+          <div class="pp-byline">R. Vasquez · K. Sato · M. Okonkwo · D. Liang</div>
+          <div class="pp-abstract">
+            Modern accelerator deployments routinely exceed 40&thinsp;kW per rack,
+            with B200-class systems approaching <span class="hl">80&thinsp;kW</span>
+            under sustained inference loads. We describe a hybrid rear-door + direct-to-chip
+            liquid cooling architecture and characterize its thermal envelope.
+          </div>
+          <div class="pp-h3">2. System Architecture</div>
+          <div class="pp-p">The deployed topology is a two-stage loop. A primary
+          facility loop carries water at 18–22&thinsp;°C from rooftop dry coolers
+          to a row-end coolant distribution unit (CDU). The CDU isolates the
+          facility side from a treated propylene-glycol mix.</div>
+          <div class="pp-figure">
+            <svg viewBox="0 0 240 100" width="100%" height="80">
+              <rect x="6" y="14" width="38" height="22" fill="#e2dccd" stroke="#5e574a" stroke-width=".6"/>
+              <rect x="100" y="38" width="48" height="28" fill="none" stroke="#5e574a" stroke-width=".8"/>
+              <rect x="190" y="20" width="42" height="60" fill="#f4f0e6" stroke="#5e574a" stroke-width=".6"/>
+              <path d="M44 22 Q72 22 100 50" stroke="#7d8aa8" stroke-width=".9" fill="none"/>
+              <path d="M44 30 Q72 30 100 60" stroke="#a85a4a" stroke-width=".9" fill="none" stroke-dasharray="2 2"/>
+              <path d="M148 50 L190 40" stroke="#7d8aa8" stroke-width=".9" fill="none"/>
+              <path d="M148 60 L190 70" stroke="#a85a4a" stroke-width=".9" fill="none" stroke-dasharray="2 2"/>
+              <text x="124" y="32" font-family="Source Serif 4" font-size="6" fill="#2a2620" text-anchor="middle" font-weight="600">CDU</text>
+              <text x="25" y="46" font-family="Source Serif 4" font-size="5" fill="#5e574a" text-anchor="middle">Dry cooler</text>
+              <text x="211" y="94" font-family="Source Serif 4" font-size="5" fill="#5e574a" text-anchor="middle">Rack + RDHx</text>
+            </svg>
+            <div class="pp-caption">Figure 1. Two-stage cooling loop.</div>
+          </div>
+        </div>
+
+        <!-- right: chat -->
+        <div class="preview-chat">
+          <div class="pc-head">
+            <span class="pc-dot"></span>
+            <span class="pc-title">Ask this document</span>
+          </div>
+          <div class="pc-msg user">What's the highest peak thermal load?</div>
+          <div class="pc-msg-assistant">
+            <div class="pc-byline"><span class="pc-byline-dot"></span>Nib</div>
+            <div class="pc-bubble">
+              Rack <b>R6</b> (8 × B200) reaches the highest peak load at
+              <b>62.4 kW</b><span class="pc-cite">1</span>, exceeding the
+              original 32 kW design budget by 95%.
+            </div>
+            <div class="pc-source">
+              <span class="pc-src-idx">1</span>
+              <span class="pc-src-body">
+                <span class="pc-src-where">Table 1, p.4</span>
+                <span class="pc-src-snippet">R6 · 8 × B200 · Peak 62.4 kW (Feb&nbsp;28, 9-day window).</span>
+              </span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+            </div>
+          </div>
+          <div class="pc-composer">
+            <span>Ask a follow-up…</span>
+            <span class="pc-send">↵</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logos / trust strip -->
+  <div class="trust">
+    <span class="trust-label">Used by research teams at</span>
+    <div class="trust-logos">
+      <span>Hyperline Labs</span>
+      <span>Arvex&nbsp;Bio</span>
+      <span>Northwind&nbsp;Capital</span>
+      <span>MERIDIAN</span>
+      <span>Quanta&nbsp;Research</span>
+      <span>Brink&nbsp;&amp;&nbsp;Hall</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Value props ─────────────────────────────────────────────────── -->
+<section class="features" id="product">
+  <div class="section-header">
+    <div class="kicker">Why Nib</div>
+    <h2 class="section-title">Built for documents that <em>actually</em> matter.</h2>
+    <p class="section-sub">
+      Research papers, financial filings, technical specs, contracts. Anything
+      where getting the wrong answer is worse than no answer at all.
+    </p>
+  </div>
+
+  <div class="feat-grid">
+    <article class="feat">
+      <div class="feat-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h14l4 4v10a1 1 0 0 1-1 1H3z"/><path d="M9 5v6h8"/><path d="M7 16h10"/></svg>
+      </div>
+      <h3>Sees charts, tables &amp; figures</h3>
+      <p>
+        Most PDF chat tools embed only extracted text and hallucinate the rest.
+        Nib runs vision extraction over every visual block — chart axes,
+        table cells, figure captions — and grounds answers in what's
+        actually drawn on the page.
+      </p>
+    </article>
+
+    <article class="feat">
+      <div class="feat-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="16" rx="1"/><path d="M7 9h6M7 13h6M7 17h4"/><circle cx="19" cy="6" r="2.4" fill="currentColor"/></svg>
+      </div>
+      <h3>Citations you can click</h3>
+      <p>
+        Every claim points back to a block on a page. Click the chip, jump to
+        the exact paragraph, table row, or figure region. Skim the source for
+        five seconds, then trust the answer.
+      </p>
+    </article>
+
+    <article class="feat">
+      <div class="feat-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+      </div>
+      <h3>Refuses to guess</h3>
+      <p>
+        When evidence is thin, Nib says so. A confidence indicator shows you
+        when the model would be reaching, and the UI prompts you to narrow
+        the question instead of fabricating an answer.
+      </p>
+    </article>
+  </div>
+</section>
+
+<!-- ── Big preview / how it works ──────────────────────────────────── -->
+<section class="how" id="how">
+  <div class="section-header">
+    <div class="kicker">How it works</div>
+    <h2 class="section-title">Three citation styles. <em>Your</em> reading flow.</h2>
+    <p class="section-sub">
+      Different documents and different readers want different friction.
+      Nib lets you choose how citations show up — and switch on the fly.
+    </p>
+  </div>
+
+  <div class="how-tabs">
+    <div class="how-tabs-rail">
+      <button class="how-tab active" data-tab="inline">
+        <span class="tab-num">01</span>
+        <span class="tab-body">
+          <span class="tab-title">Inline chips</span>
+          <span class="tab-desc">Numbered chips in the prose. Scannable and compact.</span>
+        </span>
+      </button>
+      <button class="how-tab" data-tab="cards">
+        <span class="tab-num">02</span>
+        <span class="tab-body">
+          <span class="tab-title">Source cards</span>
+          <span class="tab-desc">Expanded source cards under each answer. Best for skimming evidence.</span>
+        </span>
+      </button>
+      <button class="how-tab" data-tab="dots">
+        <span class="tab-num">03</span>
+        <span class="tab-body">
+          <span class="tab-title">Subtle dots</span>
+          <span class="tab-desc">Minimal markers that don't break the reading flow. Hover for preview.</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="how-preview">
+      <!-- INLINE -->
+      <div class="cite-demo active" data-tab="inline">
+        <div class="cd-byline"><span class="cd-dot"></span>Nib</div>
+        <div class="cd-body">
+          Figure 3 plots throughput against secondary coolant flow rate, swept
+          from 1.0 to 3.6&nbsp;L/min<span class="cd-chip">1</span>. The curve
+          shows a pronounced <b>knee at 2.4 L/min</b><span class="cd-chip">1</span>,
+          which the paper adopts as the steady-state setpoint<span class="cd-chip">2</span>.
+        </div>
+      </div>
+
+      <!-- CARDS -->
+      <div class="cite-demo" data-tab="cards">
+        <div class="cd-byline"><span class="cd-dot"></span>Nib</div>
+        <div class="cd-body">
+          Figure 3 plots throughput against secondary coolant flow rate, swept
+          from 1.0 to 3.6&nbsp;L/min<span class="cd-chip">1</span>. The curve
+          shows a pronounced <b>knee at 2.4 L/min</b><span class="cd-chip">1</span>.
+        </div>
+        <div class="cd-cards">
+          <div class="cd-card">
+            <span class="cd-card-idx">1</span>
+            <span class="cd-card-body">
+              <span class="cd-card-where">Figure 3, p.5</span>
+              <span class="cd-card-snippet">Sustained training throughput as a function of secondary coolant flow rate. Knee at 2.4 L/min…</span>
+            </span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+          </div>
+          <div class="cd-card">
+            <span class="cd-card-idx">2</span>
+            <span class="cd-card-body">
+              <span class="cd-card-where">§4, p.5</span>
+              <span class="cd-card-snippet">We adopt 2.4 L/min as the nominal setpoint for steady-state operation…</span>
+            </span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOTS -->
+      <div class="cite-demo" data-tab="dots">
+        <div class="cd-byline"><span class="cd-dot"></span>Nib</div>
+        <div class="cd-body">
+          Figure 3 plots throughput against secondary coolant flow rate, swept
+          from 1.0 to 3.6&nbsp;L/min<span class="cd-pip"></span>. The curve
+          shows a pronounced <b>knee at 2.4 L/min</b><span class="cd-pip"></span>,
+          which the paper adopts as the steady-state setpoint<span class="cd-pip"></span>.
+        </div>
+        <div class="cd-hint">Hover any dot to see the source · click to jump to the page.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Multimodal section ──────────────────────────────────────────── -->
+<section class="multimodal">
+  <div class="mm-grid">
+    <div class="mm-text">
+      <div class="kicker">Multimodal by design</div>
+      <h2 class="section-title alt">If you can <em>see</em> it in the PDF,<br/>Nib can answer about it.</h2>
+      <p class="section-sub alt">
+        Tables. Bar charts. Axis labels. Hand-drawn schematics. Photographs of
+        equipment. Captions printed three columns away from their figure.
+        Nib indexes them all as first-class blocks &mdash; not afterthoughts.
+      </p>
+
+      <ul class="mm-list">
+        <li>
+          <span class="mm-list-mark"></span>
+          <span><b>Tables</b> are extracted as structured grids. Ask about a single cell or a column trend.</span>
+        </li>
+        <li>
+          <span class="mm-list-mark"></span>
+          <span><b>Charts &amp; graphs</b> have their axes, legends, and key inflections parsed and indexed.</span>
+        </li>
+        <li>
+          <span class="mm-list-mark"></span>
+          <span><b>Figures</b> get vision-model summaries paired with their caption text.</span>
+        </li>
+        <li>
+          <span class="mm-list-mark"></span>
+          <span><b>Equations &amp; footnotes</b> are linked back to their referencing paragraph.</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="mm-card">
+      <div class="mm-card-h">
+        <span class="mm-card-label">Block-level provenance</span>
+        <span class="mm-card-sub">What Nib stores for every page</span>
+      </div>
+      <div class="mm-card-body">
+        <div class="mm-row">
+          <span class="mm-row-tag text">TEXT</span>
+          <span class="mm-row-name">§2.1 Heat-Path Split</span>
+          <span class="mm-row-meta">p.3 · 8 sentences</span>
+        </div>
+        <div class="mm-row">
+          <span class="mm-row-tag table">TABLE</span>
+          <span class="mm-row-name">Per-rack thermal envelopes</span>
+          <span class="mm-row-meta">p.4 · 6 rows × 6 cols</span>
+        </div>
+        <div class="mm-row">
+          <span class="mm-row-tag chart">CHART</span>
+          <span class="mm-row-name">Throughput vs. flow rate</span>
+          <span class="mm-row-meta">p.5 · 2 series</span>
+        </div>
+        <div class="mm-row">
+          <span class="mm-row-tag figure">FIGURE</span>
+          <span class="mm-row-name">Two-stage cooling loop</span>
+          <span class="mm-row-meta">p.3 · schematic</span>
+        </div>
+        <div class="mm-row">
+          <span class="mm-row-tag cap">CAPTION</span>
+          <span class="mm-row-name">"Figure 1: Two-stage cooling loop…"</span>
+          <span class="mm-row-meta">p.3 · refs §2</span>
+        </div>
+        <div class="mm-row">
+          <span class="mm-row-tag text">TEXT</span>
+          <span class="mm-row-name">5. Conclusion</span>
+          <span class="mm-row-meta">p.6 · 4 sentences</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Quote / social proof ────────────────────────────────────────── -->
+<section class="quote-wrap">
+  <figure class="quote">
+    <blockquote>
+      <span class="quote-mark">&ldquo;</span>
+      We replaced three different PDF tools with Nib. The day my analysts
+      stopped re-checking AI answers by hand was the day I knew it was working.
+    </blockquote>
+    <figcaption>
+      <span class="q-name">Priya Ramanathan</span>
+      <span class="q-role">Head of Research · Northwind Capital</span>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ── Pricing ─────────────────────────────────────────────────────── -->
+<section class="pricing" id="pricing">
+  <div class="section-header">
+    <div class="kicker">Pricing</div>
+    <h2 class="section-title">Honest pricing. <em>No</em> per-page surprises.</h2>
+    <p class="section-sub">
+      Start free. Move up only when you need it.
+    </p>
+  </div>
+
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">Reader</div>
+      <div class="plan-price"><span>$0</span><small>/month</small></div>
+      <div class="plan-tag">For curious individuals.</div>
+      <ul class="plan-features">
+        <li>50 pages per month</li>
+        <li>3 active documents</li>
+        <li>Text &amp; basic table extraction</li>
+        <li>Citations, inline only</li>
+      </ul>
+      <a class="btn ghost" href="#">Start free</a>
+    </div>
+
+    <div class="plan featured">
+      <div class="plan-badge">Most popular</div>
+      <div class="plan-name">Professional</div>
+      <div class="plan-price"><span>$24</span><small>/month</small></div>
+      <div class="plan-tag">For working researchers.</div>
+      <ul class="plan-features">
+        <li>2,000 pages per month</li>
+        <li>Unlimited documents</li>
+        <li>Full multimodal extraction</li>
+        <li>All three citation styles</li>
+        <li>Confidence indicators &amp; refusal</li>
+        <li>Export annotated PDFs</li>
+      </ul>
+      <a class="btn primary" href="#">Start 14-day trial</a>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Team</div>
+      <div class="plan-price"><span>$18</span><small>/user / month</small></div>
+      <div class="plan-tag">For research groups.</div>
+      <ul class="plan-features">
+        <li>Everything in Professional</li>
+        <li>Shared document libraries</li>
+        <li>SSO &amp; SCIM</li>
+        <li>SOC&nbsp;2 audit log access</li>
+        <li>Region-locked processing</li>
+      </ul>
+      <a class="btn ghost" href="#">Talk to sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ─────────────────────────────────────────────────────────── -->
+<section class="cta">
+  <div class="cta-glow" aria-hidden="true"></div>
+  <h2 class="cta-title">Read the dense&nbsp;stuff.<br/>Trust the&nbsp;answer.</h2>
+  <p class="cta-sub">Open Nib with a sample whitepaper loaded. No sign-up.</p>
+  <div class="cta-actions">
+    <a class="btn primary lg" href="index.html">
+      Open the reader
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+    </a>
+    <a class="btn ghost lg" href="#">Read the security overview</a>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────── -->
+<footer class="foot">
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <a class="brand" href="#">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <path d="M4 20 L18 6 L20 8 L8 22 L4 24 Z" fill="currentColor"/>
+            <path d="M4 20 L8 22" stroke="currentColor" stroke-width="1.4" opacity=".4"/>
+          </svg>
+        </span>
+        <span class="brand-name">Nib</span>
+      </a>
+      <p class="foot-blurb">A calmer way to read the documents that matter.</p>
+    </div>
+    <div class="foot-col">
+      <h4>Product</h4>
+      <a href="#">Features</a>
+      <a href="#">Pricing</a>
+      <a href="#">Changelog</a>
+      <a href="#">Roadmap</a>
+    </div>
+    <div class="foot-col">
+      <h4>Company</h4>
+      <a href="#">About</a>
+      <a href="#">Careers</a>
+      <a href="#">Press</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="foot-col">
+      <h4>Trust</h4>
+      <a href="#">Security</a>
+      <a href="#">Privacy</a>
+      <a href="#">SOC 2</a>
+      <a href="#">Data handling</a>
+    </div>
+  </div>
+  <div class="foot-bar">
+    <span>© 2026 Nib Reader, Inc.</span>
+    <span class="foot-bar-meta">Made with care in Brooklyn &amp; Lisbon.</span>
+  </div>
+</footer>
+
+<script>
+  // Tab interaction for the citation-style section
+  document.querySelectorAll(".how-tab").forEach((t) => {
+    t.addEventListener("click", () => {
+      const tab = t.dataset.tab;
+      document.querySelectorAll(".how-tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === tab));
+      document.querySelectorAll(".cite-demo").forEach((x) => x.classList.toggle("active", x.dataset.tab === tab));
+    });
+  });
+</script>
+
+</body>
+</html>
