@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(.\\\\mvnw compile *)",
+      "Bash(cmd /c \"mvnw.cmd compile -q\")",
+      "Bash(mvnw.cmd compile *)",
+      "Bash(./mvnw compile *)",
+      "Bash(node -e \"const p = require\\('./node_modules/vaul/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(findstr vaul *)",
+      "Bash(npm install *)",
+      "Bash(npm list *)"
     ]
   }
 }

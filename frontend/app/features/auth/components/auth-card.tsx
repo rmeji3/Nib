@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../hooks/use-auth';
 import { OAuthButton } from './oauth-button';
-import { NibLogo } from '../../../components/nib-logo';
+import { NibLogoSpinner } from '../../../components/nib-logo-spinner';
 
 export function AuthCard() {
   const { signIn, signUp, signInWithGoogle } = useAuth();
@@ -141,15 +141,7 @@ export function AuthCard() {
               isLoading || isOAuthLoading ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--text)] text-[var(--bg-base)] shadow-lg animate-pulse mb-6">
-              <NibLogo size={28} />
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--accent)]" style={{ animationDelay: '0ms' }} />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--accent)]" style={{ animationDelay: '150ms' }} />
-              <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--accent)]" style={{ animationDelay: '300ms' }} />
-            </div>
-            <span className="mt-4 text-xs font-medium text-[var(--text-dim)] uppercase tracking-wider">Authenticating...</span>
+            <NibLogoSpinner size={28} label="Authenticating" />
           </div>
 
           {/* --- SIGN IN FORM --- */}

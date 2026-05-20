@@ -1,6 +1,5 @@
 package com.nib.backend.dto;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record DocumentResponse(
@@ -10,5 +9,7 @@ public record DocumentResponse(
         String storageUrl,
         Long fileSizeBytes,
         Integer pageCount,
-        LocalDateTime createdAt
+        String createdAt,   // ISO-8601 string, e.g. "2026-05-19T20:35:06"
+        String deletedAt,   // null for active docs; ISO-8601 when trashed
+        boolean isStarred
 ) {}

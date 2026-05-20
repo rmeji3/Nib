@@ -2,14 +2,20 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, useAnimationControls } from 'framer-motion';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { NibLogo as NibLogoBase } from '../../components/nib-logo';
 export { NibLogoBase as NibLogo };
+import { NibLogoSpinner } from '../../components/nib-logo-spinner';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
+import { AnimatePresence } from 'framer-motion';
 import { useUpload } from '../upload/upload-context';
 import { useMergePdf } from './hooks/use-merge-pdf';
+import { API_URL, getAuthHeaders, renameDocument } from '../../../lib/api/documents';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,7 +104,59 @@ export function ViewerToolbar({
   onToggleChat: () => void;
 }) {
   const router = useRouter();
-  const { file } = useUpload();
+  const { file, documentId, documentUrl, documentName, setDocument } = useUpload();
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const renameMutation = useMutation({
+    mutationFn: (name: string) => renameDocument(documentId!, name),
+    onSuccess: (data) => {
+      const newName = data.originalFilename.replace(/\.pdf$/i, '');
+      setDocument(file, documentId, documentUrl, newName);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+
+  // Logo spin animation
+  const logoControls = useAnimationControls();
+  const logoAnimating = useRef(false);
+
+  const triggerLogoSpin = async (direction: 1 | -1) => {
+    if (logoAnimating.current) return;
+    logoAnimating.current = true;
+    try {
+      await logoControls.start({
+        rotate: direction * 360,
+        scale: [1, direction === 1 ? 1.3 : 1.15, 1],
+        transition: {
+          rotate: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+          scale: { duration: 0.45, times: [0, 0.4, 1], ease: 'easeOut' },
+        },
+      });
+    } finally {
+      logoControls.set({ rotate: 0 });
+      logoAnimating.current = false;
+    }
+  };
+
+  const startEdit = () => {
+    if (!documentId) return;
+    setEditValue(documentName ?? '');
+    setIsEditing(true);
+    // Focus after state settles
+    setTimeout(() => titleInputRef.current?.select(), 0);
+  };
+
+  const commitEdit = () => {
+    setIsEditing(false);
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== documentName) {
+      renameMutation.mutate(trimmed);
+    }
+  };
+
   const iconButtonClass =
     'inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[var(--text-dim)] transition hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]';
   const buttonClass =
@@ -107,23 +165,60 @@ export function ViewerToolbar({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/10 bg-[var(--bg-base)] px-3.5">
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 text-[13.5px] font-semibold">
-          <button
-            className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-sm bg-[var(--text)] text-[var(--bg-base)]"
-            onClick={() => router.push('/home')}
-            title="Go home"
-            type="button"
-          >
-            <NibLogoBase size={13} />
-          </button>
-          <span>Nib</span>
-        </div>
+        {/* Logo + wordmark — single clickable button with spin-on-hover logo */}
+        <button
+          type="button"
+          onClick={() => router.push('/home')}
+          title="Go home"
+          onMouseEnter={() => triggerLogoSpin(1)}
+          onMouseLeave={() => triggerLogoSpin(-1)}
+          className="-ml-1 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[13.5px] font-semibold text-[var(--text)] transition hover:bg-white/5"
+        >
+          <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--text)] text-[var(--bg-base)]">
+            <motion.span animate={logoControls} className="inline-flex">
+              <NibLogoBase size={13} />
+            </motion.span>
+          </span>
+          Nib
+        </button>
         <div className="mx-1 h-4 w-px bg-white/15" />
-        <div className="max-w-[380px] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] text-[var(--text-dim)]">
-          {file ? (
-            <b>{file.name}</b>
+        <div className="max-w-[360px] text-[13px] text-[var(--text-dim)]">
+          {isEditing ? (
+            /*
+             * Auto-sizing input: a hidden <span> mirroring the value lives in the same
+             * CSS grid cell — the grid sizes to the span, the input fills that cell.
+             * No JS measurement needed.
+             */
+            <div className="grid max-w-[360px]">
+              <span
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 whitespace-pre rounded border border-transparent px-1.5 py-0.5 text-[13px] font-semibold"
+              >
+                {editValue || ' '}
+              </span>
+              <input
+                ref={titleInputRef}
+                value={editValue}
+                maxLength={80}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.currentTarget.blur(); }
+                  if (e.key === 'Escape') { setIsEditing(false); }
+                }}
+                className="col-start-1 row-start-1 min-w-[8ch] rounded border border-white/20 bg-white/5 px-1.5 py-0.5 text-[13px] font-semibold text-[var(--text)] outline-none focus:border-white/40"
+                autoFocus
+              />
+            </div>
           ) : (
-            <><b>HL-TR-2025-014</b> · Adaptive Liquid Cooling for High-Density GPU Clusters.pdf</>
+            <button
+              type="button"
+              onClick={startEdit}
+              title={documentId ? 'Click to rename' : undefined}
+              className={`overflow-hidden text-ellipsis whitespace-nowrap font-semibold ${documentId ? 'hover:text-[var(--text)] cursor-text' : 'cursor-default opacity-50 italic'}`}
+            >
+              {documentName ?? (file ? file.name.replace(/\.pdf$/i, '') : 'No document')}
+            </button>
           )}
         </div>
       </div>
@@ -258,8 +353,77 @@ export function Viewer({
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }) {
   const [showThumbs, setShowThumbs] = useState(true);
-  const { file, documentUrl } = useUpload();
+  const { file, documentId, documentName } = useUpload();
   const mergeMutation = useMergePdf();
+
+  const thumbScrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: totalPages,
+    getScrollElement: () => thumbScrollRef.current,
+    estimateSize: () => 100, // thumbnail height + gap
+    overscan: 3,
+  });
+
+  // Pre-fetch the PDF as a blob URL so the Authorization header is sent through
+  // a standard fetch() call rather than relying on PDF.js worker header passing
+  // (which drops headers intermittently).
+  const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined);
+  const [isFetchingPdf, setIsFetchingPdf] = useState(false);
+  const activeBlobRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    // Local File takes full priority — no network needed
+    if (file) {
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+        activeBlobRef.current = undefined;
+      }
+      setBlobUrl(undefined);
+      setIsFetchingPdf(false);
+      return;
+    }
+
+    if (!documentId) {
+      setBlobUrl(undefined);
+      setIsFetchingPdf(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsFetchingPdf(true);
+    setBlobUrl(undefined);
+
+    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, {
+      headers: getAuthHeaders(),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
+        const url = URL.createObjectURL(blob);
+        activeBlobRef.current = url;
+        setBlobUrl(url);
+        setIsFetchingPdf(false);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[PDF] fetch error:', err);
+          setIsFetchingPdf(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [file, documentId]);
+
+  // Revoke blob URL on unmount
+  useEffect(() => () => {
+    if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
+  }, []);
+
+  const pdfSource: File | string | undefined = file ?? blobUrl;
   const isDraggingRef = useRef(false);
   const startPosRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
@@ -370,75 +534,123 @@ export function Viewer({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
+      {isFetchingPdf && !file && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-base)]">
+          <NibLogoSpinner size={26} label="Loading PDF" />
+        </div>
+      )}
       <Document
-          file={documentUrl || file || "/pdfs/BME.pdf"}
-          loading={<div className="flex h-full w-full items-center justify-center pt-20 text-sm text-[var(--text-dim)]">Loading PDF…</div>}
+          file={pdfSource}
+          loading={null}
           onLoadSuccess={({ numPages }) => onPageCountChange(numPages)}
+          onLoadError={(err) => console.error('[PDF] load error:', err)}
           className="h-full w-full"
       >
-        {showThumbs && totalPages > 0 ? (
-          <div className="thumbs flex flex-col" aria-label="Page thumbnails">
-            {/* Scrollable thumbnail list */}
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto pb-1">
-              {Array.from({ length: totalPages }, (_, index) => (
-                <button
-                  key={`thumb-${index + 1}`}
-                  type="button"
-                  className={`thumb${index === currentPage ? ' active' : ''}`}
-                  onClick={() => jumpToPage(index)}
-                  title={`Page ${index + 1}`}
+        {/*
+         * Thumbnail panel — rendered inside <Document> so <Page> thumbnails receive
+         * react-pdf's DocumentContext. position:fixed keeps it viewport-anchored without
+         * a portal, which means zero scroll-lock involvement (no Radix Dialog, no vaul).
+         */}
+        <AnimatePresence>
+          {showThumbs && totalPages > 0 && (
+            <motion.div
+              key="thumb-panel"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
+              className="fixed bottom-0 left-0 z-20 flex w-[80px] flex-col overflow-hidden border-r border-white/8 bg-[var(--bg-base)]"
+              style={{ top: '48px' /* matches NibApp grid-rows-[48px_1fr] toolbar */ }}
+            >
+              {/* Scrollable thumbnail list */}
+              <div ref={thumbScrollRef} className="flex flex-1 flex-col overflow-y-auto py-3 px-[10px]">
+                <div
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
                 >
-                  <div className="thumb-img flex items-center justify-center overflow-hidden">
-                    <Page
-                      pageNumber={index + 1}
-                      width={50}
-                      renderAnnotationLayer={false}
-                      renderTextLayer={false}
-                    />
-                  </div>
-                  <span className="thumb-num">{index + 1}</span>
-                </button>
-              ))}
-            </div>
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const index = virtualRow.index;
+                    return (
+                      <button
+                        key={virtualRow.key}
+                        type="button"
+                        className={`thumb${index === currentPage ? ' active' : ''}`}
+                        onClick={() => jumpToPage(index)}
+                        title={`Page ${index + 1}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <div className="thumb-img flex items-center justify-center overflow-hidden">
+                          <Page
+                            pageNumber={index + 1}
+                            width={50}
+                            devicePixelRatio={1}
+                            renderAnnotationLayer={false}
+                            renderTextLayer={false}
+                          />
+                        </div>
+                        <span className="thumb-num">{index + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-            {/* Separator + combine button */}
-            <div className="shrink-0 border-t border-white/10 pt-2 flex flex-col items-center gap-1">
-              {mergeMutation.isError && (
-                <p className="text-[10px] text-red-400 px-2 text-center leading-tight">
-                  {(mergeMutation.error as Error).message}
-                </p>
-              )}
-              <button
-                type="button"
-                title={mergeMutation.isPending ? 'Merging…' : 'Combine PDF'}
-                disabled={mergeMutation.isPending}
-                onClick={() => !mergeMutation.isPending && document.getElementById('thumb-combine-input')?.click()}
-                className="flex w-full items-center justify-center rounded-md py-1.5 text-[var(--text-faint)] transition hover:bg-white/5 hover:text-[var(--text-dim)] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {mergeMutation.isPending ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                    <path d="M8 2v12M2 8h12" />
-                  </svg>
+              {/* Separator + combine button */}
+              <div className="shrink-0 border-t border-white/10 pt-2 pb-3 flex flex-col items-center gap-1">
+                {mergeMutation.isError && (
+                  <p className="text-[10px] text-red-400 px-2 text-center leading-tight">
+                    {(mergeMutation.error as Error).message}
+                  </p>
                 )}
-              </button>
-              <input
-                id="thumb-combine-input"
-                type="file"
-                accept=".pdf,application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  if (picked) mergeMutation.mutate(picked);
-                  e.target.value = '';
-                }}
-              />
-            </div>
-          </div>
-        ) : null}
+                <button
+                  type="button"
+                  title={mergeMutation.isPending ? 'Merging…' : 'Combine PDF'}
+                  disabled={mergeMutation.isPending}
+                  onClick={() => !mergeMutation.isPending && document.getElementById('thumb-combine-input')?.click()}
+                  className="flex w-full items-center justify-center rounded-md py-1.5 text-[var(--text-faint)] transition hover:bg-white/5 hover:text-[var(--text-dim)] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {mergeMutation.isPending ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                      <path d="M8 2v12M2 8h12" />
+                    </svg>
+                  )}
+                </button>
+                <input
+                  id="thumb-combine-input"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0];
+                    if (picked) mergeMutation.mutate(picked);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div className="h-full overflow-auto px-0 pb-20 pt-7" ref={scrollContainerRef} style={{ paddingLeft: showThumbs ? 80 : 0 }}>
+        {/* paddingLeft shifts content right when the panel is open, in sync with the spring */}
+        <div
+          className="h-full overflow-auto px-0 pb-20 pt-7"
+          ref={scrollContainerRef}
+          style={{
+            paddingLeft: showThumbs && totalPages > 0 ? 80 : 0,
+            transition: 'padding-left 0.5s cubic-bezier(0.32, 0.72, 0, 1)',
+          }}
+        >
           <div className="flex flex-col items-center gap-6 min-w-full w-max px-12 py-24">
             {Array.from({ length: totalPages }, (_, index) => (
               <div
@@ -460,8 +672,12 @@ export function Viewer({
             ))}
             {totalPages === 0 ? (
               <div className="pdf-page-wrap">
-                <div className="pdf-page flex min-h-[500px] w-[620px] items-center justify-center rounded-lg border border-white/10 bg-[var(--bg-base)] text-sm text-[var(--text-dim)]">
-                  Unable to load PDF {file ? file.name : 'from /pdfs/BME.pdf'}
+                <div className="pdf-page flex min-h-[500px] w-[620px] flex-col items-center justify-center gap-3 rounded-lg border border-white/10 bg-[var(--bg-base)] text-sm text-[var(--text-dim)]">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-white/20">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  {pdfSource ? 'Failed to load PDF' : 'No document selected'}
                 </div>
               </div>
             ) : null}

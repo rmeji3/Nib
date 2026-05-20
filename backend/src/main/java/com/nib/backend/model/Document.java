@@ -44,6 +44,12 @@ public class Document {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "is_starred", nullable = false, columnDefinition = "boolean default false")
+    private boolean isStarred = false;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

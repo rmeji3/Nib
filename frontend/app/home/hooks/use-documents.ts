@@ -1,5 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchDocuments, type DocumentResponse } from '../../../lib/api/documents';
+import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  fetchDocuments,
+  fetchTrashedDocuments,
+  fetchStarredDocuments,
+  softDeleteDocument,
+  restoreDocument,
+  permanentDeleteDocument,
+  toggleDocumentStar,
+  type DocumentResponse,
+} from '../../../lib/api/documents';
 
 export interface DocumentItem {
   id: string;
@@ -10,6 +19,8 @@ export interface DocumentItem {
   pageCount: number | null;
   fileSizeBytes: number | null;
   createdAt: string;
+  deletedAt: string | null;
+  isStarred: boolean;
 }
 
 function formatMeta(doc: DocumentResponse): string {
@@ -36,16 +47,104 @@ function mapToDocumentItem(doc: DocumentResponse): DocumentItem {
     pageCount: doc.pageCount,
     fileSizeBytes: doc.fileSizeBytes,
     createdAt: doc.createdAt,
+    deletedAt: doc.deletedAt,
+    isStarred: doc.isStarred,
   };
 }
 
 export function useDocuments(searchTerm: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['documents', searchTerm],
-    queryFn: async () => {
-      const data = await fetchDocuments(searchTerm || undefined);
-      return data.map(mapToDocumentItem);
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await fetchDocuments(searchTerm || undefined, pageParam);
+      return {
+        ...response,
+        content: response.content.map(mapToDocumentItem),
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined;
+      return lastPage.pageNumber + 1;
     },
     staleTime: 30_000,
+  });
+}
+
+export function useTrashedDocuments() {
+  return useInfiniteQuery({
+    queryKey: ['documents', 'trash'],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await fetchTrashedDocuments(pageParam);
+      return {
+        ...response,
+        content: response.content.map(mapToDocumentItem),
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined;
+      return lastPage.pageNumber + 1;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useStarredDocuments() {
+  return useInfiniteQuery({
+    queryKey: ['documents', 'starred'],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await fetchStarredDocuments(pageParam);
+      return {
+        ...response,
+        content: response.content.map(mapToDocumentItem),
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined;
+      return lastPage.pageNumber + 1;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useSoftDeleteDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => softDeleteDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useRestoreDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function usePermanentDeleteDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => permanentDeleteDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useToggleStarDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => toggleDocumentStar(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
   });
 }

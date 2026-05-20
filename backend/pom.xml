@@ -79,6 +79,11 @@
 			<artifactId>pdfbox</artifactId>
 			<version>3.0.3</version>
 		</dependency>
+		<!-- Apache HttpClient 5 — more reliable than JDK client for large binary uploads -->
+		<dependency>
+			<groupId>org.apache.httpcomponents.client5</groupId>
+			<artifactId>httpclient5</artifactId>
+		</dependency>
 
 		<!-- JWT dependencies -->
 		<dependency>

@@ -1,14 +1,20 @@
 package com.nib.backend.controller;
 
 import com.nib.backend.dto.DocumentResponse;
+import com.nib.backend.dto.PagedResponse;
+import com.nib.backend.dto.RenameRequest;
 import com.nib.backend.model.User;
 import com.nib.backend.service.DocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -24,19 +30,110 @@ public class DocumentController {
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> upload(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(required = false) String name,
             @AuthenticationPrincipal User user
     ) {
-        log.info("Upload request from user {} for '{}'", user.getId(), file.getOriginalFilename());
-        return ResponseEntity.ok(documentService.uploadDocument(file, user));
+        log.info("Upload request from user {} for {} file(s)", user.getId(), files.size());
+        return ResponseEntity.ok(documentService.uploadDocuments(files, name, user));
     }
 
     @GetMapping
-    public ResponseEntity<List<DocumentResponse>> list(
+    public ResponseEntity<PagedResponse<DocumentResponse>> list(
             @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal User user
     ) {
-        return ResponseEntity.ok(documentService.listDocuments(user, search));
+        return ResponseEntity.ok(documentService.listDocuments(user, search, PageRequest.of(page, size)));
+    }
+
+    /** Returns all documents the user has moved to trash. */
+    @GetMapping("/trash")
+    public ResponseEntity<PagedResponse<DocumentResponse>> listTrash(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.listTrash(user, PageRequest.of(page, size)));
+    }
+
+    @GetMapping("/starred")
+    public ResponseEntity<PagedResponse<DocumentResponse>> listStarred(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.listStarredDocuments(user, PageRequest.of(page, size)));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<DocumentResponse> getById(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.getDocument(id, user));
+    }
+
+    @GetMapping("/{id}/content")
+    public ResponseEntity<byte[]> getContent(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        byte[] content = documentService.getDocumentContent(id, user);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(content);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<DocumentResponse> rename(
+            @PathVariable UUID id,
+            @Validated @RequestBody RenameRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.renameDocument(id, request.name(), user));
+    }
+
+    @PatchMapping("/{id}/star")
+    public ResponseEntity<DocumentResponse> toggleStar(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.toggleStar(id, user));
+    }
+
+    /** Move a document to trash (soft delete). */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> softDelete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Soft-delete request for document {} from user {}", id, user.getId());
+        documentService.softDelete(id, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Restore a trashed document back to the library. */
+    @PostMapping("/{id}/restore")
+    public ResponseEntity<DocumentResponse> restore(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Restore request for document {} from user {}", id, user.getId());
+        return ResponseEntity.ok(documentService.restoreDocument(id, user));
+    }
+
+    /** Permanently delete a trashed document from DB and storage. */
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Permanent-delete request for document {} from user {}", id, user.getId());
+        documentService.permanentDelete(id, user);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping(value = "/merge", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

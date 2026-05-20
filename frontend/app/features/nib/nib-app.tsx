@@ -5,11 +5,8 @@ import { ChatPanel } from './nib-chat';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
-import { useNibUpload } from './hooks/use-nib-upload';
 
 export default function NibApp() {
-  useNibUpload(); // auto-uploads local file to backend in background
-
   const {
     splitRatio,
     zoom,
