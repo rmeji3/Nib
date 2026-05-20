@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -35,8 +37,16 @@ public class IngestionService {
         );
         log.info("Created ingestion job {} for document {}", job.getId(), documentId);
 
-        // Delegate to IngestionRunner — separate bean ensures @Async proxy is used
-        ingestionRunner.run(documentId, job.getId());
+        // Fire AFTER the current transaction commits so the document and job records
+        // are visible to the async thread when it reads them from the DB
+        UUID jobId = job.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                ingestionRunner.run(documentId, jobId);
+            }
+        });
+
         return job;
     }
 
