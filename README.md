@@ -1,4 +1,4 @@
-# AI PDF Viewer Product Plan
+# Nib Product Plan
 
 ## 1) Product Vision
 
@@ -20,7 +20,7 @@ Core problem to solve: most PDF chat tools only embed extracted text and ignore 
 - Page-level citations for every answer.
 - Fast, smooth reading and chat UX.
 - Enterprise-ready security and observability.
-- Cloud deployment with Next.js on Vercel, ASP.NET API service, and Supabase.
+- Cloud deployment with Next.js on Vercel, Spring Boot API service, and Supabase.
 
 ### Non-Goals (Phase 1)
 
@@ -31,17 +31,45 @@ Core problem to solve: most PDF chat tools only embed extracted text and ignore 
 ## 3) Proposed Tech Stack
 
 - Frontend: Next.js + TypeScript (App Router)
-- Backend AI/API: ASP.NET Core (Web API)
+- Backend AI/API: Spring Boot (Java 17, Web, Data JPA)
 - Data/Auth/Storage: Supabase (Postgres, Auth, Storage, pgvector)
 - Hosting:
   - Next.js app on Vercel
-  - ASP.NET API on Azure Container Apps or App Service (recommended)
+  - Spring Boot API on Azure Container Apps or AWS App Runner (recommended)
   - Supabase managed cloud project
 
 Why this split:
 
 - Vercel is excellent for Next.js performance, edge delivery, and preview workflows.
-- ASP.NET is strong for structured orchestration, long-running jobs, and typed service architecture.
+- Spring Boot is strong for structured orchestration, robust service architectures, and JVM-based enterprise stability.
+
+## 3.5) Repository Layout & Local Development
+
+This project is organized as a monorepo containing both the frontend and the backend:
+
+- `/frontend`: Next.js web application.
+- `/backend`: Spring Boot REST API application.
+
+### Local Development Setup
+
+#### Frontend
+From the root directory, you can run the frontend scripts using npm workspaces:
+- Start development server: `npm run dev`
+- Build the project: `npm run build`
+
+Alternatively, navigate into the directory:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+#### Backend
+Navigate to the backend directory and run using the Maven wrapper:
+```bash
+cd backend
+./mvnw spring-boot:run
+```
 - Supabase gives managed auth, object storage, relational data, and vector search in one platform.
 
 ## 4) High-Level Architecture
@@ -49,7 +77,7 @@ Why this split:
 ```mermaid
 flowchart LR
   U[User] --> FE[Next.js on Vercel]
-  FE --> API[ASP.NET Core API]
+  FE --> API[Spring Boot API]
   API --> SBDB[(Supabase Postgres + pgvector)]
   API --> SBST[Supabase Storage]
   API --> MM[Multimodal LLM + OCR + Vision Extraction]
@@ -61,7 +89,7 @@ flowchart LR
 ### Pipeline
 
 1. Upload PDF to Supabase Storage.
-2. Create ingestion job in ASP.NET.
+2. Create ingestion job in Spring Boot.
 3. Parse pages into structured blocks:
 	- Text blocks
 	- Table blocks
@@ -125,7 +153,7 @@ Key fields to include:
 - page_number and block coordinates
 - model_version and extraction_version for reproducibility
 
-## 7) API Design (ASP.NET)
+## 7) API Design (Spring Boot)
 
 Core endpoints:
 
@@ -164,7 +192,7 @@ Essential UX requirements:
 - Vercel:
   - Next.js web app
   - Environment variables for API base URL and Supabase public config
-- ASP.NET service (Azure recommended):
+- Spring Boot service (Azure Container Apps or AWS App Runner recommended):
   - Private keys and AI provider secrets
   - Worker and API autoscaling
 - Supabase:
@@ -175,7 +203,7 @@ Essential UX requirements:
 ### CI/CD
 
 - Pull request preview deployments on Vercel.
-- ASP.NET build/test/deploy pipeline with gated checks.
+- Spring Boot build/test/deploy pipeline with gated checks.
 - Automated schema migrations for Supabase.
 
 ## 10) Professional Engineering Guidelines
@@ -230,7 +258,7 @@ Essential UX requirements:
 ### Phase 0: Foundations (1-2 weeks)
 
 - Auth, upload, storage, document records, basic PDF viewer.
-- Environment setup across Vercel + ASP.NET + Supabase.
+- Environment setup across Vercel + Spring Boot + Supabase.
 
 ### Phase 1: Text-Only RAG Baseline (1-2 weeks)
 
