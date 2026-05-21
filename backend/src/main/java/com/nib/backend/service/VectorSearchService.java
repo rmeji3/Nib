@@ -23,6 +23,7 @@ public class VectorSearchService {
             int pageNumber,
             int chunkIndex,
             String extractedText,
+            String blockType,
             double similarity
     ) {}
 
@@ -65,21 +66,38 @@ public class VectorSearchService {
 
     /**
      * Retrieves the top-k most similar chunks for a given query embedding and document.
-     * Calls the match_chunks() SQL function defined in the migration.
+     *
+     * Uses a direct JOIN rather than the match_chunks() SQL function so we can
+     * return block_type (needed to label text vs visual context in the chat prompt).
+     * Postgres will use the HNSW index via the ORDER BY embedding <=> ? ... LIMIT clause.
      */
     public List<ChunkMatch> search(UUID documentId, float[] queryEmbedding, int topK) {
         String vectorStr = EmbeddingService.toVectorString(queryEmbedding);
         return jdbcTemplate.query(
-                "SELECT * FROM match_chunks(?::vector, ?, ?)",
+                """
+                SELECT cb.id          AS block_id,
+                       cb.document_id,
+                       cb.page_number,
+                       cb.chunk_index,
+                       cb.extracted_text,
+                       cb.block_type,
+                       e.embedding <=> ?::vector AS similarity
+                FROM   embeddings e
+                JOIN   content_blocks cb ON cb.id = e.block_id
+                WHERE  cb.document_id = ?
+                ORDER  BY similarity
+                LIMIT  ?
+                """,
                 (rs, rowNum) -> new ChunkMatch(
                         UUID.fromString(rs.getString("block_id")),
                         UUID.fromString(rs.getString("document_id")),
                         rs.getInt("page_number"),
                         rs.getInt("chunk_index"),
                         rs.getString("extracted_text"),
+                        rs.getString("block_type"),
                         rs.getDouble("similarity")
                 ),
-                vectorStr, topK, documentId
+                vectorStr, documentId, topK
         );
     }
 }

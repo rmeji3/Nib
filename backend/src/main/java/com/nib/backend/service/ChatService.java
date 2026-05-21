@@ -138,16 +138,22 @@ public class ChatService {
 
     private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are a document Q&A assistant. Answer the user's question using ONLY the document chunks provided below.\n\n");
+        sb.append("You are a document Q&A assistant. Answer the user's question using ONLY the document content provided below.\n\n");
+        sb.append("The content includes two types of blocks:\n");
+        sb.append("  - [Page X - text]: extracted text from that page.\n");
+        sb.append("  - [Page X - visual]: an AI description of charts, tables, figures, or images on that page.\n\n");
         sb.append("Rules:\n");
-        sb.append("1. Only use information from the provided chunks — do not use any outside knowledge.\n");
+        sb.append("1. Use information from BOTH text and visual blocks — they are equally authoritative.\n");
         sb.append("2. Cite every factual claim with [Page X] where X is the page number.\n");
-        sb.append("3. If the answer cannot be found in the chunks, respond: \"I don't have enough information in the retrieved sections to answer this question.\"\n");
-        sb.append("4. Be concise and accurate.\n\n");
-        sb.append("Document chunks:\n");
+        sb.append("3. When referencing a chart, table, or figure, describe what it shows and cite the page.\n");
+        sb.append("4. If the answer cannot be found in the provided content, respond: \"I don't have enough information in the retrieved sections to answer this question.\"\n");
+        sb.append("5. Be concise and accurate.\n\n");
+        sb.append("Document content:\n");
 
         for (VectorSearchService.ChunkMatch chunk : chunks) {
-            sb.append("\n[Page ").append(chunk.pageNumber()).append("]:\n");
+            boolean isVisual = "visual_summary".equals(chunk.blockType());
+            sb.append("\n[Page ").append(chunk.pageNumber())
+              .append(isVisual ? " - visual]:\n" : " - text]:\n");
             sb.append(chunk.extractedText()).append("\n");
         }
 

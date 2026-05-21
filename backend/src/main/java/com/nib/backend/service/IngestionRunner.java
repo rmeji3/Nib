@@ -8,6 +8,7 @@ import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -18,15 +19,14 @@ import java.util.UUID;
 
 /**
  * Separate component so @Async runs through Spring's proxy.
- * IngestionService must not call its own @Async methods directly (self-invocation bypasses the proxy).
+ * IngestionService must not call its own @Async methods directly.
  *
- * Performance design:
- *  - All page texts are chunked upfront (no API calls yet).
- *  - All chunks across ALL pages are embedded in as few Mistral API calls as possible
- *    (batches of up to EMBED_BATCH_SIZE to stay within API limits).
- *  - ContentBlocks are saved in one saveAll() call.
- *  - Embeddings are saved in one batchUpdate() call.
- *  This reduces API calls from N_pages to ceil(total_chunks / EMBED_BATCH_SIZE).
+ * Phase 2 multimodal pipeline:
+ *  1. Download PDF, extract text per page.
+ *  2. Render each page to PNG → Gemini Vision → visual summary block.
+ *  3. Chunk text pages → text blocks.
+ *  4. Batch-embed ALL blocks (text + visual) in minimal Mistral API calls.
+ *  5. saveAll() content blocks, batchUpdate() embeddings — two DB round-trips total.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,10 +41,17 @@ public class IngestionRunner {
     private final ChunkingService chunkingService;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
+    private final VisionService visionService;
 
     private static final String EMBED_MODEL = "mistral-embed";
-    /** Max chunks per Mistral embeddings API call (their documented limit is 512). */
+    private static final String BLOCK_TEXT = "text";
+    private static final String BLOCK_VISUAL = "visual_summary";
+
+    /** Max chunks per Mistral embeddings API call (API limit is 512). */
     private static final int EMBED_BATCH_SIZE = 128;
+
+    @Value("${ingestion.vision.enabled:true}")
+    private boolean visionEnabled;
 
     @Async("ingestionExecutor")
     public void run(UUID documentId, UUID jobId) {
@@ -58,59 +65,80 @@ public class IngestionRunner {
             job.setStartedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);
 
-            // ── 1. Download & extract ─────────────────────────────────────────────
+            // ── 1. Download PDF ───────────────────────────────────────────────────
             byte[] pdfBytes = storageService.downloadFile(doc.getStoragePath());
+
+            // ── 2. Extract text per page ──────────────────────────────────────────
             List<String> pageTexts = textExtractionService.extractPages(pdfBytes);
             int totalPages = pageTexts.size();
 
             job.setPagesTotal(totalPages);
             ingestionJobRepository.save(job);
-            log.info("Extracted {} pages for document {}", totalPages, documentId);
+            log.info("Starting multimodal ingestion: {} pages for document {}", totalPages, documentId);
 
-            // ── 2. Chunk every page — no API calls yet ────────────────────────────
-            record PendingChunk(int pageNumber, int chunkIndex, String text) {}
-            List<PendingChunk> pending = new ArrayList<>();
+            // ── 3. Build all pending blocks (text + visual) ───────────────────────
+            //    We collect them all before calling any embedding API so we can
+            //    batch everything into the minimum number of Mistral API calls.
+            record PendingBlock(int pageNumber, int chunkIndex, String text, String blockType) {}
+            List<PendingBlock> pending = new ArrayList<>();
 
             for (int i = 0; i < totalPages; i++) {
+                int pageNumber = i + 1;
                 String pageText = pageTexts.get(i);
-                if (pageText == null || pageText.isBlank()) continue;
-                List<String> chunks = chunkingService.chunk(pageText);
-                for (int j = 0; j < chunks.size(); j++) {
-                    pending.add(new PendingChunk(i + 1, j, chunks.get(j)));
+
+                // ── 3a. Text chunks ───────────────────────────────────────────────
+                if (pageText != null && !pageText.isBlank()) {
+                    List<String> chunks = chunkingService.chunk(pageText);
+                    for (int j = 0; j < chunks.size(); j++) {
+                        pending.add(new PendingBlock(pageNumber, j, chunks.get(j), BLOCK_TEXT));
+                    }
+                }
+
+                // ── 3b. Visual summary (Gemini Vision) ───────────────────────────
+                if (visionEnabled) {
+                    log.debug("Running vision analysis for page {}/{}", pageNumber, totalPages);
+                    String visualSummary = visionService.analyzePageImage(pdfBytes, i);
+                    if (visualSummary != null && !visualSummary.isBlank()) {
+                        pending.add(new PendingBlock(pageNumber, 0, visualSummary, BLOCK_VISUAL));
+                    }
                 }
             }
 
-            log.info("Chunked into {} total chunks for document {}", pending.size(), documentId);
+            log.info("Collected {} total blocks ({} text + {} visual) for document {}",
+                    pending.size(),
+                    pending.stream().filter(p -> BLOCK_TEXT.equals(p.blockType())).count(),
+                    pending.stream().filter(p -> BLOCK_VISUAL.equals(p.blockType())).count(),
+                    documentId);
 
             if (!pending.isEmpty()) {
-                List<String> allTexts = pending.stream().map(PendingChunk::text).toList();
-
-                // ── 3. Embed ALL chunks in minimal API calls (batched) ────────────
+                // ── 4. Batch embed ALL blocks in minimal Mistral API calls ─────────
+                List<String> allTexts = pending.stream().map(PendingBlock::text).toList();
                 List<float[]> allEmbeddings = new ArrayList<>(allTexts.size());
+
                 for (int i = 0; i < allTexts.size(); i += EMBED_BATCH_SIZE) {
                     List<String> batch = allTexts.subList(i, Math.min(i + EMBED_BATCH_SIZE, allTexts.size()));
-                    log.info("Embedding batch {}/{} ({} chunks) for document {}",
+                    log.info("Embedding batch {}/{} ({} items) for document {}",
                             (i / EMBED_BATCH_SIZE) + 1,
                             (int) Math.ceil((double) allTexts.size() / EMBED_BATCH_SIZE),
                             batch.size(), documentId);
                     allEmbeddings.addAll(embeddingService.embedBatch(batch));
                 }
 
-                // ── 4. Save all ContentBlocks in one round-trip ───────────────────
+                // ── 5. Save all content blocks (one saveAll round-trip) ───────────
                 List<ContentBlock> blockEntities = new ArrayList<>(pending.size());
-                for (PendingChunk pc : pending) {
+                for (PendingBlock pb : pending) {
                     blockEntities.add(ContentBlock.builder()
                             .documentId(documentId)
-                            .pageNumber(pc.pageNumber())
-                            .blockType("text")
-                            .chunkIndex(pc.chunkIndex())
-                            .extractedText(pc.text())
-                            .tokenCount(chunkingService.estimateTokens(pc.text()))
+                            .pageNumber(pb.pageNumber())
+                            .blockType(pb.blockType())
+                            .chunkIndex(pb.chunkIndex())
+                            .extractedText(pb.text())
+                            .tokenCount(chunkingService.estimateTokens(pb.text()))
                             .build());
                 }
                 List<ContentBlock> savedBlocks = contentBlockRepository.saveAll(blockEntities);
 
-                // ── 5. Batch-insert all embeddings in one round-trip ──────────────
+                // ── 6. Batch save all embeddings (one batchUpdate round-trip) ──────
                 vectorSearchService.saveEmbeddingsBatch(savedBlocks, allEmbeddings, EMBED_MODEL);
             }
 
@@ -118,8 +146,7 @@ public class IngestionRunner {
             job.setStatus(IngestionStatus.COMPLETE);
             job.setCompletedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);
-            log.info("Ingestion complete for document {} — job {} ({} pages, {} chunks)",
-                    documentId, jobId, totalPages, pending.isEmpty() ? 0 : pending.size());
+            log.info("Ingestion complete for document {} — job {}", documentId, jobId);
 
         } catch (Exception ex) {
             log.error("Ingestion failed for document {} — job {}: {}", documentId, jobId, ex.getMessage(), ex);
