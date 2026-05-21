@@ -1,10 +1,12 @@
 package com.nib.backend.service;
 
+import com.nib.backend.model.ContentBlock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,7 +27,7 @@ public class VectorSearchService {
     ) {}
 
     /**
-     * Stores an embedding vector for a content block.
+     * Stores a single embedding vector for a content block.
      * Uses raw SQL because JPA does not support the pgvector type.
      */
     public void saveEmbedding(UUID blockId, float[] embedding, String modelVersion) {
@@ -34,6 +36,28 @@ public class VectorSearchService {
                 "INSERT INTO embeddings (id, block_id, embedding, model_version) VALUES (gen_random_uuid(), ?, ?::vector, ?)",
                 blockId, vectorStr, modelVersion
         );
+    }
+
+    /**
+     * Batch-inserts embeddings for a list of content blocks in a single JDBC round-trip.
+     * Dramatically faster than calling saveEmbedding() in a loop.
+     * blocks and embeddings must be the same size and in the same order.
+     */
+    public void saveEmbeddingsBatch(List<ContentBlock> blocks, List<float[]> embeddings, String modelVersion) {
+        if (blocks.isEmpty()) return;
+        List<Object[]> batchArgs = new ArrayList<>(blocks.size());
+        for (int i = 0; i < blocks.size(); i++) {
+            batchArgs.add(new Object[]{
+                    blocks.get(i).getId(),
+                    EmbeddingService.toVectorString(embeddings.get(i)),
+                    modelVersion
+            });
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO embeddings (id, block_id, embedding, model_version) VALUES (gen_random_uuid(), ?, ?::vector, ?)",
+                batchArgs
+        );
+        log.debug("Batch-inserted {} embeddings", blocks.size());
     }
 
     /**

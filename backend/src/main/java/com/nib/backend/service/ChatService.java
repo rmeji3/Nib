@@ -8,6 +8,7 @@ import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.exception.DocumentNotFoundException;
+import com.nib.backend.exception.RateLimitException;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
 import com.nib.backend.model.User;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
@@ -166,12 +168,23 @@ public class ChatService {
 
         String url = geminiApiUrl + "/models/" + GEMINI_MODEL + ":generateContent?key=" + geminiApiKey;
 
-        Map<String, Object> response = restClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(Map.class);
+        Map<String, Object> response;
+        try {
+            response = restClient.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            log.warn("Gemini API rate limit hit — check billing/quota at https://ai.dev/rate-limit");
+            throw new RateLimitException(
+                    "The AI service quota has been reached. Please enable billing on your Google Cloud project " +
+                    "(console.cloud.google.com) or wait for your daily quota to reset, then try again.");
+        } catch (HttpClientErrorException ex) {
+            log.error("Gemini API HTTP error {}: {}", ex.getStatusCode(), ex.getMessage());
+            throw new RuntimeException("Gemini API returned error " + ex.getStatusCode().value() + ": " + ex.getMessage());
+        }
 
         if (response == null) throw new RuntimeException("Empty response from Gemini API");
 
