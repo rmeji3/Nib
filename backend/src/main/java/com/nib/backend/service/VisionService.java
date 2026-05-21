@@ -48,6 +48,17 @@ public class VisionService {
     private static final String VISION_PROMPT = """
             Analyze this PDF page and provide a thorough plain-text description of everything visible.
 
+            FIRST — always capture any title, heading, subtitle, logo text, or brand name at the top of the page. \
+            State it explicitly at the start of your response (e.g. "This page is titled: X").
+
+            For MENU, PRICE LIST, CATALOG, or any page listing items with prices:
+            - List EVERY visible item with its EXACT price, one per line, in this format:
+              Item Name | $Price
+            - Preserve section headers (e.g. "BURGERS", "WRAPS") as their own lines above their items.
+            - Do NOT summarise or omit items. Enumerate every single one.
+            - Include any descriptions or ingredient lists if shown, on the same line after the price.
+            - Spell out section/category names in FULL — never abbreviate (write "DRINKS" not "DR").
+
             For CHARTS or GRAPHS:
             - State the chart type (bar, line, pie, scatter, etc.)
             - Give the exact title if visible
@@ -57,7 +68,7 @@ public class VisionService {
 
             For TABLES:
             - Describe the table structure (number of columns, what each column means)
-            - List the most important rows and values
+            - List EVERY row with its values — do not skip rows
             - Summarize what the table shows
 
             For IMAGES or DIAGRAMS:
@@ -65,10 +76,12 @@ public class VisionService {
             - Extract any visible text labels or annotations
 
             For TEXT-HEAVY pages:
+            - Extract the exact text of all headings and subheadings
             - Summarize the key points in a few sentences
 
-            Be specific about numbers, percentages, dates, labels, and units you can see.
-            Do NOT use markdown formatting — respond in plain paragraphs only.
+            Be specific about numbers, percentages, dates, labels, prices, and units you can see.
+            Spell every word out in full — never truncate or abbreviate.
+            Do NOT use markdown formatting — respond in plain paragraphs or simple lines only.
             """;
 
     /**
@@ -119,7 +132,9 @@ public class VisionService {
                 )),
                 "generationConfig", Map.of(
                         "temperature", 0.1,
-                        "maxOutputTokens", 1024
+                        // 4096 prevents truncation on dense menu/catalog pages.
+                        // Earlier 1024 cap was cutting words mid-token (e.g. "DR" instead of "DRINKS").
+                        "maxOutputTokens", 4096
                 )
         );
 

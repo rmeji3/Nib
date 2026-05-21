@@ -65,6 +65,40 @@ public class VectorSearchService {
     }
 
     /**
+     * Returns every visual_summary block for a document, ordered by page number.
+     * Bypasses similarity search — used by aggregation queries ("most expensive",
+     * "list all", "compare") that need full coverage rather than top-k relevance.
+     * Similarity is set to 0.0 since it's unused in this context.
+     */
+    public List<ChunkMatch> getAllVisualBlocks(UUID documentId) {
+        return jdbcTemplate.query(
+                """
+                SELECT cb.id          AS block_id,
+                       cb.document_id,
+                       cb.page_number,
+                       cb.chunk_index,
+                       cb.extracted_text,
+                       cb.block_type,
+                       0.0            AS similarity
+                FROM   content_blocks cb
+                WHERE  cb.document_id = ?
+                  AND  cb.block_type = 'visual_summary'
+                ORDER  BY cb.page_number, cb.chunk_index
+                """,
+                (rs, rowNum) -> new ChunkMatch(
+                        UUID.fromString(rs.getString("block_id")),
+                        UUID.fromString(rs.getString("document_id")),
+                        rs.getInt("page_number"),
+                        rs.getInt("chunk_index"),
+                        rs.getString("extracted_text"),
+                        rs.getString("block_type"),
+                        rs.getDouble("similarity")
+                ),
+                documentId
+        );
+    }
+
+    /**
      * Retrieves the top-k most similar chunks for a given query embedding and document.
      *
      * Uses a direct JOIN rather than the match_chunks() SQL function so we can

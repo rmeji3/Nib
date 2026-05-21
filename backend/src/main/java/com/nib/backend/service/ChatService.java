@@ -25,8 +25,12 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +61,31 @@ public class ChatService {
     @Value("${ingestion.top-k:5}")
     private int topK;
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
+
+    /**
+     * Phrases that signal the user wants to aggregate or compare across the whole
+     * document rather than ask about a specific fact. For these queries top-k
+     * similarity isn't enough — we need every visual block to be in context so
+     * Gemini can rank, count, or list across all pages.
+     */
+    private static final List<String> AGGREGATION_PHRASES = List.of(
+            "most expensive", "least expensive", "cheapest", "priciest",
+            "highest price", "lowest price", "price range",
+            "all items", "all dishes", "all options", "all the items",
+            "list all", "list every", "list everything",
+            "entire menu", "whole menu", "full menu", "complete menu", "everything on",
+            "full list", "complete list",
+            "how many", "total number", "count of",
+            "compare", "comparison"
+    );
+
+    private static boolean isAggregationQuery(String question) {
+        String lower = question.toLowerCase();
+        for (String phrase : AGGREGATION_PHRASES) {
+            if (lower.contains(phrase)) return true;
+        }
+        return false;
+    }
 
     // ── Sessions ──────────────────────────────────────────────────────────────
 
@@ -103,8 +132,31 @@ public class ChatService {
 
         // Embed the question and retrieve top-k chunks
         float[] queryEmbedding = embeddingService.embed(question);
-        List<VectorSearchService.ChunkMatch> chunks = vectorSearchService.search(
-                session.getDocumentId(), queryEmbedding, topK);
+        List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(
+                vectorSearchService.search(session.getDocumentId(), queryEmbedding, topK));
+
+        // For aggregation queries ("most expensive", "list all", "compare", etc.)
+        // top-k similarity may miss pages whose embeddings don't sit close to the
+        // query — even though those pages contain items we need to rank or list.
+        // Pull every visual block for the document and add any not already retrieved.
+        if (isAggregationQuery(question)) {
+            Set<UUID> seenBlockIds = chunks.stream()
+                    .map(VectorSearchService.ChunkMatch::blockId)
+                    .collect(Collectors.toCollection(HashSet::new));
+            List<VectorSearchService.ChunkMatch> allVisuals =
+                    vectorSearchService.getAllVisualBlocks(session.getDocumentId());
+            int added = 0;
+            for (VectorSearchService.ChunkMatch v : allVisuals) {
+                if (seenBlockIds.add(v.blockId())) {
+                    chunks.add(v);
+                    added++;
+                }
+            }
+            chunks.sort(Comparator.comparingInt(VectorSearchService.ChunkMatch::pageNumber)
+                    .thenComparingInt(VectorSearchService.ChunkMatch::chunkIndex));
+            log.info("Aggregation query detected — added {} extra visual block(s); {} total chunks in context",
+                    added, chunks.size());
+        }
 
         // Build grounded prompt
         String prompt = buildPrompt(question, chunks);
@@ -139,24 +191,24 @@ public class ChatService {
     private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are a document Q&A assistant. Answer the user's question using ONLY the document content provided below.\n\n");
-        sb.append("The content includes two types of blocks:\n");
-        sb.append("  - [Page X - text]: extracted text from that page.\n");
-        sb.append("  - [Page X - visual]: an AI description of charts, tables, figures, or images on that page.\n\n");
         sb.append("Rules:\n");
-        sb.append("1. Use information from BOTH text and visual blocks — they are equally authoritative.\n");
-        sb.append("2. Cite every factual claim with [Page X] where X is the page number.\n");
+        sb.append("1. Use information from ALL content sections — text extracts and visual descriptions are equally authoritative.\n");
+        sb.append("2. Cite every factual claim with [Page X] where X is the page number shown in the section header. " +
+                  "Write each page as its own separate tag — NEVER combine them: write [Page 1][Page 2] not [Page 1, Page 2].\n");
         sb.append("3. When referencing a chart, table, or figure, describe what it shows and cite the page.\n");
         sb.append("4. If the answer cannot be found in the provided content, respond: \"I don't have enough information in the retrieved sections to answer this question.\"\n");
-        sb.append("5. Be concise and accurate.\n\n");
-        sb.append("Document content:\n");
+        sb.append("5. Be concise and accurate. Your citation format must be exactly [Page X] — nothing else.\n\n");
+        sb.append("=== DOCUMENT CONTENT ===\n");
 
         for (VectorSearchService.ChunkMatch chunk : chunks) {
             boolean isVisual = "visual_summary".equals(chunk.blockType());
-            sb.append("\n[Page ").append(chunk.pageNumber())
-              .append(isVisual ? " - visual]:\n" : " - text]:\n");
+            sb.append("\n--- Page ").append(chunk.pageNumber())
+              .append(isVisual ? " (visual description)" : " (text extract)")
+              .append(" ---\n");
             sb.append(chunk.extractedText()).append("\n");
         }
 
+        sb.append("\n=== END OF DOCUMENT CONTENT ===\n");
         sb.append("\nQuestion: ").append(question).append("\n\nAnswer:");
         return sb.toString();
     }
@@ -209,20 +261,28 @@ public class ChatService {
 
         while (matcher.find()) {
             int pageNumber = Integer.parseInt(matcher.group(1));
-            chunks.stream()
+            boolean alreadyAdded = citations.stream()
+                    .anyMatch(existing -> existing.pageNumber() == pageNumber);
+            if (alreadyAdded) continue;
+
+            // Prefer a text block with meaningful content (≥30 chars) as the excerpt —
+            // it can be used to search the PDF text layer for highlighting.
+            // Fall back to any block for the page (e.g. visual summary) if no good text exists.
+            Optional<VectorSearchService.ChunkMatch> best = chunks.stream()
                     .filter(c -> c.pageNumber() == pageNumber)
-                    .findFirst()
-                    .ifPresent(c -> {
-                        // Deduplicate by page number
-                        boolean alreadyAdded = citations.stream()
-                                .anyMatch(existing -> existing.pageNumber() == pageNumber);
-                        if (!alreadyAdded) {
-                            String excerpt = c.extractedText().length() > 200
-                                    ? c.extractedText().substring(0, 200) + "…"
-                                    : c.extractedText();
-                            citations.add(new CitationDto(pageNumber, excerpt));
-                        }
-                    });
+                    .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
+                    .findFirst();
+            if (best.isEmpty()) {
+                best = chunks.stream()
+                        .filter(c -> c.pageNumber() == pageNumber)
+                        .findFirst();
+            }
+            best.ifPresent(c -> {
+                String excerpt = c.extractedText().length() > 200
+                        ? c.extractedText().substring(0, 200) + "…"
+                        : c.extractedText();
+                citations.add(new CitationDto(pageNumber, excerpt));
+            });
         }
         return citations;
     }

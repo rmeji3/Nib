@@ -3,12 +3,20 @@ import type { Citation } from '../nib-types';
 
 const PANEL_POSITION: 'left' | 'right' = 'right';
 
+export interface TextHighlight {
+  /** 0-indexed page that should be highlighted */
+  pageIndex: number;
+  /** The text to search for in the PDF text layer */
+  query: string;
+}
+
 export function useNibState() {
   const [splitRatio, setSplitRatio] = useState(60);
   const [zoom, setZoom] = useState(0.9);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(6);
   const [chatMinimized, setChatMinimized] = useState(false);
+  const [highlight, setHighlight] = useState<TextHighlight | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +38,11 @@ export function useNibState() {
   const onCiteClick = useCallback((citation: Citation) => {
     scrollToPage(citation.page);
     setCurrentPage(citation.page);
+    // Use the first ~60 chars of the snippet as the search query for text-layer highlighting.
+    // Snippets from well-formed PDFs (text blocks) will match; visual descriptions will silently
+    // produce no highlight, which is fine — the page scroll still provides navigation.
+    const query = citation.snippet?.trim().slice(0, 60) ?? '';
+    setHighlight(query ? { pageIndex: citation.page, query } : null);
   }, [scrollToPage]);
 
   // Drag divider resizing
@@ -90,6 +103,7 @@ export function useNibState() {
     currentPage,
     totalPages,
     chatMinimized,
+    highlight,
     setZoom,
     setCurrentPage,
     setTotalPages,

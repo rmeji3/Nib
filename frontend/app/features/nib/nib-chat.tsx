@@ -264,7 +264,6 @@ function AssistantMessageView({
               <span className="cite-card-idx">{index + 1}</span>
               <span className="cite-card-body">
                 <span className="cite-card-where">{citation.label}</span>
-                <span className="cite-card-snippet">{citation.snippet}</span>
               </span>
               <Icon name="arrow-right" />
             </button>

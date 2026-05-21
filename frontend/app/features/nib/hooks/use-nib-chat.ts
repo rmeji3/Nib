@@ -22,6 +22,18 @@ function nextId() {
 const PAGE_REF_RE = /\[Page (\d+)\]/gi;
 
 /**
+ * Gemini sometimes combines citations like [Page 1, Page 2] instead of writing
+ * [Page 1][Page 2]. This expands them into individual tags so PAGE_REF_RE can
+ * match each one normally.
+ */
+function expandCombinedCitations(answer: string): string {
+  return answer.replace(/\[Page \d+(?:,\s*Page \d+)+\]/gi, (match) => {
+    const nums = match.match(/\d+/g) ?? [];
+    return nums.map((n) => `[Page ${n}]`).join('');
+  });
+}
+
+/**
  * Single source of truth for converting an answer string + backend API citations
  * into the { segments, citations } pair the UI needs.
  *
@@ -40,6 +52,9 @@ function buildMessageContent(
   answer: string,
   apiCitations: ApiCitation[],
 ): { segments: MessageSegment[]; citations: Citation[] } {
+  // Normalize combined citations before any processing
+  const normalizedAnswer = expandCombinedCitations(answer);
+
   // Build excerpt lookup: 1-based page number → excerpt text from backend
   const excerptByPage = new Map<number, string>();
   apiCitations.forEach((c) => {
@@ -49,7 +64,7 @@ function buildMessageContent(
   // First pass: collect unique page numbers in order of first appearance
   const pageOrder: number[] = [];
   const seen = new Set<number>();
-  for (const m of answer.matchAll(PAGE_REF_RE)) {
+  for (const m of normalizedAnswer.matchAll(PAGE_REF_RE)) {
     const n = parseInt(m[1], 10);
     if (!seen.has(n)) { seen.add(n); pageOrder.push(n); }
   }
@@ -66,22 +81,22 @@ function buildMessageContent(
   const pageToIdx = new Map<number, number>();
   pageOrder.forEach((n, i) => pageToIdx.set(n, i + 1));
 
-  // Second pass: build segments, replacing [Page N] with { cite: idx }
+  // Second pass: build segments on the normalised answer, replacing [Page N] with { cite: idx }
   const segments: MessageSegment[] = [];
   const re = new RegExp(PAGE_REF_RE.source, PAGE_REF_RE.flags); // fresh instance
   let lastIndex = 0;
   let m: RegExpExecArray | null;
 
-  while ((m = re.exec(answer)) !== null) {
-    if (m.index > lastIndex) segments.push(answer.slice(lastIndex, m.index));
+  while ((m = re.exec(normalizedAnswer)) !== null) {
+    if (m.index > lastIndex) segments.push(normalizedAnswer.slice(lastIndex, m.index));
     const pageNum = parseInt(m[1], 10);
     const idx = pageToIdx.get(pageNum);
     segments.push(idx !== undefined ? { cite: idx } : m[0]);
     lastIndex = re.lastIndex;
   }
 
-  if (lastIndex < answer.length) segments.push(answer.slice(lastIndex));
-  return { segments: segments.length > 0 ? segments : [answer], citations };
+  if (lastIndex < normalizedAnswer.length) segments.push(normalizedAnswer.slice(lastIndex));
+  return { segments: segments.length > 0 ? segments : [normalizedAnswer], citations };
 }
 
 /** Convert stored API messages into the local ChatMessage format. */

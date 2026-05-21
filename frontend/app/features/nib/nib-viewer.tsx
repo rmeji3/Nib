@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import type { TextHighlight } from './hooks/use-nib-state';
 import { motion, useAnimationControls } from 'framer-motion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -27,6 +28,30 @@ import {
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export const PAGE_W = 620;
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Returns the text item as HTML, wrapping the first occurrence of `query`
+ * in a <mark> tag so react-pdf's text layer renders it highlighted.
+ * Falls back to plain escaped text when no match is found.
+ */
+function makeTextRenderer(query: string) {
+  const lower = query.toLowerCase();
+  return ({ str }: { str: string }) => {
+    const idx = str.toLowerCase().indexOf(lower);
+    if (idx === -1) return escapeHtml(str);
+    return (
+      escapeHtml(str.slice(0, idx)) +
+      '<mark style="background:oklch(0.92 0.16 85/0.55);border-radius:2px;color:inherit;padding:0">' +
+      escapeHtml(str.slice(idx, idx + query.length)) +
+      '</mark>' +
+      escapeHtml(str.slice(idx + query.length))
+    );
+  };
+}
 
 export function Icon({ name }: { name: string }) {
   const props = {
@@ -343,6 +368,7 @@ export function Viewer({
   zoom,
   setZoom,
   scrollContainerRef,
+  highlight,
 }: {
   currentPage: number;
   totalPages: number;
@@ -351,6 +377,7 @@ export function Viewer({
   zoom: number;
   setZoom: (value: number) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  highlight?: TextHighlight | null;
 }) {
   const [showThumbs, setShowThumbs] = useState(true);
   const { file, documentId, documentName } = useUpload();
@@ -666,6 +693,11 @@ export function Viewer({
                     width={PAGE_W}
                     devicePixelRatio={Math.max(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
                     renderAnnotationLayer={false}
+                    customTextRenderer={
+                      highlight && highlight.pageIndex === index
+                        ? makeTextRenderer(highlight.query)
+                        : undefined
+                    }
                   />
                 </div>
               </div>

@@ -17,6 +17,7 @@ export default function NibApp() {
     currentPage,
     totalPages,
     chatMinimized,
+    highlight,
     setZoom,
     setCurrentPage,
     setTotalPages,
@@ -61,6 +62,7 @@ export default function NibApp() {
             zoom={zoom}
             setZoom={setZoom}
             scrollContainerRef={scrollContainerRef}
+            highlight={highlight}
           />
         </div>
 

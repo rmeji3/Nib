@@ -50,6 +50,14 @@ public class IngestionRunner {
     /** Max chunks per Mistral embeddings API call (API limit is 512). */
     private static final int EMBED_BATCH_SIZE = 128;
 
+    /**
+     * Minimum trimmed length for a page's extracted text to be worth indexing.
+     * Below this, PDFBox has typically only recovered stray glyphs (e.g. "e")
+     * from a page whose font encoding it can't decode. Such fragments become
+     * useless "citation excerpts" in the UI. Vision still covers the page.
+     */
+    private static final int MIN_TEXT_LENGTH = 30;
+
     @Value("${ingestion.vision.enabled:true}")
     private boolean visionEnabled;
 
@@ -88,9 +96,18 @@ public class IngestionRunner {
 
                 // ── 3a. Text chunks ───────────────────────────────────────────────
                 if (pageText != null && !pageText.isBlank()) {
-                    List<String> chunks = chunkingService.chunk(pageText);
-                    for (int j = 0; j < chunks.size(); j++) {
-                        pending.add(new PendingBlock(pageNumber, j, chunks.get(j), BLOCK_TEXT));
+                    String trimmed = pageText.trim();
+                    if (trimmed.length() < MIN_TEXT_LENGTH) {
+                        log.debug("Page {} text is too short ({} chars) — skipping text blocks, " +
+                                  "visual block will cover this page", pageNumber, trimmed.length());
+                    } else if (isCharacterSpaced(pageText)) {
+                        log.debug("Page {} has character-spaced text (font encoding artifact) — " +
+                                  "skipping text blocks, visual block will cover this page", pageNumber);
+                    } else {
+                        List<String> chunks = chunkingService.chunk(pageText);
+                        for (int j = 0; j < chunks.size(); j++) {
+                            pending.add(new PendingBlock(pageNumber, j, chunks.get(j), BLOCK_TEXT));
+                        }
                     }
                 }
 
@@ -155,5 +172,19 @@ public class IngestionRunner {
             job.setCompletedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);
         }
+    }
+
+    /**
+     * Returns true when PDFBox has produced character-spaced output like "e g g s 2 0"
+     * instead of normal words. This happens with some PDF fonts that encode each glyph
+     * at an explicit X position with inter-character gaps PDFBox reads as spaces.
+     * Such text is useless for RAG — Gemini Vision covers those pages instead.
+     */
+    private static boolean isCharacterSpaced(String text) {
+        String[] tokens = text.trim().split("\\s+");
+        if (tokens.length < 10) return false;
+        long singleCharCount = 0;
+        for (String t : tokens) if (t.length() == 1) singleCharCount++;
+        return (double) singleCharCount / tokens.length > 0.65;
     }
 }
