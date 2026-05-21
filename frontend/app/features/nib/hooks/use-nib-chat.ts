@@ -18,44 +18,70 @@ function nextId() {
   return crypto.randomUUID();
 }
 
-/** Convert API citations (1-based page numbers) to frontend Citations (0-based for PDF viewer). */
-function mapCitations(apiCitations: ApiCitation[]): Citation[] {
-  return apiCitations.map((c) => ({
-    page: c.pageNumber - 1,
-    blockId: `page-${c.pageNumber}`,
-    label: `Page ${c.pageNumber}`,
-    snippet: c.excerpt,
-  }));
-}
+// Case-insensitive — catches [Page 1], [page 1], [PAGE 1]
+const PAGE_REF_RE = /\[Page (\d+)\]/gi;
 
 /**
- * Parse the plain answer string into MessageSegments.
- * Replaces [Page X] markers in the text with { cite: N } references pointing
- * into the citations array, so the UI can render clickable citation chips.
+ * Single source of truth for converting an answer string + backend API citations
+ * into the { segments, citations } pair the UI needs.
+ *
+ * Why not rely on response.citations alone?
+ * The backend extracts citations only for pages that appeared in the top-k
+ * vector-search results. If Gemini cites a page that wasn't retrieved, the
+ * backend drops it — leaving [Page N] as an un-mappable marker in the text.
+ *
+ * This function solves it by scanning the answer text directly:
+ *  1. Finds every [Page N] marker in the text (case-insensitive).
+ *  2. Builds the citations array from those page numbers (order of first appearance).
+ *  3. Fills in excerpt snippets from apiCitations when the backend has them.
+ *  4. Replaces every [Page N] with a { cite: idx } segment → clickable chip.
  */
-function parseSegments(answer: string, citations: Citation[]): MessageSegment[] {
-  // Map 1-based page number → 1-based index in citations array
-  const pageToIdx = new Map<number, number>();
-  citations.forEach((c, i) => {
-    const pageNum = c.page + 1;
-    if (!pageToIdx.has(pageNum)) pageToIdx.set(pageNum, i + 1);
+function buildMessageContent(
+  answer: string,
+  apiCitations: ApiCitation[],
+): { segments: MessageSegment[]; citations: Citation[] } {
+  // Build excerpt lookup: 1-based page number → excerpt text from backend
+  const excerptByPage = new Map<number, string>();
+  apiCitations.forEach((c) => {
+    if (!excerptByPage.has(c.pageNumber)) excerptByPage.set(c.pageNumber, c.excerpt);
   });
 
-  const segments: MessageSegment[] = [];
-  const regex = /\[Page (\d+)\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  // First pass: collect unique page numbers in order of first appearance
+  const pageOrder: number[] = [];
+  const seen = new Set<number>();
+  for (const m of answer.matchAll(PAGE_REF_RE)) {
+    const n = parseInt(m[1], 10);
+    if (!seen.has(n)) { seen.add(n); pageOrder.push(n); }
+  }
 
-  while ((match = regex.exec(answer)) !== null) {
-    if (match.index > lastIndex) segments.push(answer.slice(lastIndex, match.index));
-    const pageNum = parseInt(match[1], 10);
+  // Build citations array — one entry per unique cited page
+  const citations: Citation[] = pageOrder.map((pageNum) => ({
+    page: pageNum - 1,                           // 0-indexed for the PDF viewer
+    blockId: `page-${pageNum}`,
+    label: `Page ${pageNum}`,
+    snippet: excerptByPage.get(pageNum) ?? '',
+  }));
+
+  // Map page number → 1-based citation index (used by MessageSegments)
+  const pageToIdx = new Map<number, number>();
+  pageOrder.forEach((n, i) => pageToIdx.set(n, i + 1));
+
+  // Second pass: build segments, replacing [Page N] with { cite: idx }
+  const segments: MessageSegment[] = [];
+  const re = new RegExp(PAGE_REF_RE.source, PAGE_REF_RE.flags); // fresh instance
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(answer)) !== null) {
+    if (m.index > lastIndex) segments.push(answer.slice(lastIndex, m.index));
+    const pageNum = parseInt(m[1], 10);
     const idx = pageToIdx.get(pageNum);
-    segments.push(idx !== undefined ? { cite: idx } : match[0]);
-    lastIndex = regex.lastIndex;
+    segments.push(idx !== undefined ? { cite: idx } : m[0]);
+    lastIndex = re.lastIndex;
   }
 
   if (lastIndex < answer.length) segments.push(answer.slice(lastIndex));
-  return segments.length > 0 ? segments : [answer];
+  return { segments: segments.length > 0 ? segments : [answer], citations };
 }
 
 /** Convert stored API messages into the local ChatMessage format. */
@@ -72,8 +98,7 @@ function mapApiMessages(
     if (msg.role === 'user') {
       return { id: msg.id, role: 'user', text: msg.content } satisfies UserMessage;
     }
-    const citations = mapCitations(msg.citations ?? []);
-    const segments = parseSegments(msg.content, citations);
+    const { segments, citations } = buildMessageContent(msg.content, msg.citations ?? []);
     return {
       id: msg.id,
       role: 'assistant',
@@ -161,8 +186,7 @@ export function useNibChat(documentId: string | null) {
         const response = await sendChatQuery(sessionId, text);
         window.clearInterval(stepTimer);
 
-        const citations = mapCitations(response.citations);
-        const segments = parseSegments(response.answer, citations);
+        const { segments, citations } = buildMessageContent(response.answer, response.citations);
         const finalReasoning = [
           'Embedded query with Mistral.',
           `Retrieved ${response.citations.length} source passage${response.citations.length !== 1 ? 's' : ''}.`,
