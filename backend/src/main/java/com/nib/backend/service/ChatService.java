@@ -51,10 +51,11 @@ public class ChatService {
     @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiApiUrl;
 
+    @Value("${gemini.model:gemini-2.5-flash}")
+    private String geminiModel;
+
     @Value("${ingestion.top-k:5}")
     private int topK;
-
-    private static final String GEMINI_MODEL = "gemini-2.0-flash";
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
 
     // ── Sessions ──────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ public class ChatService {
                 .role("assistant")
                 .content(answer)
                 .citations(serializeCitations(citations))
-                .modelVersion(GEMINI_MODEL)
+                .modelVersion(geminiModel)
                 .build());
 
         return new ChatQueryResponse(
@@ -128,7 +129,7 @@ public class ChatService {
                 sessionId,
                 answer,
                 citations,
-                GEMINI_MODEL,
+                geminiModel,
                 assistantMsg.getCreatedAt().toString()
         );
     }
@@ -166,7 +167,7 @@ public class ChatService {
                 )
         );
 
-        String url = geminiApiUrl + "/models/" + GEMINI_MODEL + ":generateContent?key=" + geminiApiKey;
+        String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
 
         Map<String, Object> response;
         try {
