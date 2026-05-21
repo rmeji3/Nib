@@ -26,14 +26,24 @@ public class EmbeddingService {
     private static final String MODEL = "mistral-embed";
 
     /**
-     * Embeds a single text string using Mistral's embedding API.
-     * Returns a float array of dimension 1024.
+     * Embeds a single text string. Delegates to embedBatch for consistency.
+     */
+    public float[] embed(String text) {
+        return embedBatch(List.of(text)).get(0);
+    }
+
+    /**
+     * Embeds multiple texts in a single Mistral API call.
+     * Dramatically reduces API calls vs. calling embed() per chunk — avoids rate limits.
+     * Returns a list of float arrays in the same order as the input list.
      */
     @SuppressWarnings("unchecked")
-    public float[] embed(String text) {
+    public List<float[]> embedBatch(List<String> texts) {
+        if (texts == null || texts.isEmpty()) return List.of();
+
         Map<String, Object> body = Map.of(
                 "model", MODEL,
-                "input", List.of(text)
+                "input", texts
         );
 
         Map<String, Object> response = restClient.post()
@@ -49,14 +59,19 @@ public class EmbeddingService {
         List<Map<String, Object>> data = (List<Map<String, Object>>) response.get("data");
         if (data == null || data.isEmpty()) throw new RuntimeException("No embedding data returned");
 
-        List<Double> embedding = (List<Double>) data.get(0).get("embedding");
-        if (embedding == null) throw new RuntimeException("Null embedding vector returned");
+        // Sort by index to guarantee ordering matches input list
+        data.sort((a, b) -> Integer.compare(
+                ((Number) a.get("index")).intValue(),
+                ((Number) b.get("index")).intValue()
+        ));
 
-        float[] result = new float[embedding.size()];
-        for (int i = 0; i < embedding.size(); i++) {
-            result[i] = embedding.get(i).floatValue();
-        }
-        return result;
+        return data.stream().map(item -> {
+            List<Double> embedding = (List<Double>) item.get("embedding");
+            if (embedding == null) throw new RuntimeException("Null embedding vector in batch response");
+            float[] result = new float[embedding.size()];
+            for (int i = 0; i < embedding.size(); i++) result[i] = embedding.get(i).floatValue();
+            return result;
+        }).toList();
     }
 
     /** Formats a float array into the pgvector string format: [0.1,0.2,...] */

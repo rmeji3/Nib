@@ -65,20 +65,28 @@ public class IngestionRunner {
                 }
 
                 List<String> chunks = chunkingService.chunk(pageText);
-                for (int j = 0; j < chunks.size(); j++) {
-                    String chunkText = chunks.get(j);
+                if (chunks.isEmpty()) {
+                    incrementProcessed(job);
+                    continue;
+                }
 
-                    ContentBlock block = contentBlockRepository.save(ContentBlock.builder()
+                // Save all blocks for this page first
+                List<ContentBlock> blocks = new java.util.ArrayList<>();
+                for (int j = 0; j < chunks.size(); j++) {
+                    blocks.add(contentBlockRepository.save(ContentBlock.builder()
                             .documentId(documentId)
                             .pageNumber(pageNumber)
                             .blockType("text")
                             .chunkIndex(j)
-                            .extractedText(chunkText)
-                            .tokenCount(chunkingService.estimateTokens(chunkText))
-                            .build());
+                            .extractedText(chunks.get(j))
+                            .tokenCount(chunkingService.estimateTokens(chunks.get(j)))
+                            .build()));
+                }
 
-                    float[] embedding = embeddingService.embed(chunkText);
-                    vectorSearchService.saveEmbedding(block.getId(), embedding, EMBED_MODEL);
+                // Embed all chunks in one batched API call — one request per page, not per chunk
+                List<float[]> embeddings = embeddingService.embedBatch(chunks);
+                for (int j = 0; j < blocks.size(); j++) {
+                    vectorSearchService.saveEmbedding(blocks.get(j).getId(), embeddings.get(j), EMBED_MODEL);
                 }
 
                 incrementProcessed(job);
