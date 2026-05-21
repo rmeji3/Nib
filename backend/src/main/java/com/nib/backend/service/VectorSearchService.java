@@ -57,7 +57,10 @@ public class VectorSearchService {
                 "INSERT INTO embeddings (id, block_id, embedding, model_version) VALUES (gen_random_uuid(), ?, ?::vector, ?)",
                 batchArgs
         );
-        log.debug("Batch-inserted {} embeddings", blocks.size());
+        // Refresh planner statistics so the HNSW index covers the new rows immediately.
+        // Without this, the first query after a bulk insert can return 0 results.
+        jdbcTemplate.execute("ANALYZE embeddings");
+        log.debug("Batch-inserted {} embeddings and ran ANALYZE", blocks.size());
     }
 
     /**
