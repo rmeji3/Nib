@@ -40,36 +40,39 @@ This is a live developer guide and project directory index for the Next.js front
 
 | URL Route | Type | File Path |
 | --- | --- | --- |
-| `/` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/page.tsx) |
-| `/file` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/file/page.tsx) |
-| `/home` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/home/page.tsx) |
-| `/signin` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signin/page.tsx) |
-| `/signup` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signup/page.tsx) |
+| `/` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/page.tsx) |
+| `/document/[id]` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/document/[id]/page.tsx) |
+| `/document/uploading` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/document/uploading/page.tsx) |
+| `/file` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/file/page.tsx) |
+| `/home` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/home/page.tsx) |
+| `/signin` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/signin/page.tsx) |
+| `/signup` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/signup/page.tsx) |
 
 ### Feature Modules (`frontend/app/features`)
 
 #### Feature: `auth`
 - **Components**:
-  - [`auth-card.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/auth/components/auth-card.tsx)
-  - [`auth-provider.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/auth/components/auth-provider.tsx)
-  - [`oauth-button.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/auth/components/oauth-button.tsx)
-  - [`protected-route.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/auth/components/protected-route.tsx)
+  - [`auth-card.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/auth-card.tsx)
+  - [`auth-provider.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/auth-provider.tsx)
+  - [`oauth-button.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/oauth-button.tsx)
+  - [`protected-route.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/protected-route.tsx)
 - **Hooks**:
-  - [`use-auth.ts`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/auth/hooks/use-auth.ts)
+  - [`use-auth.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/hooks/use-auth.ts)
 
 #### Feature: `nib`
 - **Hooks**:
-  - [`use-merge-pdf.ts`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/nib/hooks/use-merge-pdf.ts)
-  - [`use-nib-chat.ts`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/nib/hooks/use-nib-chat.ts)
-  - [`use-nib-state.ts`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/nib/hooks/use-nib-state.ts)
-  - [`use-nib-upload.ts`](file:///A:/Coding/ai-pdf-viewer/frontend/app/features/nib/hooks/use-nib-upload.ts)
+  - [`use-ingestion-status.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-ingestion-status.ts)
+  - [`use-merge-pdf.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-merge-pdf.ts)
+  - [`use-nib-chat.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-chat.ts)
+  - [`use-nib-state.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-state.ts)
+  - [`use-nib-upload.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-upload.ts)
 
 #### Feature: `upload`
 
 ### Shared Global Components (`frontend/components`)
 
-- [`ui/drawer.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/components/ui/drawer.tsx)
-- [`ui/dropdown-menu.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/components/ui/dropdown-menu.tsx)
+- [`ui/drawer.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/components/ui/drawer.tsx)
+- [`ui/dropdown-menu.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/components/ui/dropdown-menu.tsx)
 
 <!-- END_AUTO_MAP -->
 
@@ -84,3 +87,4 @@ This section is maintained by AI coding agents to track architectural updates, n
 - **2026-05-20**: Implemented global cursor-pointer styles for all buttons/interactive elements, and explicitly changed radix dropdown items from cursor-default to cursor-pointer in `ui/dropdown-menu.tsx`.
 - **2026-05-19**: Added document upload, listing, and PDF merge features. New files: `lib/api/documents.ts` (API client), `app/features/nib/hooks/use-nib-upload.ts` (auto-upload local file to backend), `app/features/nib/hooks/use-merge-pdf.ts` (merge PDFs via backend). Updated: `upload-context.tsx` (added `documentId`, `documentUrl`, `setDocument`), `home/hooks/use-documents.ts` (real API replacing mock data), `home/page.tsx` (document grid now real, click navigates to viewer), `nib-viewer.tsx` (uses `documentUrl` for loaded documents, combine button triggers real merge), `nib-app.tsx` (mounts `useNibUpload`).
 - **2026-05-20**: Wired up `@tanstack/react-virtual` in `nib-viewer.tsx` for the thumbnail sidebar to prevent performance tanking on large PDFs, and limited thumbnail `devicePixelRatio` to 1.
+- **2026-05-21**: Phase 1 RAG frontend wiring. New files: `lib/api/chat.ts` (getOrCreateSession, sendChatQuery, fetchSessionMessages), `app/features/nib/hooks/use-ingestion-status.ts` (TanStack Query polling every 2 s until COMPLETE/FAILED). Modified: `lib/api/documents.ts` (added IngestionStatus interface + fetchIngestionStatus), `hooks/use-nib-chat.ts` (full rewrite — real Gemini chat via sendChatQuery, session init on mount, historical message hydration, parseSegments maps [Page X] → Citation chips, animated reasoning steps during fetch), `nib-app.tsx` (reads documentId from useUpload context, passes isIndexing/progress/pagesTotal/pagesProcessed to ChatPanel), `nib-chat.tsx` (IndexingBanner component with progress bar + pulse dot, dynamic subtitle, composer disabled while indexing).

@@ -43,41 +43,42 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 <!-- START_AUTO_MAP -->
 ### API Controller & Endpoints Map
 
-#### Controller: `AuthController`
+#### Controller: [`AuthController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
-#### Controller: `DocumentController`
+#### Controller: [`ChatController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/ChatController.java)
 | Verb | Endpoint Route |
 | --- | --- |
-| `GET` | `/api/v1/documents` |
-| `POST` | `/api/v1/documents/upload` |
-| `POST` | `/api/v1/documents/merge` |
-| `GET` | `/api/v1/documents/{id}` |
-| `PATCH` | `/api/v1/documents/{id}` |
-| `DELETE` | `/api/v1/documents/{id}` |
-| `PATCH` | `/api/v1/documents/{id}/star` |
-| `POST` | `/api/v1/documents/{id}/restore` |
-| `DELETE` | `/api/v1/documents/{id}/permanent` |
+| `GET` | `/api/v1/chat/sessions/document/{documentId}` |
+| `GET` | `/api/v1/chat/sessions/{sessionId}/messages` |
+| `POST` | `/api/v1/chat/sessions/{sessionId}/query` |
+
+#### Controller: [`DocumentController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
+| Verb | Endpoint Route |
+| --- | --- |
 | `GET` | `/api/v1/documents/trash` |
 | `GET` | `/api/v1/documents/starred` |
+| `GET` | `/api/v1/documents/{id}` |
+| `GET` | `/api/v1/documents/{id}/content` |
+| `GET` | `/api/v1/documents` |
+| `POST` | `/api/v1/documents/upload` |
+| `POST` | `/api/v1/documents/{id}/restore` |
+| `POST` | `/api/v1/documents/merge` |
+| `DELETE` | `/api/v1/documents/{id}` |
+| `DELETE` | `/api/v1/documents/{id}/permanent` |
+| `PATCH` | `/api/v1/documents/{id}` |
+| `PATCH` | `/api/v1/documents/{id}/star` |
 
-#### Controller: `IngestionController` *(Phase 1)*
+#### Controller: [`IngestionController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/documents/{id}/status` |
 | `POST` | `/api/v1/documents/{id}/ingest` |
 
-#### Controller: `ChatController` *(Phase 1)*
-| Verb | Endpoint Route |
-| --- | --- |
-| `GET` | `/api/v1/chat/sessions/document/{documentId}` |
-| `POST` | `/api/v1/chat/sessions/{sessionId}/query` |
-| `GET` | `/api/v1/chat/sessions/{sessionId}/messages` |
-
-#### Controller: `TestController`
+#### Controller: [`TestController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/test/hello` |
@@ -85,53 +86,56 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 
 ### Database Entities (`backend/src/.../model`)
 
-- `Document`
-- `User`
-- `ContentBlock` *(Phase 1)* — per-page text chunks
-- `IngestionJob` *(Phase 1)* — async pipeline status tracking
-- `ChatSession` *(Phase 1)* — conversation thread per document
-- `ChatMessage` *(Phase 1)* — individual chat turns with JSONB citations
-- `IngestionStatus` *(Phase 1)* — enum: PENDING, PROCESSING, COMPLETE, FAILED
+- [`ChatMessage`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ChatMessage.java)
+- [`ChatSession`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ChatSession.java)
+- [`ContentBlock`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ContentBlock.java)
+- [`Document`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/Document.java)
+- [`IngestionJob`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/IngestionJob.java)
+- [`IngestionStatus`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/IngestionStatus.java)
+- [`User`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/User.java)
 
 ### Data Access Repositories (`backend/src/.../repository`)
 
-- `DocumentRepository`
-- `UserRepository`
-- `ContentBlockRepository` *(Phase 1)*
-- `IngestionJobRepository` *(Phase 1)*
-- `ChatSessionRepository` *(Phase 1)*
-- `ChatMessageRepository` *(Phase 1)*
+- [`ChatMessageRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ChatMessageRepository.java)
+- [`ChatSessionRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ChatSessionRepository.java)
+- [`ContentBlockRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ContentBlockRepository.java)
+- [`DocumentRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
+- [`IngestionJobRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/IngestionJobRepository.java)
+- [`UserRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
 
 ### Business Services (`backend/src/.../service`)
 
-- `AuthService`
-- `DocumentService` — triggers ingestion automatically on upload
-- `JwtService`
-- `SupabaseStorageService`
-- `TextExtractionService` *(Phase 1)* — PDFBox page-by-page text extraction
-- `ChunkingService` *(Phase 1)* — sliding-window character chunker (~500 tokens)
-- `EmbeddingService` *(Phase 1)* — Mistral `mistral-embed` API, returns float[1024]
-- `VectorSearchService` *(Phase 1)* — JdbcTemplate pgvector insert + match_chunks() search
-- `IngestionService` *(Phase 1)* — @Async orchestrator; PENDING→PROCESSING→COMPLETE/FAILED
-- `ChatService` *(Phase 1)* — RAG loop: embed question → pgvector search → Gemini 2.0 Flash → citations
+- [`AuthService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/AuthService.java)
+- [`ChatService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/ChatService.java)
+- [`ChunkingService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/ChunkingService.java)
+- [`DocumentService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/DocumentService.java)
+- [`EmbeddingService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/EmbeddingService.java)
+- [`IngestionRunner`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionRunner.java)
+- [`IngestionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionService.java)
+- [`JwtService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
+- [`SupabaseStorageService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
+- [`TestIService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
+- [`TestService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestService.java)
+- [`TextExtractionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TextExtractionService.java)
+- [`VectorSearchService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/VectorSearchService.java)
 
 ### Data Transfer Objects (`backend/src/.../dto`)
 
-- `AuthRequest`, `AuthResponse`, `RegisterRequest`
-- `DocumentResponse`, `PagedResponse`, `RenameRequest`
-- `IngestionStatusResponse` *(Phase 1)*
-- `CitationDto` *(Phase 1)* — `{ pageNumber, excerpt }`
-- `ChatQueryRequest` *(Phase 1)*
-- `ChatQueryResponse` *(Phase 1)*
-- `ChatMessageResponse` *(Phase 1)*
-- `ChatSessionResponse` *(Phase 1)*
+- [`AuthRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
+- [`AuthResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
+- [`ChatMessageResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatMessageResponse.java)
+- [`ChatQueryRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryRequest.java)
+- [`ChatQueryResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryResponse.java)
+- [`ChatSessionResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatSessionResponse.java)
+- [`CitationDto`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/CitationDto.java)
+- [`DocumentResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
+- [`IngestionStatusResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/IngestionStatusResponse.java)
+- [`PagedResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/PagedResponse.java)
+- [`RegisterRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
+- [`RenameRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/RenameRequest.java)
+- [`TestRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
+- [`TestResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
 
-### Config (`backend/src/.../config`)
-
-- `ApplicationConfig` — auth beans + RestClient + ObjectMapper
-- `AsyncConfig` *(Phase 1)* — `ingestionExecutor` thread pool (4 core / 8 max)
-- `SecurityConfig` — JWT filter chain + CORS
-- `JwtAuthFilter`
 
 <!-- END_AUTO_MAP -->
 

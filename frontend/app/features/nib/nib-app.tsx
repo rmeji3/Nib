@@ -5,8 +5,12 @@ import { ChatPanel } from './nib-chat';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
+import { useIngestionStatus } from './hooks/use-ingestion-status';
+import { useUpload } from '../upload/upload-context';
 
 export default function NibApp() {
+  const { documentId } = useUpload();
+
   const {
     splitRatio,
     zoom,
@@ -25,7 +29,8 @@ export default function NibApp() {
     onDividerPointerUp,
   } = useNibState();
 
-  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat();
+  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat(documentId);
+  const { isIndexing, progress, pagesProcessed, pagesTotal } = useIngestionStatus(documentId);
 
   const chatWidthPct = 100 - splitRatio;
 
@@ -90,6 +95,10 @@ export default function NibApp() {
                   onCiteClick={onCiteClick}
                   busy={busy}
                   onToggleMinimize={() => setChatMinimized(true)}
+                  isIndexing={isIndexing}
+                  progress={progress}
+                  pagesProcessed={pagesProcessed}
+                  pagesTotal={pagesTotal}
                 />
               </div>
             </motion.div>
