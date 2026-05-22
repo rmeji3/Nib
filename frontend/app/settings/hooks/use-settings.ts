@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '../../features/auth/hooks/use-auth';
 
 export type AccentColor = 'zinc' | 'blue' | 'purple' | 'teal' | 'amber' | 'rose';
 export type TrashRetention = '7' | '30' | '90' | 'never';
 export type DateDisplay = 'relative' | 'absolute';
 export type ReadingMode = 'paper' | 'minimal';
+export type Theme = 'light' | 'dark' | 'system';
 
 export interface AppSettings {
   accentColor: AccentColor;
@@ -20,6 +22,7 @@ export interface AppSettings {
   pageContextWindow: number;
   showConfidence: boolean;
   trashRetention: TrashRetention;
+  theme: Theme;
 }
 
 const DEFAULTS: AppSettings = {
@@ -35,6 +38,7 @@ const DEFAULTS: AppSettings = {
   pageContextWindow: 3,
   showConfidence: true,
   trashRetention: '30',
+  theme: 'system',
 };
 
 const STORAGE_KEY = 'nib_settings';
@@ -56,37 +60,93 @@ function applyAccent(color: AccentColor) {
   root.style.setProperty('--accent-glow-c', preset.c);
 }
 
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if (isDark) {
+    root.classList.remove('light');
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+    root.classList.add('light');
+  }
+}
+
 export function useSettings() {
+  const { user, updateUserSession } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
+      let parsed: Partial<AppSettings> = {};
       if (stored) {
-        const parsed: Partial<AppSettings> = JSON.parse(stored);
-        const merged = { ...DEFAULTS, ...parsed };
-        setSettings(merged);
-        applyAccent(merged.accentColor);
+        parsed = JSON.parse(stored);
       }
+      
+      let backendSettings: Partial<AppSettings> = {};
+      if (user?.settings) {
+        try {
+          backendSettings = JSON.parse(user.settings);
+        } catch(e) {}
+      }
+
+      const merged = { ...DEFAULTS, ...parsed, ...backendSettings };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      
+      setSettings(merged);
+      applyAccent(merged.accentColor);
+      applyTheme(merged.theme);
     } catch {}
     setLoaded(true);
-  }, []);
-
-  const update = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    setSettings(prev => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      if (key === 'accentColor') applyAccent(value as AccentColor);
-      return next;
-    });
-  }, []);
+  }, [user?.settings]);
 
   const reset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
     setSettings(DEFAULTS);
     applyAccent('zinc');
+    applyTheme('system');
   }, []);
+
+  const prevUser = useRef(user);
+  useEffect(() => {
+    // If the user was logged in and is now logged out, reset to default
+    if (prevUser.current && !user) {
+      reset();
+    }
+    prevUser.current = user;
+  }, [user, reset]);
+
+  const update = useCallback(async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const prevStr = localStorage.getItem(STORAGE_KEY);
+    const prev = prevStr ? JSON.parse(prevStr) : DEFAULTS;
+    const next = { ...prev, [key]: value };
+    
+    setSettings(next);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    if (key === 'accentColor') applyAccent(value as AccentColor);
+    if (key === 'theme') applyTheme(value as Theme);
+
+    if (user?.token) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      try {
+        await fetch(`${apiUrl}/api/v1/users/me/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({ settings: JSON.stringify(next) }),
+        });
+        if (updateUserSession) {
+          updateUserSession(JSON.stringify(next));
+        }
+      } catch (err) {
+        console.error('Failed to sync settings to backend', err);
+      }
+    }
+  }, [user]);
 
   return { settings, update, reset, loaded };
 }

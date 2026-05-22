@@ -11,6 +11,7 @@ export interface User {
   avatarUrl?: string;
   provider: 'credentials' | 'google';
   token?: string;
+  settings?: string;
 }
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ interface AuthContextType {
   signUp: (email: string, name: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserSession: (settings: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         name: data.name,
         provider: 'credentials',
         token: data.token,
+        settings: data.settings,
       };
       setUser(loggedUser);
       localStorage.setItem('nib_user', JSON.stringify(loggedUser));
@@ -105,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         name: data.name,
         provider: 'credentials',
         token: data.token,
+        settings: data.settings,
       };
       setUser(loggedUser);
       localStorage.setItem('nib_user', JSON.stringify(loggedUser));
@@ -156,8 +160,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/');
   };
 
+  const updateUserSession = (settings: string) => {
+    if (user) {
+      const updatedUser = { ...user, settings };
+      setUser(updatedUser);
+      localStorage.setItem('nib_user', JSON.stringify(updatedUser));
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signUp, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signUp, signInWithGoogle, signOut, updateUserSession }}>
       {children}
 
       {/* Google OAuth Simulation Modal */}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useSettings } from '../settings/hooks/use-settings';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useRouter } from 'next/navigation';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -23,6 +24,7 @@ import {
   useToggleStarDocument,
   type DocumentItem,
 } from './hooks/use-documents';
+import { useFormattedMeta } from './hooks/use-formatted-meta';
 import {
   useCollections,
   useCollectionDocuments,
@@ -141,6 +143,7 @@ function InfiniteScrollTrigger({ onIntersect, hasMore }: { onIntersect: () => vo
 // ─── Recent Doc Card (compact horizontal strip) ───────────────────────────────
 
 function RecentDocCard({ doc, onClick }: { doc: DocumentItem; onClick: () => void }) {
+  const formatMeta = useFormattedMeta();
   return (
     <button
       onClick={onClick}
@@ -154,7 +157,7 @@ function RecentDocCard({ doc, onClick }: { doc: DocumentItem; onClick: () => voi
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-[var(--text)] truncate leading-snug">{doc.title}</p>
-        <p className="text-[11px] text-[var(--text-faint)] mt-0.5">{formatRelativeTime(doc.lastOpenedAt)}</p>
+        <p className="text-[11px] text-[var(--text-faint)] mt-0.5 truncate">{formatMeta(doc)}</p>
       </div>
     </button>
   );
@@ -217,6 +220,7 @@ interface DocumentCardProps {
 }
 
 function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting }: DocumentCardProps) {
+  const formatMeta = useFormattedMeta();
   return (
     <div className={`group relative rounded-xl border border-white/10 bg-[var(--bg-surface)] transition hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg flex flex-col h-full ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
       <button type="button" onClick={onClick} className="w-full text-left p-4 flex-1 flex flex-col">
@@ -224,7 +228,7 @@ function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFr
         <h4 className="font-serif text-lg leading-6 line-clamp-2 pr-7 break-words">
           <Highlight text={doc.title} search={search} />
         </h4>
-        <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{doc.meta}</p>
+        <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
         <div className="mt-auto pt-3">
           <span className="inline-flex rounded bg-white/10 px-2 py-1 text-[10px] text-[var(--text-dim)]">{doc.tag}</span>
         </div>
@@ -276,11 +280,12 @@ interface TrashCardProps {
 }
 
 function TrashCard({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }: TrashCardProps) {
+  const formatMeta = useFormattedMeta();
   return (
     <div className={`rounded-xl border border-white/10 bg-[var(--bg-surface)] p-4 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''}`}>
       <DocumentPreview documentId={doc.id} />
       <h4 className="font-serif text-lg leading-6 line-clamp-2 text-[var(--text-dim)]">{doc.title}</h4>
-      <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{doc.meta}</p>
+      <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
       <div className="mt-3 flex gap-2">
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
           className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)] transition disabled:opacity-50">
@@ -386,6 +391,7 @@ interface DocumentListRowProps {
 }
 
 function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting }: DocumentListRowProps) {
+  const formatMeta = useFormattedMeta();
   return (
     <div className={`group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-4 py-3 transition hover:border-white/20 hover:bg-[var(--bg-elevated)] ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="shrink-0 flex h-9 w-7 items-center justify-center rounded-[3px] bg-white/5 text-[var(--text-faint)]">
@@ -395,7 +401,7 @@ function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemov
       </div>
       <button type="button" onClick={onClick} className="flex-1 min-w-0 text-left">
         <p className="text-sm font-medium text-[var(--text)] truncate"><Highlight text={doc.title} search={search} /></p>
-        <p className="text-xs text-[var(--text-faint)] truncate mt-0.5">{doc.meta}</p>
+        <p className="text-xs text-[var(--text-faint)] truncate mt-0.5">{formatMeta(doc)}</p>
       </button>
       <span className="shrink-0 hidden sm:inline-flex rounded bg-white/10 px-2 py-1 text-[10px] text-[var(--text-dim)]">{doc.tag}</span>
       <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -431,6 +437,7 @@ function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemov
 // ─── Trash List Row ───────────────────────────────────────────────────────────
 
 function TrashListRow({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }: TrashCardProps) {
+  const formatMeta = useFormattedMeta();
   return (
     <div className={`group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-4 py-3 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''}`}>
       <div className="shrink-0 flex h-9 w-7 items-center justify-center rounded-[3px] bg-white/5 text-[var(--text-faint)]">
@@ -440,7 +447,7 @@ function TrashListRow({ doc, onRestore, onDeleteForever, isRestoring, isDeleting
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[var(--text-dim)] truncate">{doc.title}</p>
-        <p className="text-xs text-[var(--text-faint)] truncate mt-0.5">{doc.meta}</p>
+        <p className="text-xs text-[var(--text-faint)] truncate mt-0.5">{formatMeta(doc)}</p>
       </div>
       <div className="shrink-0 flex items-center gap-2">
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
@@ -472,10 +479,12 @@ function ViewPanel({ active, children }: { active: boolean; children: React.Reac
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const formatMeta = useFormattedMeta();
   const [view, setView] = useState<View>('all');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const { settings } = useSettings();
 
   // Collection dialogs
   const [createCollectionOpen, setCreateCollectionOpen] = useState(false);
@@ -705,12 +714,16 @@ export default function HomePage() {
     active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count?: number;
   }) => (
     <button onClick={onClick}
+      title={settings.compactSidebar ? label : undefined}
       className={`flex w-full items-center justify-between rounded-md px-3 py-2 transition-colors text-[13px] font-medium ${
         active ? 'bg-[var(--bg-elevated)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-      }`}
+      } ${settings.compactSidebar ? 'justify-center' : ''}`}
     >
-      <div className="flex items-center gap-3">{icon}{label}</div>
-      {count !== undefined && count > 0 && (
+      <div className={`flex items-center ${settings.compactSidebar ? 'justify-center' : 'gap-3'}`}>
+        {icon}
+        {!settings.compactSidebar && <span>{label}</span>}
+      </div>
+      {!settings.compactSidebar && count !== undefined && count > 0 && (
         <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-white/5 px-1.5 text-[10px] font-semibold text-[var(--text-faint)]">
           {count}
         </span>
@@ -720,23 +733,25 @@ export default function HomePage() {
 
   return (
     <ProtectedRoute>
-      <main className="grid min-h-[100dvh] grid-cols-1 bg-[var(--bg-base)] lg:grid-cols-[256px_1fr] overflow-hidden">
+      <main className={`grid min-h-[100dvh] grid-cols-1 bg-[var(--bg-base)] overflow-hidden transition-[grid-template-columns] duration-300 ${settings.compactSidebar ? 'lg:grid-cols-[68px_1fr]' : 'lg:grid-cols-[256px_1fr]'}`}>
 
         {/* ── Sidebar ── */}
         <aside className="flex flex-col border-b border-white/10 bg-[var(--bg-surface)] p-4 lg:border-b-0 lg:border-r lg:h-full justify-between animate-in fade-in slide-in-from-left-8 duration-[1000ms] ease-[cubic-bezier(0.23,1,0.32,1)] fill-mode-both overflow-y-auto">
           <div className="flex flex-col flex-1 min-h-0">
-            <div className="flex items-center gap-2 px-2 pb-4">
-              <div className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--text)] text-[var(--bg-base)]">
+            <div className={`flex items-center pb-4 ${settings.compactSidebar ? 'justify-center' : 'gap-2 px-2'}`}>
+              <div className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--text)] text-[var(--bg-base)]">
                 <NibLogo size={15} />
               </div>
-              <span className="text-base font-semibold">Nib</span>
+              {!settings.compactSidebar && <span className="text-base font-semibold">Nib</span>}
             </div>
 
             <button onClick={() => setUploadOpen(true)} type="button"
-              className="mb-4 flex w-full items-center justify-between rounded-lg bg-[var(--text)] px-3 py-2 text-sm font-medium text-[var(--bg-base)] transition hover:opacity-90">
-              Upload PDF
-              <div className="flex h-5 w-5 items-center justify-center rounded bg-[var(--bg-base)] text-[var(--text)]">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              className={`mb-4 flex w-full items-center justify-between rounded-lg bg-[var(--text)] text-[var(--bg-base)] transition hover:opacity-90 ${settings.compactSidebar ? 'justify-center aspect-square p-0' : 'px-3 py-2 text-sm font-medium'}`}
+              title={settings.compactSidebar ? "Upload PDF" : undefined}
+            >
+              {!settings.compactSidebar && <span>Upload PDF</span>}
+              <div className={`flex items-center justify-center rounded ${settings.compactSidebar ? 'h-6 w-6 bg-transparent text-[var(--bg-base)]' : 'h-5 w-5 bg-[var(--bg-base)] text-[var(--text)]'}`}>
+                <svg width={settings.compactSidebar ? 18 : 12} height={settings.compactSidebar ? 18 : 12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
               </div>
@@ -760,7 +775,11 @@ export default function HomePage() {
             {/* Collections section */}
             <div className="mt-6 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Collections</span>
+                {!settings.compactSidebar ? (
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Collections</span>
+                ) : (
+                  <span className="h-px flex-1 bg-white/10 mx-2" />
+                )}
                 <button type="button" onClick={() => setCreateCollectionOpen(true)}
                   title="New collection"
                   className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] transition">
@@ -780,13 +799,14 @@ export default function HomePage() {
                         view === 'collection' && selectedCollectionId === c.id
                           ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
                           : 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-                      }`}
+                      } ${settings.compactSidebar ? 'justify-center px-0' : ''}`}
+                      title={settings.compactSidebar ? c.name : undefined}
                     >
                       <svg className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                       </svg>
-                      <span className="flex-1 truncate text-left">{c.name}</span>
-                      <span className="text-[10px] text-[var(--text-faint)] shrink-0">{c.documentCount}</span>
+                      {!settings.compactSidebar && <span className="flex-1 truncate text-left">{c.name}</span>}
+                      {!settings.compactSidebar && <span className="text-[10px] text-[var(--text-faint)] shrink-0">{c.documentCount}</span>}
                     </button>
                   ))
                 )}
@@ -797,7 +817,7 @@ export default function HomePage() {
           {/* User panel */}
           {user && (
             <div className="mt-auto border-t border-white/5 pt-4 shrink-0">
-              <UserMenu user={user} onSignOut={signOut} />
+              <UserMenu user={user} onSignOut={signOut} compact={settings.compactSidebar} />
             </div>
           )}
         </aside>
@@ -978,7 +998,7 @@ export default function HomePage() {
                         <span className="font-medium text-[var(--text)]">Most recent</span>
                       </div>
                       <h2 className="mt-3 font-serif text-[28px] sm:text-3xl leading-tight text-[var(--text)]">{sortedDocuments[0].title}</h2>
-                      <p className="mt-2 text-[13px] text-[var(--text-faint)]">{sortedDocuments[0].meta}</p>
+                      <p className="mt-2 text-[13px] text-[var(--text-faint)]">{formatMeta(sortedDocuments[0])}</p>
                       <div className="mt-5 flex flex-wrap gap-3">
                         <button type="button" onClick={() => handleDocumentClick(sortedDocuments[0])}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90">
@@ -1392,7 +1412,7 @@ export default function HomePage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{doc.title}</p>
-                      <p className="text-[11px] text-[var(--text-faint)] truncate">{doc.meta}</p>
+                      <p className="text-[11px] text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
                     </div>
                   </button>
                 ))}

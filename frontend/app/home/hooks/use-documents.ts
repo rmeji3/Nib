@@ -33,10 +33,6 @@ function formatMeta(doc: DocumentResponse): string {
     const kb = Math.round(doc.fileSizeBytes / 1024);
     parts.push(kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
   }
-  if (doc.createdAt) {
-    const date = new Date(doc.createdAt);
-    parts.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
-  }
   return parts.join(' · ');
 }
 
