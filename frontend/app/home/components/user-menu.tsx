@@ -19,9 +19,10 @@ interface UserMenuProps {
   user: User;
   onSignOut: () => void;
   variant?: 'sidebar' | 'toolbar';
+  compact?: boolean;
 }
 
-export function UserMenu({ user, onSignOut, variant = 'sidebar' }: UserMenuProps) {
+export function UserMenu({ user, onSignOut, variant = 'sidebar', compact = false }: UserMenuProps) {
   const router = useRouter();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [isMac, setIsMac] = useState(false);
@@ -52,7 +53,8 @@ export function UserMenu({ user, onSignOut, variant = 'sidebar' }: UserMenuProps
           ) : (
             <button
               type="button"
-              className="group flex w-full cursor-pointer items-center gap-3 rounded-lg border border-white/5 bg-white/[0.01] px-2 py-1.5 outline-none transition-all hover:border-white/10 hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-white/20"
+              className={`group flex cursor-pointer items-center outline-none transition-all focus-visible:ring-1 focus-visible:ring-white/20 ${compact ? 'mx-auto justify-center rounded-full hover:ring-1 hover:ring-white/20' : 'w-full gap-3 rounded-lg border border-white/5 bg-white/[0.01] px-2 py-1.5 hover:border-white/10 hover:bg-white/5'}`}
+              title={compact ? user.name : undefined}
             >
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.name} className="h-8 w-8 shrink-0 rounded-full border border-white/10 bg-white/5 object-cover" />
@@ -61,14 +63,18 @@ export function UserMenu({ user, onSignOut, variant = 'sidebar' }: UserMenuProps
                   {initials}
                 </div>
               )}
-              <div className="flex min-w-0 flex-1 flex-col text-left">
-                <span className="truncate text-xs font-semibold text-[var(--text)]">{user.name}</span>
-                <span className="truncate text-[10px] text-[var(--text-faint)]">{user.email}</span>
-              </div>
-              <ChevronUpIcon
-                size={13}
-                className="shrink-0 text-[var(--text-faint)] transition-transform duration-200 group-data-[state=open]:rotate-180"
-              />
+              {!compact && (
+                <>
+                  <div className="flex min-w-0 flex-1 flex-col text-left">
+                    <span className="truncate text-xs font-semibold text-[var(--text)]">{user.name}</span>
+                    <span className="truncate text-[10px] text-[var(--text-faint)]">{user.email}</span>
+                  </div>
+                  <ChevronUpIcon
+                    size={13}
+                    className="shrink-0 text-[var(--text-faint)] transition-transform duration-200 group-data-[state=open]:rotate-180"
+                  />
+                </>
+              )}
             </button>
           )}
         </DropdownMenuTrigger>

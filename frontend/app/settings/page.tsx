@@ -282,23 +282,34 @@ function AppearanceTab() {
           <div className="flex items-center gap-1 rounded-lg border border-white/8 bg-[var(--bg-surface)] p-1">
             <button
               type="button"
-              className="rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-[var(--text)] transition"
+              onClick={() => update('theme', 'dark')}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                settings.theme === 'dark'
+                  ? 'bg-[var(--border-strong)] text-[var(--text)]'
+                  : 'text-[var(--text-dim)] hover:bg-[var(--border-faint)] hover:text-[var(--text)]'
+              }`}
             >
               Dark
             </button>
             <button
               type="button"
-              disabled
-              title="Coming soon"
-              className="cursor-not-allowed rounded-md px-3 py-1 text-xs font-medium text-[var(--text-faint)] opacity-40"
+              onClick={() => update('theme', 'light')}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                settings.theme === 'light'
+                  ? 'bg-[var(--border-strong)] text-[var(--text)]'
+                  : 'text-[var(--text-dim)] hover:bg-[var(--border-faint)] hover:text-[var(--text)]'
+              }`}
             >
               Light
             </button>
             <button
               type="button"
-              disabled
-              title="Coming soon"
-              className="cursor-not-allowed rounded-md px-3 py-1 text-xs font-medium text-[var(--text-faint)] opacity-40"
+              onClick={() => update('theme', 'system')}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                settings.theme === 'system'
+                  ? 'bg-[var(--border-strong)] text-[var(--text)]'
+                  : 'text-[var(--text-dim)] hover:bg-[var(--border-faint)] hover:text-[var(--text)]'
+              }`}
             >
               System
             </button>
