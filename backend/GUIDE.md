@@ -43,20 +43,42 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 <!-- START_AUTO_MAP -->
 ### API Controller & Endpoints Map
 
-#### Controller: [`AuthController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/AuthController.java)
+#### Controller: [`AuthController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
-#### Controller: [`DocumentController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
+#### Controller: [`ChatController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/ChatController.java)
 | Verb | Endpoint Route |
 | --- | --- |
+| `GET` | `/api/v1/chat/sessions/document/{documentId}` |
+| `GET` | `/api/v1/chat/sessions/{sessionId}/messages` |
+| `POST` | `/api/v1/chat/sessions/{sessionId}/query` |
+
+#### Controller: [`DocumentController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/documents/trash` |
+| `GET` | `/api/v1/documents/starred` |
+| `GET` | `/api/v1/documents/{id}` |
+| `GET` | `/api/v1/documents/{id}/content` |
 | `GET` | `/api/v1/documents` |
 | `POST` | `/api/v1/documents/upload` |
+| `POST` | `/api/v1/documents/{id}/restore` |
 | `POST` | `/api/v1/documents/merge` |
+| `DELETE` | `/api/v1/documents/{id}` |
+| `DELETE` | `/api/v1/documents/{id}/permanent` |
+| `PATCH` | `/api/v1/documents/{id}` |
+| `PATCH` | `/api/v1/documents/{id}/star` |
 
-#### Controller: [`TestController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/TestController.java)
+#### Controller: [`IngestionController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/documents/{id}/status` |
+| `POST` | `/api/v1/documents/{id}/ingest` |
+
+#### Controller: [`TestController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/test/hello` |
@@ -64,31 +86,55 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 
 ### Database Entities (`backend/src/.../model`)
 
-- [`Document`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Document.java)
-- [`User`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/User.java)
+- [`ChatMessage`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ChatMessage.java)
+- [`ChatSession`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ChatSession.java)
+- [`ContentBlock`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/ContentBlock.java)
+- [`Document`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/Document.java)
+- [`IngestionJob`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/IngestionJob.java)
+- [`IngestionStatus`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/IngestionStatus.java)
+- [`User`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/model/User.java)
 
 ### Data Access Repositories (`backend/src/.../repository`)
 
-- [`DocumentRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
-- [`UserRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
+- [`ChatMessageRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ChatMessageRepository.java)
+- [`ChatSessionRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ChatSessionRepository.java)
+- [`ContentBlockRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/ContentBlockRepository.java)
+- [`DocumentRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
+- [`IngestionJobRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/IngestionJobRepository.java)
+- [`UserRepository`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
 
 ### Business Services (`backend/src/.../service`)
 
-- [`AuthService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/AuthService.java)
-- [`DocumentService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/DocumentService.java)
-- [`JwtService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/JwtService.java)
-- [`SupabaseStorageService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
-- [`TestIService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/TestIService.java)
-- [`TestService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/TestService.java)
+- [`AuthService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/AuthService.java)
+- [`ChatService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/ChatService.java)
+- [`ChunkingService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/ChunkingService.java)
+- [`DocumentService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/DocumentService.java)
+- [`EmbeddingService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/EmbeddingService.java)
+- [`IngestionRunner`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionRunner.java)
+- [`IngestionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionService.java)
+- [`JwtService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
+- [`SupabaseStorageService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
+- [`TestIService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
+- [`TestService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestService.java)
+- [`TextExtractionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TextExtractionService.java)
+- [`VectorSearchService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/VectorSearchService.java)
 
 ### Data Transfer Objects (`backend/src/.../dto`)
 
-- [`AuthRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
-- [`AuthResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
-- [`DocumentResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
-- [`RegisterRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
-- [`TestRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
-- [`TestResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
+- [`AuthRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
+- [`AuthResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
+- [`ChatMessageResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatMessageResponse.java)
+- [`ChatQueryRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryRequest.java)
+- [`ChatQueryResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryResponse.java)
+- [`ChatSessionResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatSessionResponse.java)
+- [`CitationDto`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/CitationDto.java)
+- [`DocumentResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
+- [`IngestionStatusResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/IngestionStatusResponse.java)
+- [`PagedResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/PagedResponse.java)
+- [`RegisterRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
+- [`RenameRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/RenameRequest.java)
+- [`TestRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
+- [`TestResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
 
 
 <!-- END_AUTO_MAP -->
@@ -101,5 +147,6 @@ This section is maintained by AI coding agents to track architectural updates, e
 
 ### Log
 - **2026-05-20**: Renamed package structure from `com.aipdfviewer.backend` to `com.nib.backend`. Removed deprecated `spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS` config due to Jackson 3/Spring Boot 4.0.6 upgrade compatibility. Moved JWT Secret Key to environment variable `JWT_SECRET_KEY` in `.env` and loaded it dynamically in `application.properties` with a newly generated cryptographically secure 256-bit key.
+- **2026-05-20**: Phase 1 RAG pipeline implemented. New: `ContentBlock`, `IngestionJob`, `ChatSession`, `ChatMessage` entities + repositories; `TextExtractionService` (PDFBox), `ChunkingService` (sliding window, 2000 char / 200 overlap), `EmbeddingService` (Mistral `mistral-embed`, float[1024]), `VectorSearchService` (JdbcTemplate → pgvector match_chunks()), `IngestionService` (@Async orchestrator), `ChatService` (Gemini 2.0 Flash RAG loop with [Page X] citation parsing); `IngestionController` + `ChatController`; `AsyncConfig` (ingestionExecutor 4/8 threads); `ObjectMapper` bean added to `ApplicationConfig`; `DocumentService.uploadDocuments()` now auto-triggers ingestion after save. API keys: `MISTRAL_API_KEY`, `GEMINI_API_KEY` required in `.env`.
 - **2026-05-20**: Created the initial `GUIDE.md` skeleton and implemented the guide update automation script.
 - **2026-05-19**: Added document upload, listing, and PDF merge. New: `Document` entity, `DocumentRepository`, `DocumentResponse` DTO, `DocumentController` (`POST /upload`, `GET /`, `POST /merge`), `DocumentService`, `SupabaseStorageService` (Supabase Storage REST via `RestClient`), `GlobalExceptionHandler`, and exception types. Updated: `pom.xml` (added PDFBox 3.0.3), `application.properties` (Supabase Storage config, multipart limits 50 MB, Jackson ISO dates), `ApplicationConfig` (added `RestClient` bean). Supabase Storage bucket name configurable via `SUPABASE_STORAGE_BUCKET` env var (default: `documents`). Signed URLs valid for 1 hour.

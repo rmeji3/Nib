@@ -226,10 +226,12 @@ function AssistantMessageView({
   msg,
   onCiteHover,
   onCiteClick,
+  onEvidenceOpen,
 }: {
   msg: AssistantMessage;
   onCiteHover: (citation: Citation | null, anchor?: HTMLElement) => void;
   onCiteClick: (citation: Citation) => void;
+  onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
 }) {
   return (
     <div className={`msg msg-assistant${msg.streaming ? ' is-streaming' : ''}`}>
@@ -250,21 +252,21 @@ function AssistantMessageView({
           />
         )}
       </div>
-      {!msg.streaming ? (
+      {!msg.streaming && msg.citations.length > 0 ? (
         <div className="cite-cards-wrap">
           {msg.citations.map((citation, index) => (
             <button
               key={`${citation.label}-${index}`}
               type="button"
               className="cite-card group relative overflow-hidden transition-all hover:border-[var(--citation-line)] hover:[box-shadow:0_0_16px_-4px_var(--citation)]"
-              onClick={() => onCiteClick(citation)}
+              onClick={() => onEvidenceOpen(msg.citations, citation.blockId)}
               onMouseEnter={(event) => onCiteHover(citation, event.currentTarget)}
               onMouseLeave={() => onCiteHover(null)}
+              title="Open evidence"
             >
               <span className="cite-card-idx">{index + 1}</span>
               <span className="cite-card-body">
                 <span className="cite-card-where">{citation.label}</span>
-                <span className="cite-card-snippet">{citation.snippet}</span>
               </span>
               <Icon name="arrow-right" />
             </button>
@@ -359,23 +361,80 @@ function Composer({ onSend, disabled }: { onSend: (value: string) => void; disab
   );
 }
 
+function IndexingBanner({
+  progress,
+  pagesProcessed,
+  pagesTotal,
+}: {
+  progress: number;
+  pagesProcessed: number;
+  pagesTotal: number | null;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
+      <div className="flex items-center gap-2.5">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--accent)]" />
+        </span>
+        <span className="text-[13.5px] font-semibold text-[var(--text)]">Indexing document…</span>
+      </div>
+
+      {pagesTotal !== null && pagesTotal > 0 && (
+        <div className="w-52">
+          <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
+            <span>{pagesProcessed} of {pagesTotal} pages</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="max-w-[220px] text-[12px] leading-relaxed text-[var(--text-faint)]">
+        Embedding text into pgvector so you can ask questions. This usually takes under a minute.
+      </p>
+    </div>
+  );
+}
+
 export function ChatPanel({
   messages,
   onSendPrompt,
   onPickSuggestion,
   onCiteClick,
+  onEvidenceOpen,
   busy,
   onToggleMinimize,
+  isIndexing,
+  progress,
+  pagesProcessed,
+  pagesTotal,
 }: {
   messages: Array<UserMessage | AssistantMessage>;
   onSendPrompt: (value: string) => void;
   onPickSuggestion: (prompt: PromptLibraryEntry | { reset: true }) => void;
   onCiteClick: (citation: Citation) => void;
+  onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
   busy: boolean;
   onToggleMinimize: () => void;
+  isIndexing: boolean;
+  progress: number;
+  pagesProcessed: number;
+  pagesTotal: number | null;
 }) {
   const [hover, setHover] = useState<{ citation: Citation; anchor: HTMLElement } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  const subtitle = isIndexing
+    ? `Indexing… ${pagesProcessed}${pagesTotal !== null ? `/${pagesTotal}` : ''} pages`
+    : pagesTotal !== null && pagesTotal > 0
+      ? `${pagesTotal} pages indexed · answers grounded in source`
+      : 'Answers grounded in document source';
 
   useEffect(() => {
     const body = bodyRef.current;
@@ -397,10 +456,10 @@ export function ChatPanel({
       <div className="chat-header relative z-[1] flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div>
           <div className="chat-title flex items-center gap-2 text-[13px] font-semibold">
-            <span className={`chat-title-dot${busy ? ' thinking' : ''}`} />
-            {busy ? 'Thinking…' : 'Ask this document'}
+            <span className={`chat-title-dot${busy ? ' thinking' : isIndexing ? ' thinking' : ''}`} />
+            {busy ? 'Thinking…' : isIndexing ? 'Indexing…' : 'Ask this document'}
           </div>
-          <div className="chat-subtitle mt-0.5 text-[11px] text-[var(--text-faint)]">Grounded in 6 pages · 24 blocks indexed · 2 figures · 1 table</div>
+          <div className="chat-subtitle mt-0.5 text-[11px] text-[var(--text-faint)]">{subtitle}</div>
         </div>
         <div className="chat-header-actions flex items-center gap-1">
           <button className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]" type="button" title="New conversation" onClick={() => onPickSuggestion({ reset: true })}><Icon name="clear" /></button>
@@ -409,41 +468,52 @@ export function ChatPanel({
       </div>
 
       <div className="chat-body relative z-[1] flex flex-col gap-[18px] overflow-y-auto p-4" ref={bodyRef}>
-        {isEmpty ? (
-          <div className="chat-empty flex flex-col gap-4">
-            <div className="chat-welcome pb-3">
-              <h2 className="mb-1 text-base font-semibold">Hi, ask about the cooling whitepaper</h2>
-              <p className="text-[12.5px] leading-[1.45] text-[var(--text-dim)]">
-                Nib has indexed every paragraph, the table on page 4, and both figures. Every answer is grounded with page-level citations you can click to jump to.
-              </p>
-            </div>
-            <Suggestions onPick={(prompt) => onPickSuggestion(prompt)} />
-          </div>
-        ) : null}
+        {isIndexing ? (
+          <IndexingBanner
+            progress={progress}
+            pagesProcessed={pagesProcessed}
+            pagesTotal={pagesTotal}
+          />
+        ) : (
+          <>
+            {isEmpty ? (
+              <div className="chat-empty flex flex-col gap-4">
+                <div className="chat-welcome pb-3">
+                  <h2 className="mb-1 text-base font-semibold">Ask anything about this document</h2>
+                  <p className="text-[12.5px] leading-[1.45] text-[var(--text-dim)]">
+                    Every answer is grounded in the indexed pages and includes clickable page-level citations.
+                  </p>
+                </div>
+                <Suggestions onPick={(prompt) => onPickSuggestion(prompt)} />
+              </div>
+            ) : null}
 
-        {messages.map((message) => (
-          message.role === 'user' ? (
-            <UserMessageView key={message.id} msg={message} />
-          ) : (
-            <AssistantMessageView
-              key={message.id}
-              msg={message}
-              onCiteHover={(citation, anchor) => {
-                if (!citation || !anchor) {
-                  setHover(null);
-                  return;
-                }
-                setHover({ citation, anchor });
-              }}
-              onCiteClick={onCiteClick}
-            />
-          )
-        ))}
+            {messages.map((message) =>
+              message.role === 'user' ? (
+                <UserMessageView key={message.id} msg={message} />
+              ) : (
+                <AssistantMessageView
+                  key={message.id}
+                  msg={message}
+                  onCiteHover={(citation, anchor) => {
+                    if (!citation || !anchor) {
+                      setHover(null);
+                      return;
+                    }
+                    setHover({ citation, anchor });
+                  }}
+                  onCiteClick={onCiteClick}
+                  onEvidenceOpen={onEvidenceOpen}
+                />
+              ),
+            )}
 
-        {!isEmpty && !busy ? <Suggestions onPick={(prompt) => onPickSuggestion(prompt)} /> : null}
+            {!isEmpty && !busy ? <Suggestions onPick={(prompt) => onPickSuggestion(prompt)} /> : null}
+          </>
+        )}
       </div>
 
-      <Composer onSend={onSendPrompt} disabled={busy} />
+      <Composer onSend={onSendPrompt} disabled={busy || isIndexing} />
       {hover ? <CitePreview data={hover.citation} anchor={hover.anchor} /> : null}
     </div>
   );

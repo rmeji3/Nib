@@ -1,0 +1,94 @@
+# Phase 2 mini eval — 5 PDFs × 3 questions each.
+#
+# Each question carries:
+#   q                  - the question to ask the assistant
+#   expected_includes  - substrings the answer must contain (case-insensitive)
+#   expected_pages     - page numbers the answer should cite
+#   category           - factual | visual | aggregation
+#
+# `expected_includes` should be facts that can only be answered correctly —
+# don't include generic words. `expected_pages` may be a subset (it's fine if
+# the assistant cites more pages than required, as long as it includes these).
+#
+# Add a "skip: true" flag to any question that doesn't apply to a given PDF
+# (e.g. a research paper has no "most expensive" aggregation question).
+
+- pdf: 01-research-paper.pdf
+  description: "TODO: name the PDF and what it's about (1 line)"
+  questions:
+    - q: "TODO: factual question (e.g. 'What is the main contribution?')"
+      expected_includes: ["TODO"]
+      expected_pages: [1]
+      category: factual
+    - q: "TODO: visual question (e.g. 'What does Figure 3 show?')"
+      expected_includes: ["TODO"]
+      expected_pages: [5]
+      category: visual
+    - q: "TODO: aggregation question (e.g. 'Which rack has the highest peak power?')"
+      expected_includes: ["TODO"]
+      expected_pages: [4]
+      category: aggregation
+
+- pdf: 02-chart-figure.pdf
+  description: "TODO"
+  questions:
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [1]
+      category: factual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [2]
+      category: visual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [3]
+      category: aggregation
+
+- pdf: 03-table-financial.pdf
+  description: "TODO"
+  questions:
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [1]
+      category: factual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [2]
+      category: visual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [3]
+      category: aggregation
+
+- pdf: 04-menu-character-spaced.pdf
+  description: "Subah cafe menu — exercises the character-spaced vision-only pathway"
+  questions:
+    - q: "What is this PDF about?"
+      expected_includes: ["Subah", "menu", "breakfast"]
+      expected_pages: [1]
+      category: factual
+    - q: "List the breakfast omelets and their prices"
+      expected_includes: ["Omelet"]
+      expected_pages: [1]
+      category: visual
+    - q: "What is the most expensive item on the menu?"
+      expected_includes: ["29"]
+      expected_pages: [2]
+      category: aggregation
+
+- pdf: 05-mixed.pdf
+  description: "TODO"
+  questions:
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [1]
+      category: factual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [2]
+      category: visual
+    - q: "TODO"
+      expected_includes: ["TODO"]
+      expected_pages: [3]
+      category: aggregation

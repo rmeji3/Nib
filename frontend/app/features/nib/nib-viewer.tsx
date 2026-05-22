@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import type { TextHighlight } from './hooks/use-nib-state';
 import { motion, useAnimationControls } from 'framer-motion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -27,6 +28,75 @@ import {
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export const PAGE_W = 620;
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Returns the text item as HTML, wrapping the first occurrence of `query`
+ * in a <mark> tag so react-pdf's text layer renders it highlighted.
+ * Falls back to plain escaped text when no match is found.
+ */
+function makeTextRenderer(query: string) {
+  const lower = query.toLowerCase();
+  return ({ str }: { str: string }) => {
+    const idx = str.toLowerCase().indexOf(lower);
+    if (idx === -1) return escapeHtml(str);
+    return (
+      escapeHtml(str.slice(0, idx)) +
+      '<mark style="background:oklch(0.92 0.16 85/0.55);border-radius:2px;color:inherit;padding:0">' +
+      escapeHtml(str.slice(idx, idx + query.length)) +
+      '</mark>' +
+      escapeHtml(str.slice(idx + query.length))
+    );
+  };
+}
+
+/**
+ * Absolutely-positioned rectangle that draws a highlight over a region of the
+ * rendered PDF page. Coords come from the backend in PDF user units (top-left
+ * origin); we scale uniformly using PAGE_W / pageWidth since the Page renders
+ * at fixed PAGE_W and preserves aspect ratio.
+ *
+ * Pointer-events disabled so the overlay never blocks PDF interactions.
+ */
+function BboxOverlay({
+  highlight,
+}: {
+  highlight: Extract<TextHighlight, { kind: 'bbox' }>;
+}) {
+  const scale = PAGE_W / highlight.pageWidth;
+  const left = highlight.bbox.x * scale;
+  const top = highlight.bbox.y * scale;
+  const width = highlight.bbox.width * scale;
+  const height = highlight.bbox.height * scale;
+
+  // Render a stable key per (page, bbox) so the pulse animation re-fires on
+  // each new citation click but not on unrelated re-renders.
+  const animKey = `${highlight.pageIndex}-${left}-${top}-${width}-${height}`;
+
+  return (
+    <motion.div
+      key={animKey}
+      initial={{ opacity: 0, scale: 1.08 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
+      className="pointer-events-none absolute rounded-[2px]"
+      style={{
+        left,
+        top,
+        width,
+        height,
+        background: 'oklch(0.92 0.16 85 / 0.30)',
+        boxShadow:
+          '0 0 0 1.5px oklch(0.78 0.18 75 / 0.85), 0 0 16px -2px oklch(0.78 0.18 75 / 0.55)',
+        mixBlendMode: 'multiply',
+      }}
+      aria-hidden="true"
+    />
+  );
+}
 
 export function Icon({ name }: { name: string }) {
   const props = {
@@ -343,6 +413,7 @@ export function Viewer({
   zoom,
   setZoom,
   scrollContainerRef,
+  highlight,
 }: {
   currentPage: number;
   totalPages: number;
@@ -351,6 +422,7 @@ export function Viewer({
   zoom: number;
   setZoom: (value: number) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  highlight?: TextHighlight | null;
 }) {
   const [showThumbs, setShowThumbs] = useState(true);
   const { file, documentId, documentName } = useUpload();
@@ -660,13 +732,25 @@ export function Viewer({
                 style={{ zoom }}
               >
                 <div className="page-num-tag">p.{index + 1}</div>
-                <div className="pdf-page">
+                <div className="pdf-page relative">
                   <Page
                     pageNumber={index + 1}
                     width={PAGE_W}
                     devicePixelRatio={Math.max(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
                     renderAnnotationLayer={false}
+                    customTextRenderer={
+                      highlight &&
+                      highlight.kind === 'text' &&
+                      highlight.pageIndex === index
+                        ? makeTextRenderer(highlight.query)
+                        : undefined
+                    }
                   />
+                  {highlight &&
+                    highlight.kind === 'bbox' &&
+                    highlight.pageIndex === index && (
+                      <BboxOverlay highlight={highlight} />
+                    )}
                 </div>
               </div>
             ))}
