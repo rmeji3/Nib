@@ -1,11 +1,14 @@
 package com.nib.backend.service;
 
+import com.nib.backend.dto.BBox;
 import com.nib.backend.model.ContentBlock;
 import com.nib.backend.model.IngestionJob;
 import com.nib.backend.model.IngestionStatus;
 import com.nib.backend.repository.ContentBlockRepository;
 import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
+import com.nib.backend.service.ChunkingService.PositionedChunk;
+import com.nib.backend.service.PositionedTextExtractor.PositionedPage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -43,7 +46,7 @@ public class IngestionRunner {
     private final IngestionJobRepository ingestionJobRepository;
     private final ContentBlockRepository contentBlockRepository;
     private final SupabaseStorageService storageService;
-    private final TextExtractionService textExtractionService;
+    private final PositionedTextExtractor positionedTextExtractor;
     private final ChunkingService chunkingService;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
@@ -91,9 +94,9 @@ public class IngestionRunner {
             // ── 1. Download PDF ───────────────────────────────────────────────────
             byte[] pdfBytes = storageService.downloadFile(doc.getStoragePath());
 
-            // ── 2. Extract text per page ──────────────────────────────────────────
-            List<String> pageTexts = textExtractionService.extractPages(pdfBytes);
-            int totalPages = pageTexts.size();
+            // ── 2. Extract text per page (with positions) ─────────────────────────
+            List<PositionedPage> pages = positionedTextExtractor.extractPages(pdfBytes);
+            int totalPages = pages.size();
 
             job.setPagesTotal(totalPages);
             ingestionJobRepository.save(job);
@@ -105,7 +108,15 @@ public class IngestionRunner {
             //    is not thread-safe), but dispatch each Gemini Vision call to a
             //    thread pool as soon as its render finishes. While the renderer
             //    moves to page N+1, page N's API call is already running.
-            record PendingBlock(int pageNumber, int chunkIndex, String text, String blockType) {}
+            record PendingBlock(
+                    int pageNumber,
+                    int chunkIndex,
+                    String text,
+                    String blockType,
+                    BBox bbox,
+                    Double pageWidth,
+                    Double pageHeight
+            ) {}
             List<PendingBlock> pending = new ArrayList<>();
 
             // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
@@ -143,8 +154,9 @@ public class IngestionRunner {
 
             // ── 3b. Build text blocks while vision runs in the background ───────
             for (int i = 0; i < totalPages; i++) {
-                int pageNumber = i + 1;
-                String pageText = pageTexts.get(i);
+                PositionedPage page = pages.get(i);
+                int pageNumber = page.pageNumber();
+                String pageText = page.text();
 
                 if (pageText != null && !pageText.isBlank()) {
                     String trimmed = pageText.trim();
@@ -155,9 +167,17 @@ public class IngestionRunner {
                         log.debug("Page {} has character-spaced text (font encoding artifact) — " +
                                   "skipping text blocks, visual block will cover this page", pageNumber);
                     } else {
-                        List<String> chunks = chunkingService.chunk(pageText);
-                        for (int j = 0; j < chunks.size(); j++) {
-                            pending.add(new PendingBlock(pageNumber, j, chunks.get(j), BLOCK_TEXT));
+                        List<PositionedChunk> chunks = chunkingService.chunkWithPositions(page);
+                        for (PositionedChunk pc : chunks) {
+                            pending.add(new PendingBlock(
+                                    pageNumber,
+                                    pc.chunkIndex(),
+                                    pc.text(),
+                                    BLOCK_TEXT,
+                                    pc.bbox(),
+                                    page.pageWidth(),
+                                    page.pageHeight()
+                            ));
                         }
                     }
                 }
@@ -169,7 +189,13 @@ public class IngestionRunner {
                     try {
                         String visualSummary = visionFutures.get(i).get();
                         if (visualSummary != null && !visualSummary.isBlank()) {
-                            pending.add(new PendingBlock(i + 1, 0, visualSummary, BLOCK_VISUAL));
+                            // Visual blocks cover the whole page — bbox is the page rectangle
+                            PositionedPage page = pages.get(i);
+                            BBox fullPage = new BBox(0.0, 0.0, page.pageWidth(), page.pageHeight());
+                            pending.add(new PendingBlock(
+                                    page.pageNumber(), 0, visualSummary, BLOCK_VISUAL,
+                                    fullPage, page.pageWidth(), page.pageHeight()
+                            ));
                         }
                     } catch (Exception ex) {
                         log.warn("Vision task for page {} failed: {}", i + 1, ex.getMessage());
@@ -206,6 +232,7 @@ public class IngestionRunner {
                 // ── 5. Save all content blocks (one saveAll round-trip) ───────────
                 List<ContentBlock> blockEntities = new ArrayList<>(pending.size());
                 for (PendingBlock pb : pending) {
+                    BBox bb = pb.bbox();
                     blockEntities.add(ContentBlock.builder()
                             .documentId(documentId)
                             .pageNumber(pb.pageNumber())
@@ -213,6 +240,12 @@ public class IngestionRunner {
                             .chunkIndex(pb.chunkIndex())
                             .extractedText(pb.text())
                             .tokenCount(chunkingService.estimateTokens(pb.text()))
+                            .bboxX(bb != null ? bb.x() : null)
+                            .bboxY(bb != null ? bb.y() : null)
+                            .bboxWidth(bb != null ? bb.width() : null)
+                            .bboxHeight(bb != null ? bb.height() : null)
+                            .pageWidth(pb.pageWidth())
+                            .pageHeight(pb.pageHeight())
                             .build());
                 }
                 List<ContentBlock> savedBlocks = contentBlockRepository.saveAll(blockEntities);

@@ -10,7 +10,9 @@
       "Bash(node -e \"const p = require\\('./node_modules/vaul/package.json'\\); console.log\\(p.version\\)\")",
       "Bash(findstr vaul *)",
       "Bash(npm install *)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Skill(pdf)",
+      "Skill(pdf:*)"
     ]
   }
 }

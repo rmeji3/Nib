@@ -3,6 +3,7 @@ package com.nib.backend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nib.backend.dto.BBox;
 import com.nib.backend.dto.ChatMessageResponse;
 import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
@@ -265,26 +266,47 @@ public class ChatService {
                     .anyMatch(existing -> existing.pageNumber() == pageNumber);
             if (alreadyAdded) continue;
 
-            // Prefer a text block with meaningful content (≥30 chars) as the excerpt —
-            // it can be used to search the PDF text layer for highlighting.
-            // Fall back to any block for the page (e.g. visual summary) if no good text exists.
-            Optional<VectorSearchService.ChunkMatch> best = chunks.stream()
+            // Surface both kinds of evidence for the page so the evidence drawer
+            // can show them side by side:
+            //   textExcerpt   — from a meaningful (≥30 chars) text block
+            //   visualSummary — from the Gemini Vision visual_summary block
+            // bbox is taken from whichever block we chose to anchor the highlight on,
+            // preferring the text block (more precise) over the page-level visual block.
+
+            Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
                     .filter(c -> c.pageNumber() == pageNumber)
+                    .filter(c -> !"visual_summary".equals(c.blockType()))
                     .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
                     .findFirst();
-            if (best.isEmpty()) {
-                best = chunks.stream()
-                        .filter(c -> c.pageNumber() == pageNumber)
-                        .findFirst();
-            }
-            best.ifPresent(c -> {
-                String excerpt = c.extractedText().length() > 200
-                        ? c.extractedText().substring(0, 200) + "…"
-                        : c.extractedText();
-                citations.add(new CitationDto(pageNumber, excerpt));
-            });
+
+            Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
+                    .filter(c -> c.pageNumber() == pageNumber)
+                    .filter(c -> "visual_summary".equals(c.blockType()))
+                    .findFirst();
+
+            // Fallback: if neither qualified, take literally anything for this page
+            VectorSearchService.ChunkMatch anchor = textBlock.orElse(
+                    visualBlock.orElse(chunks.stream()
+                            .filter(c -> c.pageNumber() == pageNumber)
+                            .findFirst().orElse(null)));
+            if (anchor == null) continue;
+
+            String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
+            String visualSummary = visualBlock.map(c -> truncate(c.extractedText(), 600)).orElse(null);
+
+            // Anchor's bbox drives the viewer overlay
+            BBox bbox = anchor.bbox();
+            Double pageWidth = anchor.pageWidth();
+            Double pageHeight = anchor.pageHeight();
+
+            citations.add(new CitationDto(pageNumber, textExcerpt, visualSummary, bbox, pageWidth, pageHeight));
         }
         return citations;
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return null;
+        return s.length() > max ? s.substring(0, max) + "…" : s;
     }
 
     private String serializeCitations(List<CitationDto> citations) {

@@ -55,10 +55,10 @@ function buildMessageContent(
   // Normalize combined citations before any processing
   const normalizedAnswer = expandCombinedCitations(answer);
 
-  // Build excerpt lookup: 1-based page number → excerpt text from backend
-  const excerptByPage = new Map<number, string>();
+  // Build a lookup by page number so we can attach text/visual/bbox to each citation
+  const byPage = new Map<number, ApiCitation>();
   apiCitations.forEach((c) => {
-    if (!excerptByPage.has(c.pageNumber)) excerptByPage.set(c.pageNumber, c.excerpt);
+    if (!byPage.has(c.pageNumber)) byPage.set(c.pageNumber, c);
   });
 
   // First pass: collect unique page numbers in order of first appearance
@@ -70,12 +70,24 @@ function buildMessageContent(
   }
 
   // Build citations array — one entry per unique cited page
-  const citations: Citation[] = pageOrder.map((pageNum) => ({
-    page: pageNum - 1,                           // 0-indexed for the PDF viewer
-    blockId: `page-${pageNum}`,
-    label: `Page ${pageNum}`,
-    snippet: excerptByPage.get(pageNum) ?? '',
-  }));
+  const citations: Citation[] = pageOrder.map((pageNum) => {
+    const api = byPage.get(pageNum);
+    // `snippet` powers the legacy text-layer search highlight: use the real text
+    // excerpt when available, otherwise fall back to the visual description (the
+    // search will silently no-op on visual text, which is fine).
+    const snippet = api?.textExcerpt ?? api?.visualSummary ?? '';
+    return {
+      page: pageNum - 1,                           // 0-indexed for the PDF viewer
+      blockId: `page-${pageNum}`,
+      label: `Page ${pageNum}`,
+      snippet,
+      textExcerpt: api?.textExcerpt ?? null,
+      visualSummary: api?.visualSummary ?? null,
+      bbox: api?.bbox ?? null,
+      pageWidth: api?.pageWidth ?? null,
+      pageHeight: api?.pageHeight ?? null,
+    };
+  });
 
   // Map page number → 1-based citation index (used by MessageSegments)
   const pageToIdx = new Map<number, number>();

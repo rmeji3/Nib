@@ -1,5 +1,6 @@
 package com.nib.backend.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -77,6 +78,10 @@ public class ApplicationConfig {
 
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        // Citations stored on old assistant messages have a legacy `excerpt`
+        // field that no longer exists on the current CitationDto. Ignore unknown
+        // properties so history rendering keeps working after the bbox migration.
+        return new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 }

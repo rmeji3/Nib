@@ -19,9 +19,25 @@ export interface ChatSession {
   createdAt: string;
 }
 
+export interface ApiBBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface ApiCitation {
   pageNumber: number;
-  excerpt: string;
+  /** Excerpt from a text block — usable for PDF text-layer search highlighting. Null when no usable text block exists. */
+  textExcerpt: string | null;
+  /** Gemini Vision description of the page — shown in the evidence drawer. Null when vision was disabled or failed. */
+  visualSummary: string | null;
+  /** Bounding box on the page in PDF user units, top-left origin. Null for blocks ingested before the bbox pipeline. */
+  bbox: ApiBBox | null;
+  /** Page width in the same units as bbox. Null when bbox is null. */
+  pageWidth: number | null;
+  /** Page height in the same units as bbox. Null when bbox is null. */
+  pageHeight: number | null;
 }
 
 export interface ChatQueryResponse {

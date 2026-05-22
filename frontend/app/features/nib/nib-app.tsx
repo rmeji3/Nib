@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChatPanel } from './nib-chat';
+import { EvidenceDrawer } from './nib-evidence-drawer';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
@@ -18,6 +19,9 @@ export default function NibApp() {
     totalPages,
     chatMinimized,
     highlight,
+    evidenceOpen,
+    evidenceCitations,
+    evidenceFocusedBlockId,
     setZoom,
     setCurrentPage,
     setTotalPages,
@@ -25,6 +29,8 @@ export default function NibApp() {
     scrollContainerRef,
     scrollToPage,
     onCiteClick,
+    openEvidence,
+    closeEvidence,
     onDividerPointerDown,
     onDividerPointerMove,
     onDividerPointerUp,
@@ -89,18 +95,28 @@ export default function NibApp() {
               </div>
 
               {/* Chat */}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ChatPanel
                   messages={messages}
                   onSendPrompt={sendPrompt}
                   onPickSuggestion={onPickSuggestion}
                   onCiteClick={onCiteClick}
+                  onEvidenceOpen={openEvidence}
                   busy={busy}
                   onToggleMinimize={() => setChatMinimized(true)}
                   isIndexing={isIndexing}
                   progress={progress}
                   pagesProcessed={pagesProcessed}
                   pagesTotal={pagesTotal}
+                />
+                <EvidenceDrawer
+                  citations={evidenceCitations}
+                  open={evidenceOpen}
+                  onClose={closeEvidence}
+                  onJumpTo={(citation) => {
+                    onCiteClick(citation);
+                  }}
+                  focusedBlockId={evidenceFocusedBlockId}
                 />
               </div>
             </motion.div>

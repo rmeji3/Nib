@@ -1,11 +1,14 @@
 package com.nib.backend.service;
 
+import com.nib.backend.dto.BBox;
 import com.nib.backend.model.ContentBlock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +27,10 @@ public class VectorSearchService {
             int chunkIndex,
             String extractedText,
             String blockType,
-            double similarity
+            double similarity,
+            BBox bbox,            // null for blocks ingested before the bbox pipeline
+            Double pageWidth,     // null when bbox is null
+            Double pageHeight     // null when bbox is null
     ) {}
 
     /**
@@ -79,21 +85,19 @@ public class VectorSearchService {
                        cb.chunk_index,
                        cb.extracted_text,
                        cb.block_type,
+                       cb.bbox_x,
+                       cb.bbox_y,
+                       cb.bbox_width,
+                       cb.bbox_height,
+                       cb.page_width,
+                       cb.page_height,
                        0.0            AS similarity
                 FROM   content_blocks cb
                 WHERE  cb.document_id = ?
                   AND  cb.block_type = 'visual_summary'
                 ORDER  BY cb.page_number, cb.chunk_index
                 """,
-                (rs, rowNum) -> new ChunkMatch(
-                        UUID.fromString(rs.getString("block_id")),
-                        UUID.fromString(rs.getString("document_id")),
-                        rs.getInt("page_number"),
-                        rs.getInt("chunk_index"),
-                        rs.getString("extracted_text"),
-                        rs.getString("block_type"),
-                        rs.getDouble("similarity")
-                ),
+                (rs, rowNum) -> mapRow(rs),
                 documentId
         );
     }
@@ -115,6 +119,12 @@ public class VectorSearchService {
                        cb.chunk_index,
                        cb.extracted_text,
                        cb.block_type,
+                       cb.bbox_x,
+                       cb.bbox_y,
+                       cb.bbox_width,
+                       cb.bbox_height,
+                       cb.page_width,
+                       cb.page_height,
                        e.embedding <=> ?::vector AS similarity
                 FROM   embeddings e
                 JOIN   content_blocks cb ON cb.id = e.block_id
@@ -122,16 +132,35 @@ public class VectorSearchService {
                 ORDER  BY similarity
                 LIMIT  ?
                 """,
-                (rs, rowNum) -> new ChunkMatch(
-                        UUID.fromString(rs.getString("block_id")),
-                        UUID.fromString(rs.getString("document_id")),
-                        rs.getInt("page_number"),
-                        rs.getInt("chunk_index"),
-                        rs.getString("extracted_text"),
-                        rs.getString("block_type"),
-                        rs.getDouble("similarity")
-                ),
+                (rs, rowNum) -> mapRow(rs),
                 vectorStr, documentId, topK
+        );
+    }
+
+    /** Shared row mapper for ChunkMatch — bbox + page dims are nullable. */
+    private static ChunkMatch mapRow(ResultSet rs) throws SQLException {
+        BBox bbox = null;
+        double bx = rs.getDouble("bbox_x");
+        boolean bboxNull = rs.wasNull();
+        if (!bboxNull) {
+            double by = rs.getDouble("bbox_y");
+            double bw = rs.getDouble("bbox_width");
+            double bh = rs.getDouble("bbox_height");
+            bbox = new BBox(bx, by, bw, bh);
+        }
+        Double pageWidth = rs.getObject("page_width", Double.class);
+        Double pageHeight = rs.getObject("page_height", Double.class);
+        return new ChunkMatch(
+                UUID.fromString(rs.getString("block_id")),
+                UUID.fromString(rs.getString("document_id")),
+                rs.getInt("page_number"),
+                rs.getInt("chunk_index"),
+                rs.getString("extracted_text"),
+                rs.getString("block_type"),
+                rs.getDouble("similarity"),
+                bbox,
+                pageWidth,
+                pageHeight
         );
     }
 }

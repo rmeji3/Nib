@@ -226,10 +226,12 @@ function AssistantMessageView({
   msg,
   onCiteHover,
   onCiteClick,
+  onEvidenceOpen,
 }: {
   msg: AssistantMessage;
   onCiteHover: (citation: Citation | null, anchor?: HTMLElement) => void;
   onCiteClick: (citation: Citation) => void;
+  onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
 }) {
   return (
     <div className={`msg msg-assistant${msg.streaming ? ' is-streaming' : ''}`}>
@@ -250,16 +252,17 @@ function AssistantMessageView({
           />
         )}
       </div>
-      {!msg.streaming ? (
+      {!msg.streaming && msg.citations.length > 0 ? (
         <div className="cite-cards-wrap">
           {msg.citations.map((citation, index) => (
             <button
               key={`${citation.label}-${index}`}
               type="button"
               className="cite-card group relative overflow-hidden transition-all hover:border-[var(--citation-line)] hover:[box-shadow:0_0_16px_-4px_var(--citation)]"
-              onClick={() => onCiteClick(citation)}
+              onClick={() => onEvidenceOpen(msg.citations, citation.blockId)}
               onMouseEnter={(event) => onCiteHover(citation, event.currentTarget)}
               onMouseLeave={() => onCiteHover(null)}
+              title="Open evidence"
             >
               <span className="cite-card-idx">{index + 1}</span>
               <span className="cite-card-body">
@@ -404,6 +407,7 @@ export function ChatPanel({
   onSendPrompt,
   onPickSuggestion,
   onCiteClick,
+  onEvidenceOpen,
   busy,
   onToggleMinimize,
   isIndexing,
@@ -415,6 +419,7 @@ export function ChatPanel({
   onSendPrompt: (value: string) => void;
   onPickSuggestion: (prompt: PromptLibraryEntry | { reset: true }) => void;
   onCiteClick: (citation: Citation) => void;
+  onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
   busy: boolean;
   onToggleMinimize: () => void;
   isIndexing: boolean;
@@ -498,6 +503,7 @@ export function ChatPanel({
                     setHover({ citation, anchor });
                   }}
                   onCiteClick={onCiteClick}
+                  onEvidenceOpen={onEvidenceOpen}
                 />
               ),
             )}
