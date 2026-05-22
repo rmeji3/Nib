@@ -78,6 +78,23 @@ export function useSettings() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    const onSettingsChanged = () => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setSettings(prev => ({ ...prev, ...JSON.parse(stored) }));
+      }
+    };
+    window.addEventListener('nib_settings_changed', onSettingsChanged);
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_KEY) onSettingsChanged();
+    });
+    return () => {
+      window.removeEventListener('nib_settings_changed', onSettingsChanged);
+      window.removeEventListener('storage', onSettingsChanged);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       let parsed: Partial<AppSettings> = {};
@@ -125,6 +142,7 @@ export function useSettings() {
     
     setSettings(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event('nib_settings_changed'));
     if (key === 'accentColor') applyAccent(value as AccentColor);
     if (key === 'theme') applyTheme(value as Theme);
 
