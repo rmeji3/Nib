@@ -1,8 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Citation } from '../nib-types';
+import type { BBox, Citation } from '../nib-types';
 import type { pdfjs } from 'react-pdf';
 
 const PANEL_POSITION: 'left' | 'right' = 'right';
+
+/**
+ * What kind of highlight to show on the cited page.
+ *  - `bbox`: precise rectangle overlay using coordinates captured during ingestion.
+ *  - `text`: legacy fallback — search the rendered text layer for a snippet. Used
+ *    for blocks ingested before the bbox pipeline.
+ */
+export type TextHighlight =
+  | {
+      kind: 'bbox';
+      pageIndex: number;
+      bbox: BBox;
+      pageWidth: number;
+      pageHeight: number;
+    }
+  | {
+      kind: 'text';
+      pageIndex: number;
+      query: string;
+    };
 
 export function useNibState() {
   const [splitRatio, setSplitRatio] = useState(60);
@@ -11,6 +31,13 @@ export function useNibState() {
   const [totalPages, setTotalPages] = useState(6);
   const [chatMinimized, setChatMinimized] = useState(false);
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null);
+  const [highlight, setHighlight] = useState<TextHighlight | null>(null);
+
+  // Evidence drawer state — which assistant message's citations are open, and
+  // which citation (by blockId) should be scrolled into view on open.
+  const [evidenceCitations, setEvidenceCitations] = useState<Citation[]>([]);
+  const [evidenceFocusedBlockId, setEvidenceFocusedBlockId] = useState<string | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
@@ -24,7 +51,34 @@ export function useNibState() {
   const onCiteClick = useCallback((citation: Citation) => {
     scrollToPage(citation.page);
     setCurrentPage(citation.page);
+
+    // Prefer precise bbox-driven overlay when the citation carries one — it
+    // works on any PDF (including character-spaced fonts) and points to the
+    // exact region a chunk came from.
+    if (citation.bbox && citation.pageWidth && citation.pageHeight) {
+      setHighlight({
+        kind: 'bbox',
+        pageIndex: citation.page,
+        bbox: citation.bbox,
+        pageWidth: citation.pageWidth,
+        pageHeight: citation.pageHeight,
+      });
+      return;
+    }
+
+    // Fallback for legacy blocks (ingested before the bbox pipeline): search
+    // the rendered text layer for the first ~60 chars of the snippet.
+    const query = citation.snippet?.trim().slice(0, 60) ?? '';
+    setHighlight(query ? { kind: 'text', pageIndex: citation.page, query } : null);
   }, [scrollToPage]);
+
+  const openEvidence = useCallback((citations: Citation[], focusedBlockId: string | null) => {
+    setEvidenceCitations(citations);
+    setEvidenceFocusedBlockId(focusedBlockId);
+    setEvidenceOpen(true);
+  }, []);
+
+  const closeEvidence = useCallback(() => setEvidenceOpen(false), []);
 
   // Drag divider resizing
   const onDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -86,6 +140,10 @@ export function useNibState() {
     chatMinimized,
     pdf,
     setPdf,
+    highlight,
+    evidenceOpen,
+    evidenceCitations,
+    evidenceFocusedBlockId,
     setZoom,
     setCurrentPage,
     setTotalPages,
@@ -94,6 +152,8 @@ export function useNibState() {
     scrollToPageRef,
     scrollToPage,
     onCiteClick,
+    openEvidence,
+    closeEvidence,
     onDividerPointerDown,
     onDividerPointerMove,
     onDividerPointerUp,

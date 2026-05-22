@@ -1,137 +1,280 @@
-import { useCallback, useState } from 'react';
-import { PROMPT_LIBRARY } from '../nib-chat';
-import type { AssistantMessage, ChatMessage, PromptAnswer, PromptLibraryEntry, UserMessage } from '../nib-types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  fetchSessionMessages,
+  getOrCreateSession,
+  sendChatQuery,
+} from '../../../../lib/api/chat';
+import type { ApiCitation } from '../../../../lib/api/chat';
+import type {
+  AssistantMessage,
+  ChatMessage,
+  Citation,
+  MessageSegment,
+  PromptLibraryEntry,
+  UserMessage,
+} from '../nib-types';
 
 function nextId() {
   return crypto.randomUUID();
 }
 
-function seedMessages(): ChatMessage[] {
-  const answer = PROMPT_LIBRARY[0].a;
-  return [
-    { id: nextId(), role: 'user', text: PROMPT_LIBRARY[0].q },
-    {
-      id: nextId(),
+// Case-insensitive — catches [Page 1], [page 1], [PAGE 1]
+const PAGE_REF_RE = /\[Page (\d+)\]/gi;
+
+/**
+ * Gemini sometimes combines citations like [Page 1, Page 2] instead of writing
+ * [Page 1][Page 2]. This expands them into individual tags so PAGE_REF_RE can
+ * match each one normally.
+ */
+function expandCombinedCitations(answer: string): string {
+  return answer.replace(/\[Page \d+(?:,\s*Page \d+)+\]/gi, (match) => {
+    const nums = match.match(/\d+/g) ?? [];
+    return nums.map((n) => `[Page ${n}]`).join('');
+  });
+}
+
+/**
+ * Single source of truth for converting an answer string + backend API citations
+ * into the { segments, citations } pair the UI needs.
+ *
+ * Why not rely on response.citations alone?
+ * The backend extracts citations only for pages that appeared in the top-k
+ * vector-search results. If Gemini cites a page that wasn't retrieved, the
+ * backend drops it — leaving [Page N] as an un-mappable marker in the text.
+ *
+ * This function solves it by scanning the answer text directly:
+ *  1. Finds every [Page N] marker in the text (case-insensitive).
+ *  2. Builds the citations array from those page numbers (order of first appearance).
+ *  3. Fills in excerpt snippets from apiCitations when the backend has them.
+ *  4. Replaces every [Page N] with a { cite: idx } segment → clickable chip.
+ */
+function buildMessageContent(
+  answer: string,
+  apiCitations: ApiCitation[],
+): { segments: MessageSegment[]; citations: Citation[] } {
+  // Normalize combined citations before any processing
+  const normalizedAnswer = expandCombinedCitations(answer);
+
+  // Build a lookup by page number so we can attach text/visual/bbox to each citation
+  const byPage = new Map<number, ApiCitation>();
+  apiCitations.forEach((c) => {
+    if (!byPage.has(c.pageNumber)) byPage.set(c.pageNumber, c);
+  });
+
+  // First pass: collect unique page numbers in order of first appearance
+  const pageOrder: number[] = [];
+  const seen = new Set<number>();
+  for (const m of normalizedAnswer.matchAll(PAGE_REF_RE)) {
+    const n = parseInt(m[1], 10);
+    if (!seen.has(n)) { seen.add(n); pageOrder.push(n); }
+  }
+
+  // Build citations array — one entry per unique cited page
+  const citations: Citation[] = pageOrder.map((pageNum) => {
+    const api = byPage.get(pageNum);
+    // `snippet` powers the legacy text-layer search highlight: use the real text
+    // excerpt when available, otherwise fall back to the visual description (the
+    // search will silently no-op on visual text, which is fine).
+    const snippet = api?.textExcerpt ?? api?.visualSummary ?? '';
+    return {
+      page: pageNum - 1,                           // 0-indexed for the PDF viewer
+      blockId: `page-${pageNum}`,
+      label: `Page ${pageNum}`,
+      snippet,
+      textExcerpt: api?.textExcerpt ?? null,
+      visualSummary: api?.visualSummary ?? null,
+      bbox: api?.bbox ?? null,
+      pageWidth: api?.pageWidth ?? null,
+      pageHeight: api?.pageHeight ?? null,
+    };
+  });
+
+  // Map page number → 1-based citation index (used by MessageSegments)
+  const pageToIdx = new Map<number, number>();
+  pageOrder.forEach((n, i) => pageToIdx.set(n, i + 1));
+
+  // Second pass: build segments on the normalised answer, replacing [Page N] with { cite: idx }
+  const segments: MessageSegment[] = [];
+  const re = new RegExp(PAGE_REF_RE.source, PAGE_REF_RE.flags); // fresh instance
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(normalizedAnswer)) !== null) {
+    if (m.index > lastIndex) segments.push(normalizedAnswer.slice(lastIndex, m.index));
+    const pageNum = parseInt(m[1], 10);
+    const idx = pageToIdx.get(pageNum);
+    segments.push(idx !== undefined ? { cite: idx } : m[0]);
+    lastIndex = re.lastIndex;
+  }
+
+  if (lastIndex < normalizedAnswer.length) segments.push(normalizedAnswer.slice(lastIndex));
+  return { segments: segments.length > 0 ? segments : [normalizedAnswer], citations };
+}
+
+/** Convert stored API messages into the local ChatMessage format. */
+function mapApiMessages(
+  apiMessages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    citations: ApiCitation[] | null;
+    createdAt: string;
+  }>,
+): ChatMessage[] {
+  return apiMessages.map((msg) => {
+    if (msg.role === 'user') {
+      return { id: msg.id, role: 'user', text: msg.content } satisfies UserMessage;
+    }
+    const { segments, citations } = buildMessageContent(msg.content, msg.citations ?? []);
+    return {
+      id: msg.id,
       role: 'assistant',
-      reasoning: answer.reasoning,
-      reasoningShown: answer.reasoning,
-      segments: answer.segments,
-      citations: answer.citations,
-      confidence: answer.confidence,
+      reasoning: [],
+      reasoningShown: [],
+      segments,
+      citations,
+      confidence: citations.length > 0 ? 0.85 : 0.5,
       streaming: false,
       streamDone: true,
-      streamedText: answer.segments.map((segment) => typeof segment === 'string' ? segment : 'strong' in segment ? segment.strong : '').join(''),
-    },
-  ];
+      streamedText: msg.content,
+    } satisfies AssistantMessage;
+  });
 }
 
-function genericAnswer(): PromptAnswer {
-  return {
-    reasoning: [
-      'Embedding query...',
-      'Retrieving top-k chunks from 24 indexed blocks.',
-      'Reranking by relevance + extraction confidence.',
-      'Drafting grounded response.',
-    ],
-    segments: [
-      'I could not find a strong direct match for that in the indexed document. The whitepaper covers the cooling architecture (§2, p.3), per-rack thermal envelopes (Table 1, p.4), throughput vs. flow rate (Figure 3, p.5), and the adaptive flow policy',
-      { cite: 1 },
-      '. Try one of the suggested questions below, or rephrase to point at a specific section.',
-    ],
-    citations: [
-      { page: 0, blockId: 'p1-abstract', label: 'Abstract, p.1', snippet: 'Modern accelerator deployments routinely exceed 40 kW per rack...' },
-    ],
-    confidence: 0.45,
-  };
-}
+const REASONING_STEPS = [
+  'Embedding query with Mistral…',
+  'Retrieving relevant passages from pgvector…',
+  'Generating grounded response with Gemini…',
+] as const;
 
-export function useNibChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => seedMessages());
+export function useNibChat(documentId: string | null) {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  // Guard against React Strict Mode double-invocation of effects
+  const initRef = useRef(false);
 
-  const sendPrompt = useCallback((text: string) => {
-    const userMessage: UserMessage = { id: nextId(), role: 'user', text };
-    const matchedPrompt = PROMPT_LIBRARY.find((prompt) => prompt.q.toLowerCase() === text.toLowerCase())
-      ?? PROMPT_LIBRARY.find((prompt) =>
-        text.toLowerCase().split(/\s+/).filter((word) => word.length > 3).some((word) => prompt.q.toLowerCase().includes(word)),
-      );
-    const answer = matchedPrompt?.a ?? genericAnswer();
-    const assistantId = nextId();
-    const assistantMessage: AssistantMessage = {
-      id: assistantId,
-      role: 'assistant',
-      reasoning: answer.reasoning,
-      reasoningShown: [],
-      segments: answer.segments,
-      citations: answer.citations,
-      confidence: answer.confidence,
-      streaming: true,
-      streamDone: false,
-      streamedText: '',
-    };
+  // On mount (or when documentId becomes available), get/create the session
+  // and load any existing message history.
+  useEffect(() => {
+    if (!documentId || initRef.current) return;
+    initRef.current = true;
 
-    setMessages((current) => [...current, userMessage, assistantMessage]);
-    setBusy(true);
+    getOrCreateSession(documentId)
+      .then(async (session) => {
+        setSessionId(session.id);
+        const apiMessages = await fetchSessionMessages(session.id);
+        if (apiMessages.length > 0) setMessages(mapApiMessages(apiMessages));
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to initialise chat session:', err);
+      });
+  }, [documentId]);
 
-    let stepIndex = 0;
-    const stepInterval = window.setInterval(() => {
-      stepIndex += 1;
-      setMessages((current) => current.map((message) => {
-        if (message.id !== assistantId || message.role !== 'assistant') {
-          return message;
-        }
-        return { ...message, reasoningShown: answer.reasoning.slice(0, stepIndex) };
-      }));
+  const sendPrompt = useCallback(
+    async (text: string) => {
+      if (!sessionId || busy) return;
 
-      if (stepIndex < answer.reasoning.length) {
+      const userMsg: UserMessage = { id: nextId(), role: 'user', text };
+      const pendingId = nextId();
+
+      const pendingMsg: AssistantMessage = {
+        id: pendingId,
+        role: 'assistant',
+        reasoning: [...REASONING_STEPS],
+        reasoningShown: [REASONING_STEPS[0]],
+        segments: [],
+        citations: [],
+        confidence: 0.8,
+        streaming: true,
+        streamDone: false,
+        streamedText: '',
+      };
+
+      setMessages((prev) => [...prev, userMsg, pendingMsg]);
+      setBusy(true);
+      setChatError(null);
+
+      // Animate reasoning steps while the network request is in flight
+      let stepIndex = 0;
+      const stepTimer = window.setInterval(() => {
+        stepIndex = Math.min(stepIndex + 1, REASONING_STEPS.length - 1);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId && m.role === 'assistant'
+              ? { ...m, reasoningShown: [...REASONING_STEPS].slice(0, stepIndex + 1) }
+              : m,
+          ),
+        );
+      }, 800);
+
+      try {
+        const response = await sendChatQuery(sessionId, text);
+        window.clearInterval(stepTimer);
+
+        const { segments, citations } = buildMessageContent(response.answer, response.citations);
+        const finalReasoning = [
+          'Embedded query with Mistral.',
+          `Retrieved ${response.citations.length} source passage${response.citations.length !== 1 ? 's' : ''}.`,
+          'Generated grounded response with Gemini.',
+        ];
+
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== pendingId || m.role !== 'assistant') return m;
+            return {
+              ...m,
+              reasoning: finalReasoning,
+              reasoningShown: finalReasoning,
+              segments,
+              citations,
+              confidence: citations.length > 0 ? 0.85 : 0.5,
+              streaming: false,
+              streamDone: true,
+              streamedText: response.answer,
+            } satisfies AssistantMessage;
+          }),
+        );
+      } catch (err) {
+        window.clearInterval(stepTimer);
+        const message =
+          err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+        setChatError(message);
+
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== pendingId || m.role !== 'assistant') return m;
+            return {
+              ...m,
+              reasoning: ['Failed to get a response.'],
+              reasoningShown: ['Failed to get a response.'],
+              segments: [message],
+              citations: [],
+              confidence: 0,
+              streaming: false,
+              streamDone: true,
+            } satisfies AssistantMessage;
+          }),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [sessionId, busy],
+  );
+
+  const onPickSuggestion = useCallback(
+    (prompt: PromptLibraryEntry | { reset: true }) => {
+      if ('reset' in prompt) {
+        setMessages([]);
+        setChatError(null);
         return;
       }
+      sendPrompt(prompt.q);
+    },
+    [sendPrompt],
+  );
 
-      window.clearInterval(stepInterval);
-      const fullText = answer.segments.map((segment) => typeof segment === 'string' ? segment : 'strong' in segment ? segment.strong : '').join('');
-      let streamedLength = 0;
-      const chunk = Math.max(2, Math.floor(fullText.length / 35));
-
-      const textInterval = window.setInterval(() => {
-        streamedLength = Math.min(fullText.length, streamedLength + chunk);
-
-        setMessages((current) => current.map((message) => {
-          if (message.id !== assistantId || message.role !== 'assistant') {
-            return message;
-          }
-          return { ...message, streamedText: fullText.slice(0, streamedLength) };
-        }));
-
-        if (streamedLength < fullText.length) {
-          return;
-        }
-
-        window.clearInterval(textInterval);
-        setMessages((current) => current.map((message) => {
-          if (message.id !== assistantId || message.role !== 'assistant') {
-            return message;
-          }
-          return { ...message, streaming: false, streamDone: true };
-        }));
-        setBusy(false);
-
-      }, 35);
-    }, 320);
-  }, []);
-
-  const onPickSuggestion = useCallback((prompt: PromptLibraryEntry | { reset: true }) => {
-    if ('reset' in prompt) {
-      setMessages([]);
-      setBusy(false);
-      return;
-    }
-    sendPrompt(prompt.q);
-  }, [sendPrompt]);
-
-  return {
-    messages,
-    busy,
-    sendPrompt,
-    onPickSuggestion,
-  };
+  return { messages, busy, chatError, sendPrompt, onPickSuggestion };
 }

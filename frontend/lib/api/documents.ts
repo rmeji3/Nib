@@ -143,6 +143,25 @@ export async function trackDocumentOpen(id: string): Promise<DocumentResponse> {
   return res.json();
 }
 
+// ── Ingestion ─────────────────────────────────────────────────────────────────
+
+export interface IngestionStatus {
+  jobId: string | null;
+  documentId: string;
+  status: 'NOT_STARTED' | 'PENDING' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
+  pagesTotal: number | null;
+  pagesProcessed: number;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export async function fetchIngestionStatus(documentId: string): Promise<IngestionStatus> {
+  const res = await apiFetch(`/api/v1/documents/${documentId}/status`);
+  if (!res.ok) throw new Error(`Failed to fetch ingestion status: ${res.statusText}`);
+  return res.json();
+}
+
 export async function mergeDocuments(
   baseDocumentId: string | null,
   baseFile: File | null,

@@ -43,12 +43,13 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 <!-- START_AUTO_MAP -->
 ### API Controller & Endpoints Map
 
-#### Controller: [`AuthController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/AuthController.java)
+#### Controller: [`AuthController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
+<<<<<<< HEAD
 #### Controller: [`CollectionController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/CollectionController.java)
 | Verb | Endpoint Route |
 | --- | --- |
@@ -78,14 +79,19 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `PATCH` | `/api/v1/documents/{id}` |
 | `PATCH` | `/api/v1/documents/{id}/star` |
 
-#### Controller: [`TestController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/TestController.java)
+#### Controller: [`IngestionController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/documents/{id}/status` |
+| `POST` | `/api/v1/documents/{id}/ingest` |
+
+#### Controller: [`TestController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/test/hello` |
 | `POST` | `/api/v1/test/email` |
 
 ### Database Entities (`backend/src/.../model`)
-
 - [`Collection`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Collection.java)
 - [`CollectionDocument`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/CollectionDocument.java)
 - [`Document`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Document.java)
@@ -123,6 +129,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`TestResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
 
 
+
 <!-- END_AUTO_MAP -->
 
 ---
@@ -135,6 +142,7 @@ This section is maintained by AI coding agents to track architectural updates, e
 - **2026-05-20**: Renamed package structure from `com.aipdfviewer.backend` to `com.nib.backend`. Removed deprecated `spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS` config due to Jackson 3/Spring Boot 4.0.6 upgrade compatibility. Moved JWT Secret Key to environment variable `JWT_SECRET_KEY` in `.env` and loaded it dynamically in `application.properties` with a newly generated cryptographically secure 256-bit key.
 - **2026-05-20**: Added collections service. New: `Collection` + `CollectionDocument` entities, `CollectionRepository`, `CollectionDocumentRepository`, `CollectionSummary`/`CreateCollectionRequest`/`AddToCollectionRequest` DTOs, `CollectionService`, `CollectionController`. `CollectionDocument` uses `@OnDelete(CASCADE)` on both FKs for DB-level cascade cleanup. `CollectionNotFoundException` + handler in `GlobalExceptionHandler`. Endpoints: CRUD on collections + add/remove/list documents per collection.
 - **2026-05-20**: Added recent documents feature. New: `lastOpenedAt` field on `Document` entity, `GET /api/v1/documents/recent` endpoint returning docs ordered by `lastOpenedAt DESC`, `POST /api/v1/documents/{id}/open` endpoint that stamps `lastOpenedAt` via a direct JPQL `@Modifying` query (avoids triggering `@PreUpdate` on `updatedAt`). Updated `DocumentResponse` DTO to include `lastOpenedAt`. Updated `DocumentRepository` with `findByUserAndLastOpenedAtIsNotNullAndDeletedAtIsNullOrderByLastOpenedAtDesc` and `updateLastOpenedAt` methods.
+- **2026-05-20**: Phase 1 RAG pipeline implemented. New: `ContentBlock`, `IngestionJob`, `ChatSession`, `ChatMessage` entities + repositories; `TextExtractionService` (PDFBox), `ChunkingService` (sliding window, 2000 char / 200 overlap), `EmbeddingService` (Mistral `mistral-embed`, float[1024]), `VectorSearchService` (JdbcTemplate → pgvector match_chunks()), `IngestionService` (@Async orchestrator), `ChatService` (Gemini 2.0 Flash RAG loop with [Page X] citation parsing); `IngestionController` + `ChatController`; `AsyncConfig` (ingestionExecutor 4/8 threads); `ObjectMapper` bean added to `ApplicationConfig`; `DocumentService.uploadDocuments()` now auto-triggers ingestion after save. API keys: `MISTRAL_API_KEY`, `GEMINI_API_KEY` required in `.env`.
 - **2026-05-20**: Created the initial `GUIDE.md` skeleton and implemented the guide update automation script.
 - **2026-05-19**: Added document upload, listing, and PDF merge. New: `Document` entity, `DocumentRepository`, `DocumentResponse` DTO, `DocumentController` (`POST /upload`, `GET /`, `POST /merge`), `DocumentService`, `SupabaseStorageService` (Supabase Storage REST via `RestClient`), `GlobalExceptionHandler`, and exception types. Updated: `pom.xml` (added PDFBox 3.0.3), `application.properties` (Supabase Storage config, multipart limits 50 MB, Jackson ISO dates), `ApplicationConfig` (added `RestClient` bean). Supabase Storage bucket name configurable via `SUPABASE_STORAGE_BUCKET` env var (default: `documents`). Signed URLs valid for 1 hour.
 - **2026-05-20**: Fixed bug where trashed document previews failed to load by changing getDocumentContent to no longer check if deletedAt is null.

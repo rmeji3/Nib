@@ -2,13 +2,18 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChatPanel } from './nib-chat';
+import { EvidenceDrawer } from './nib-evidence-drawer';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
 import { usePdfSearch } from './hooks/use-pdf-search';
 import { useEffect } from 'react';
+import { useIngestionStatus } from './hooks/use-ingestion-status';
+import { useUpload } from '../upload/upload-context';
 
 export default function NibApp() {
+  const { documentId } = useUpload();
+
   const {
     splitRatio,
     zoom,
@@ -17,6 +22,10 @@ export default function NibApp() {
     chatMinimized,
     pdf,
     setPdf,
+    highlight,
+    evidenceOpen,
+    evidenceCitations,
+    evidenceFocusedBlockId,
     setZoom,
     setCurrentPage,
     setTotalPages,
@@ -25,13 +34,16 @@ export default function NibApp() {
     scrollToPageRef,
     scrollToPage,
     onCiteClick,
+    openEvidence,
+    closeEvidence,
     onDividerPointerDown,
     onDividerPointerMove,
     onDividerPointerUp,
   } = useNibState();
 
-  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat();
+  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat(documentId);
   const searchState = usePdfSearch(pdf);
+  const { isIndexing, progress, pagesProcessed, pagesTotal } = useIngestionStatus(documentId);
 
   useEffect(() => {
     // Jump to match when next/prev is clicked
@@ -94,6 +106,7 @@ export default function NibApp() {
             scrollToPageRef={scrollToPageRef}
             searchQuery={searchState.query}
             setPdf={setPdf}
+            highlight={highlight}
           />
         </div>
 
@@ -120,14 +133,28 @@ export default function NibApp() {
               </div>
 
               {/* Chat */}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ChatPanel
                   messages={messages}
                   onSendPrompt={sendPrompt}
                   onPickSuggestion={onPickSuggestion}
                   onCiteClick={onCiteClick}
+                  onEvidenceOpen={openEvidence}
                   busy={busy}
                   onToggleMinimize={() => setChatMinimized(true)}
+                  isIndexing={isIndexing}
+                  progress={progress}
+                  pagesProcessed={pagesProcessed}
+                  pagesTotal={pagesTotal}
+                />
+                <EvidenceDrawer
+                  citations={evidenceCitations}
+                  open={evidenceOpen}
+                  onClose={closeEvidence}
+                  onJumpTo={(citation) => {
+                    onCiteClick(citation);
+                  }}
+                  focusedBlockId={evidenceFocusedBlockId}
                 />
               </div>
             </motion.div>

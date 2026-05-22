@@ -1,0 +1,10 @@
+# Place the 5 eval PDFs here:
+#
+# 01-research-paper.pdf
+# 02-chart-figure.pdf
+# 03-table-financial.pdf
+# 04-menu-character-spaced.pdf
+# 05-mixed.pdf
+#
+# PDFs are deliberately NOT committed to keep the repo light. If you want a
+# shared baseline, host them somewhere durable and link from eval/phase2-mini/README.md.

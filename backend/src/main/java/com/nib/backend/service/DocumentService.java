@@ -33,6 +33,7 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final SupabaseStorageService storageService;
+    private final IngestionService ingestionService;
 
     public DocumentResponse uploadDocuments(List<MultipartFile> files, String customName, User user) {
         if (files == null || files.isEmpty())
@@ -79,6 +80,7 @@ public class DocumentService {
                 .build());
 
         log.info("Saved document {} ({} file(s)) for user {}", document.getId(), files.size(), user.getId());
+        ingestionService.createAndTrigger(document.getId());
         return toResponse(document, storageService.generateSignedUrl(storagePath, 3600));
     }
 
