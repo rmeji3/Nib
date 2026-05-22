@@ -25,6 +25,7 @@ import {
 } from '../../../components/ui/dropdown-menu';
 import { useAuth } from '../auth/hooks/use-auth';
 import { UserMenu } from '../../home/components/user-menu';
+import { useSettings } from '../../settings/hooks/use-settings';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -535,6 +536,7 @@ export function Viewer({
   scrollToPageRef: React.MutableRefObject<((index: number) => void) | null>;
   highlight?: TextHighlight | null;
 }) {
+  const { settings } = useSettings();
   const [showThumbs, setShowThumbs] = useState(true);
   const { file, documentId, documentUrl } = useUpload();
   const mergeMutation = useMergePdf();
@@ -621,9 +623,9 @@ export function Viewer({
     const target = container.querySelector<HTMLElement>(`[data-page-index="${index}"]`);
     if (target) {
       const top = target.offsetTop - 24;
-      container.scrollTo({ top, behavior: 'smooth' });
+      container.scrollTo({ top, behavior: settings.smoothScrolling ? 'smooth' : 'auto' });
     }
-  }, [scrollContainerRef]);
+  }, [scrollContainerRef, settings.smoothScrolling]);
 
   // Expose to parent (used by nib-state scrollToPage, search navigation, citations)
   useEffect(() => {
@@ -823,7 +825,9 @@ export function Viewer({
                   renderW={renderW}
                   scale={scale}
                   textRenderer={textRenderer}
-                  highlight={highlight}
+                  highlight={settings.citationHighlight ? highlight : null}
+                  showPageNumbers={settings.showPageNumbers}
+                  readingMode={settings.readingMode}
                 />
               ))}
             </div>
@@ -841,6 +845,8 @@ function PdfPageWrapper({
   scale,
   textRenderer,
   highlight,
+  showPageNumbers,
+  readingMode,
 }: {
   index: number;
   pageW: number;
@@ -848,6 +854,8 @@ function PdfPageWrapper({
   scale: number;
   textRenderer: (props: any) => string;
   highlight?: TextHighlight | null;
+  showPageNumbers: boolean;
+  readingMode: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -872,7 +880,7 @@ function PdfPageWrapper({
       className="pdf-page-wrap mx-auto w-fit"
       data-page-index={index}
     >
-      <div className="page-num-tag">p.{index + 1}</div>
+      {showPageNumbers && <div className="page-num-tag">p.{index + 1}</div>}
       <div 
         className="pdf-page"
         style={{
@@ -886,6 +894,7 @@ function PdfPageWrapper({
       >
         <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
           <Page
+            className={readingMode === 'minimal' ? '!bg-transparent !shadow-none' : ''}
             pageNumber={index + 1}
             width={renderW}
             devicePixelRatio={Math.max(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}

@@ -322,13 +322,19 @@ function AppearanceTab() {
 
 function ReaderTab() {
   const { settings, update } = useSettings();
+  const [zoomVal, setZoomVal] = useState(settings.defaultZoom);
+
+  useEffect(() => {
+    setZoomVal(settings.defaultZoom);
+  }, [settings.defaultZoom]);
+
   return (
     <div>
       <SectionTitle>PDF Reader</SectionTitle>
       <SettingCard className="mb-6">
         <SettingRow
           label="Default zoom"
-          description={`Starting zoom level when opening a document (${settings.defaultZoom}%)`}
+          description={`Starting zoom level when opening a document (${zoomVal}%)`}
         >
           <div className="flex items-center gap-3">
             <input
@@ -336,12 +342,13 @@ function ReaderTab() {
               min={50}
               max={200}
               step={10}
-              value={settings.defaultZoom}
-              onChange={e => update('defaultZoom', Number(e.target.value))}
+              value={zoomVal}
+              onChange={e => setZoomVal(Number(e.target.value))}
+              onPointerUp={e => update('defaultZoom', Number(e.currentTarget.value))}
               className="w-28 cursor-pointer accent-white"
             />
             <span className="w-10 text-right font-mono text-xs text-[var(--text-faint)]">
-              {settings.defaultZoom}%
+              {zoomVal}%
             </span>
           </div>
         </SettingRow>
@@ -358,17 +365,6 @@ function ReaderTab() {
           description="Animate page transitions in the PDF viewer"
         >
           <Toggle checked={settings.smoothScrolling} onChange={v => update('smoothScrolling', v)} />
-        </SettingRow>
-
-        <SettingRow label="Reading mode" description="Visual style of the document background">
-          <Select
-            value={settings.readingMode}
-            onChange={v => update('readingMode', v)}
-            options={[
-              { value: 'paper', label: 'Paper (warm white)' },
-              { value: 'minimal', label: 'Minimal (no background)' },
-            ]}
-          />
         </SettingRow>
       </SettingCard>
     </div>
