@@ -5,6 +5,8 @@ import { ChatPanel } from './nib-chat';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
+import { usePdfSearch } from './hooks/use-pdf-search';
+import { useEffect } from 'react';
 
 export default function NibApp() {
   const {
@@ -13,11 +15,14 @@ export default function NibApp() {
     currentPage,
     totalPages,
     chatMinimized,
+    pdf,
+    setPdf,
     setZoom,
     setCurrentPage,
     setTotalPages,
     setChatMinimized,
     scrollContainerRef,
+    scrollToPageRef,
     scrollToPage,
     onCiteClick,
     onDividerPointerDown,
@@ -26,6 +31,29 @@ export default function NibApp() {
   } = useNibState();
 
   const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat();
+  const searchState = usePdfSearch(pdf);
+
+  useEffect(() => {
+    // Jump to match when next/prev is clicked
+    if (searchState.currentMatch) {
+      scrollToPage(searchState.currentMatch.pageIndex);
+    }
+  }, [searchState.currentMatch, scrollToPage]);
+
+  // Handle Ctrl+F globally
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        // The toolbar manages the 'showSearch' state implicitly when search query is updated,
+        // but since we want to toggle the UI cleanly, it might be better handled inside ViewerToolbar.
+        // For now, we can just focus the search input if it exists, or dispatch a custom event.
+        window.dispatchEvent(new CustomEvent('nib:open-search'));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const chatWidthPct = 100 - splitRatio;
 
@@ -39,6 +67,13 @@ export default function NibApp() {
         setZoom={setZoom}
         chatMinimized={chatMinimized}
         onToggleChat={() => setChatMinimized((v) => !v)}
+        searchQuery={searchState.query}
+        setSearchQuery={searchState.search}
+        onSearchNext={searchState.nextMatch}
+        onSearchPrev={searchState.prevMatch}
+        matchCount={searchState.matches.length}
+        currentMatchIndex={searchState.currentMatchIndex}
+        isSearching={searchState.isSearching}
       />
 
       {/* Main content row */}
@@ -56,6 +91,9 @@ export default function NibApp() {
             zoom={zoom}
             setZoom={setZoom}
             scrollContainerRef={scrollContainerRef}
+            scrollToPageRef={scrollToPageRef}
+            searchQuery={searchState.query}
+            setPdf={setPdf}
           />
         </div>
 

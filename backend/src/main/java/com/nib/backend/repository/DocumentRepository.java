@@ -5,8 +5,11 @@ import com.nib.backend.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +29,17 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     // ── Trash (deletedAt IS NOT NULL) ─────────────────────────────────────────
 
     Page<Document> findByUserAndDeletedAtIsNotNullOrderByDeletedAtDesc(User user, Pageable pageable);
+
+    // ── Recent (lastOpenedAt IS NOT NULL, ordered most-recent first) ─────────
+
+    Page<Document> findByUserAndLastOpenedAtIsNotNullAndDeletedAtIsNullOrderByLastOpenedAtDesc(
+            User user, Pageable pageable);
+
+    // ── Stamp lastOpenedAt without triggering @PreUpdate on updatedAt ─────────
+
+    @Modifying
+    @Query("UPDATE Document d SET d.lastOpenedAt = :openedAt WHERE d.id = :id AND d.user = :user AND d.deletedAt IS NULL")
+    int updateLastOpenedAt(@Param("id") UUID id, @Param("user") User user, @Param("openedAt") LocalDateTime openedAt);
 
     // ── Any state (for restore / permanent-delete lookups) ───────────────────
 

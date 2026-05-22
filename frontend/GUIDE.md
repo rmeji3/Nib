@@ -41,8 +41,11 @@ This is a live developer guide and project directory index for the Next.js front
 | URL Route | Type | File Path |
 | --- | --- | --- |
 | `/` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/page.tsx) |
+| `/document/[id]` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/[id]/page.tsx) |
+| `/document/uploading` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/uploading/page.tsx) |
 | `/file` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/file/page.tsx) |
 | `/home` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/home/page.tsx) |
+| `/settings` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/settings/page.tsx) |
 | `/signin` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signin/page.tsx) |
 | `/signup` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signup/page.tsx) |
 
@@ -84,3 +87,6 @@ This section is maintained by AI coding agents to track architectural updates, n
 - **2026-05-20**: Implemented global cursor-pointer styles for all buttons/interactive elements, and explicitly changed radix dropdown items from cursor-default to cursor-pointer in `ui/dropdown-menu.tsx`.
 - **2026-05-19**: Added document upload, listing, and PDF merge features. New files: `lib/api/documents.ts` (API client), `app/features/nib/hooks/use-nib-upload.ts` (auto-upload local file to backend), `app/features/nib/hooks/use-merge-pdf.ts` (merge PDFs via backend). Updated: `upload-context.tsx` (added `documentId`, `documentUrl`, `setDocument`), `home/hooks/use-documents.ts` (real API replacing mock data), `home/page.tsx` (document grid now real, click navigates to viewer), `nib-viewer.tsx` (uses `documentUrl` for loaded documents, combine button triggers real merge), `nib-app.tsx` (mounts `useNibUpload`).
 - **2026-05-20**: Wired up `@tanstack/react-virtual` in `nib-viewer.tsx` for the thumbnail sidebar to prevent performance tanking on large PDFs, and limited thumbnail `devicePixelRatio` to 1.
+- **2026-05-20**: Replaced dead "Filter" button with a working `SearchFilterPopover` component (`app/home/components/search-filter-popover.tsx`). Added `sortBy` state (client-side sort across all views), active filter chips inline in the search bar (mobile fallback row below), and "Jump to" view shortcuts + collection combobox inside the popover. Sort applies to currently-loaded pages only.
+- **2026-05-20**: Added `/settings` page with 7 tabs (Profile, Appearance, PDF Reader, AI & Chat, Privacy & Data, Shortcuts, About). Created `app/settings/hooks/use-settings.ts` (localStorage-backed settings with accent color applied via CSS custom properties). Replaced the inline user panel + sign-out icon in `home/page.tsx` with `app/home/components/user-menu.tsx`, a Radix DropdownMenu that links to Settings, Keyboard shortcuts, and Sign out.
+- **2026-05-20**: Implemented ViewPanel to lazily mount and persist views (prevents PDF canvas destruction/remount logic). Split docsGridRef for grid animations per-view. Fixed selectedCollectionId hydration when returning to library view.

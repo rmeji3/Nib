@@ -3,10 +3,12 @@ import {
   fetchDocuments,
   fetchTrashedDocuments,
   fetchStarredDocuments,
+  fetchRecentDocuments,
   softDeleteDocument,
   restoreDocument,
   permanentDeleteDocument,
   toggleDocumentStar,
+  trackDocumentOpen,
   type DocumentResponse,
 } from '../../../lib/api/documents';
 
@@ -21,6 +23,7 @@ export interface DocumentItem {
   createdAt: string;
   deletedAt: string | null;
   isStarred: boolean;
+  lastOpenedAt: string | null;
 }
 
 function formatMeta(doc: DocumentResponse): string {
@@ -37,7 +40,7 @@ function formatMeta(doc: DocumentResponse): string {
   return parts.join(' · ');
 }
 
-function mapToDocumentItem(doc: DocumentResponse): DocumentItem {
+export function mapToDocumentItem(doc: DocumentResponse): DocumentItem {
   return {
     id: doc.id,
     title: doc.originalFilename.replace(/\.pdf$/i, ''),
@@ -49,6 +52,7 @@ function mapToDocumentItem(doc: DocumentResponse): DocumentItem {
     createdAt: doc.createdAt,
     deletedAt: doc.deletedAt,
     isStarred: doc.isStarred,
+    lastOpenedAt: doc.lastOpenedAt ?? null,
   };
 }
 
@@ -145,6 +149,35 @@ export function useToggleStarDocument() {
     mutationFn: (id: string) => toggleDocumentStar(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useRecentDocuments() {
+  return useInfiniteQuery({
+    queryKey: ['documents', 'recent'],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await fetchRecentDocuments(pageParam);
+      return {
+        ...response,
+        content: response.content.map(mapToDocumentItem),
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.last) return undefined;
+      return lastPage.pageNumber + 1;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useTrackDocumentOpen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => trackDocumentOpen(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', 'recent'] });
     },
   });
 }

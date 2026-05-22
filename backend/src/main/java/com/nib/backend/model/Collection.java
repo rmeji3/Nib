@@ -7,13 +7,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "documents")
+@Table(name = "collections")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Document {
+public class Collection {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,34 +24,13 @@ public class Document {
     private User user;
 
     @Column(nullable = false)
-    private String filename;
-
-    @Column(name = "original_filename", nullable = false)
-    private String originalFilename;
-
-    @Column(name = "storage_path", nullable = false)
-    private String storagePath;
-
-    @Column(name = "file_size_bytes")
-    private Long fileSizeBytes;
-
-    @Column(name = "page_count")
-    private Integer pageCount;
+    private String name;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @Column(name = "last_opened_at")
-    private LocalDateTime lastOpenedAt;
-
-    @Column(name = "is_starred", nullable = false, columnDefinition = "boolean default false")
-    private boolean isStarred = false;
 
     @PrePersist
     protected void onCreate() {

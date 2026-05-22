@@ -220,6 +220,10 @@ button:disabled {
 }
 
 .pdf-page {
+  /* wrapper is now transparent */
+}
+
+.react-pdf__Page {
   background: var(--paper);
   box-shadow: var(--shadow-page);
 }

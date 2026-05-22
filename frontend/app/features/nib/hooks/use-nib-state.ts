@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Citation } from '../nib-types';
+import type { pdfjs } from 'react-pdf';
 
 const PANEL_POSITION: 'left' | 'right' = 'right';
 
@@ -9,22 +10,15 @@ export function useNibState() {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(6);
   const [chatMinimized, setChatMinimized] = useState(false);
+  const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
+  /** Populated by the Viewer component once its virtualizer is ready. */
+  const scrollToPageRef = useRef<((index: number) => void) | null>(null);
 
   const scrollToPage = useCallback((page: number) => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return;
-    }
-    const pages = container.querySelectorAll<HTMLElement>(`.pdf-page-wrap`);
-    const target = pages[page];
-    if (target) {
-      const targetRect = target.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      container.scrollBy({ top: targetRect.top - containerRect.top - 24, behavior: 'smooth' });
-    }
+    scrollToPageRef.current?.(page);
   }, []);
 
   const onCiteClick = useCallback((citation: Citation) => {
@@ -90,11 +84,14 @@ export function useNibState() {
     currentPage,
     totalPages,
     chatMinimized,
+    pdf,
+    setPdf,
     setZoom,
     setCurrentPage,
     setTotalPages,
     setChatMinimized,
     scrollContainerRef,
+    scrollToPageRef,
     scrollToPage,
     onCiteClick,
     onDividerPointerDown,

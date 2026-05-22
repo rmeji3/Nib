@@ -6,18 +6,7 @@ import { fetchBlobUrl, getCachedBlobUrl, hasCachedBlobUrl } from './pdf-blob-cac
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export default function DocumentPreview({
-  documentId,
-  className = 'mb-4 h-72 w-full rounded-md bg-gradient-to-b from-[#1d2129] to-[#15181f] flex items-start justify-center overflow-hidden relative',
-  pageWidth = 200,
-  pageClassName = 'shadow-md overflow-hidden rounded-sm border border-white/10 mt-4',
-}: {
-  documentId: string;
-  className?: string;
-  pageWidth?: number;
-  pageClassName?: string;
-}) {
-  // Initialise directly from cache — zero flicker on revisit.
+export default function BannerDocumentPreview({ documentId }: { documentId: string }) {
   const [blobUrl, setBlobUrl] = useState<string | undefined>(() => getCachedBlobUrl(documentId));
   const [loaded, setLoaded] = useState(() => hasCachedBlobUrl(documentId));
 
@@ -27,17 +16,15 @@ export default function DocumentPreview({
     let cancelled = false;
     fetchBlobUrl(documentId)
       .then(url => { if (!cancelled) setBlobUrl(url); })
-      .catch(err => console.error('[DocumentPreview] fetch error:', err));
+      .catch(err => console.error('[BannerPreview] fetch error:', err));
 
     return () => { cancelled = true; };
   }, [documentId]);
 
   return (
-    <div className={className}>
+    <div className="absolute top-0 left-0 w-full h-full bg-[#1d2129] rounded-[4px] shadow-xl border border-white/10 flex items-start justify-center overflow-hidden">
       {!loaded && (
-        <div className="absolute inset-0 flex items-start justify-center overflow-hidden animate-pulse">
-          <div className="mt-4 w-[200px] max-w-full h-[calc(100%-1.5rem)] bg-white/5 rounded-sm border border-white/10" />
-        </div>
+        <div className="absolute inset-0 animate-pulse bg-white/5" />
       )}
       <div
         className={`w-full h-full flex items-start justify-center transition-opacity duration-500 ${
@@ -48,12 +35,12 @@ export default function DocumentPreview({
           <Document file={blobUrl} loading={null} className="flex items-start justify-center w-full">
             <Page
               pageNumber={1}
-              width={pageWidth}
+              width={140}
               devicePixelRatio={1}
               renderAnnotationLayer={false}
               renderTextLayer={false}
               onLoadSuccess={() => setLoaded(true)}
-              className={pageClassName}
+              className="shadow-md overflow-hidden bg-white"
             />
           </Document>
         )}
