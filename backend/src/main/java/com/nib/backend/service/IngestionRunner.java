@@ -8,6 +8,8 @@ import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Separate component so @Async runs through Spring's proxy.
@@ -61,6 +67,15 @@ public class IngestionRunner {
     @Value("${ingestion.vision.enabled:true}")
     private boolean visionEnabled;
 
+    /**
+     * How many Gemini Vision API calls can be in-flight at once. Each call takes
+     * 5–10 seconds, so concurrency directly multiplies indexing throughput.
+     * 8 is a safe default for paid Gemini quotas (~2000 RPM); lower if you see
+     * rate limit errors.
+     */
+    @Value("${ingestion.vision.concurrency:8}")
+    private int visionConcurrency;
+
     @Async("ingestionExecutor")
     public void run(UUID documentId, UUID jobId) {
         IngestionJob job = ingestionJobRepository.findById(jobId).orElseThrow();
@@ -85,16 +100,52 @@ public class IngestionRunner {
             log.info("Starting multimodal ingestion: {} pages for document {}", totalPages, documentId);
 
             // ── 3. Build all pending blocks (text + visual) ───────────────────────
-            //    We collect them all before calling any embedding API so we can
-            //    batch everything into the minimum number of Mistral API calls.
+            //    Vision API calls dominate ingestion time (~5–10 s each).
+            //    Strategy: render pages sequentially with one PDDocument (PDFBox
+            //    is not thread-safe), but dispatch each Gemini Vision call to a
+            //    thread pool as soon as its render finishes. While the renderer
+            //    moves to page N+1, page N's API call is already running.
             record PendingBlock(int pageNumber, int chunkIndex, String text, String blockType) {}
             List<PendingBlock> pending = new ArrayList<>();
 
+            // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
+            List<CompletableFuture<String>> visionFutures = new ArrayList<>(totalPages);
+            ExecutorService visionExecutor = null;
+            long visionStart = System.currentTimeMillis();
+            if (visionEnabled) {
+                int concurrency = Math.max(1, Math.min(visionConcurrency, totalPages));
+                visionExecutor = Executors.newFixedThreadPool(concurrency, r -> {
+                    Thread t = new Thread(r, "vision-api");
+                    t.setDaemon(true);
+                    return t;
+                });
+                log.info("Dispatching {} vision tasks with concurrency {} for document {}",
+                        totalPages, concurrency, documentId);
+                try (PDDocument pdfDoc = Loader.loadPDF(pdfBytes)) {
+                    final ExecutorService exec = visionExecutor;
+                    for (int i = 0; i < totalPages; i++) {
+                        byte[] pngBytes;
+                        try {
+                            pngBytes = visionService.renderPageFromDocument(pdfDoc, i);
+                        } catch (Exception ex) {
+                            log.warn("Failed to render page {} — skipping its visual block: {}",
+                                    i + 1, ex.getMessage());
+                            visionFutures.add(CompletableFuture.completedFuture(null));
+                            continue;
+                        }
+                        final int pageNumber = i + 1;
+                        final byte[] image = pngBytes;
+                        visionFutures.add(CompletableFuture.supplyAsync(
+                                () -> visionService.analyzeRenderedImage(image, pageNumber), exec));
+                    }
+                }
+            }
+
+            // ── 3b. Build text blocks while vision runs in the background ───────
             for (int i = 0; i < totalPages; i++) {
                 int pageNumber = i + 1;
                 String pageText = pageTexts.get(i);
 
-                // ── 3a. Text chunks ───────────────────────────────────────────────
                 if (pageText != null && !pageText.isBlank()) {
                     String trimmed = pageText.trim();
                     if (trimmed.length() < MIN_TEXT_LENGTH) {
@@ -110,15 +161,26 @@ public class IngestionRunner {
                         }
                     }
                 }
+            }
 
-                // ── 3b. Visual summary (Gemini Vision) ───────────────────────────
-                if (visionEnabled) {
-                    log.debug("Running vision analysis for page {}/{}", pageNumber, totalPages);
-                    String visualSummary = visionService.analyzePageImage(pdfBytes, i);
-                    if (visualSummary != null && !visualSummary.isBlank()) {
-                        pending.add(new PendingBlock(pageNumber, 0, visualSummary, BLOCK_VISUAL));
+            // ── 3c. Collect vision results (waits for any still-running calls) ──
+            if (visionEnabled) {
+                for (int i = 0; i < visionFutures.size(); i++) {
+                    try {
+                        String visualSummary = visionFutures.get(i).get();
+                        if (visualSummary != null && !visualSummary.isBlank()) {
+                            pending.add(new PendingBlock(i + 1, 0, visualSummary, BLOCK_VISUAL));
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Vision task for page {} failed: {}", i + 1, ex.getMessage());
                     }
                 }
+                if (visionExecutor != null) {
+                    visionExecutor.shutdown();
+                    visionExecutor.awaitTermination(5, TimeUnit.SECONDS);
+                }
+                log.info("Vision analysis complete in {} ms ({} pages)",
+                        System.currentTimeMillis() - visionStart, totalPages);
             }
 
             log.info("Collected {} total blocks ({} text + {} visual) for document {}",

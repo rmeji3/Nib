@@ -90,33 +90,54 @@ public class VisionService {
      *
      * Returns null if rendering or the API call fails — the caller should skip
      * the visual block for that page rather than failing the entire ingestion.
+     *
+     * NOTE: this method reloads the entire PDF every call. When processing many
+     * pages, prefer rendering with {@link #renderPageFromDocument} (one shared
+     * PDDocument) and then calling {@link #analyzeRenderedImage} on each PNG.
      */
     public String analyzePageImage(byte[] pdfBytes, int pageIndex) {
-        try {
-            byte[] imageBytes = renderPage(pdfBytes, pageIndex);
-            String base64 = Base64.getEncoder().encodeToString(imageBytes);
-            String description = callGeminiVision(base64);
-            log.debug("Vision analysis complete for page {} ({} chars)", pageIndex + 1,
-                    description != null ? description.length() : 0);
-            return description;
+        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
+            byte[] imageBytes = renderPageFromDocument(doc, pageIndex);
+            return analyzeRenderedImage(imageBytes, pageIndex + 1);
         } catch (Exception ex) {
             log.warn("Vision analysis failed for page {}: {}", pageIndex + 1, ex.getMessage());
             return null;
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private byte[] renderPage(byte[] pdfBytes, int pageIndex) throws Exception {
-        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
-            PDFRenderer renderer = new PDFRenderer(doc);
-            BufferedImage image = renderer.renderImageWithDPI(pageIndex, RENDER_DPI, ImageType.RGB);
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                ImageIO.write(image, "png", baos);
-                return baos.toByteArray();
-            }
+    /**
+     * Renders a single page from an already-open PDDocument. Use this when
+     * processing many pages so the PDF is only parsed once. PDDocument is NOT
+     * thread-safe, so call this serially from one thread.
+     */
+    public byte[] renderPageFromDocument(PDDocument doc, int pageIndex) throws Exception {
+        PDFRenderer renderer = new PDFRenderer(doc);
+        BufferedImage image = renderer.renderImageWithDPI(pageIndex, RENDER_DPI, ImageType.RGB);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            ImageIO.write(image, "png", baos);
+            return baos.toByteArray();
         }
     }
+
+    /**
+     * Calls Gemini Vision on a pre-rendered PNG. Safe to call concurrently from
+     * many threads — the heavy work is network I/O, not local CPU.
+     * Returns null on failure so the caller can skip that page's visual block.
+     */
+    public String analyzeRenderedImage(byte[] pngBytes, int pageNumberForLog) {
+        try {
+            String base64 = Base64.getEncoder().encodeToString(pngBytes);
+            String description = callGeminiVision(base64);
+            log.debug("Vision analysis complete for page {} ({} chars)", pageNumberForLog,
+                    description != null ? description.length() : 0);
+            return description;
+        } catch (Exception ex) {
+            log.warn("Vision analysis failed for page {}: {}", pageNumberForLog, ex.getMessage());
+            return null;
+        }
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
     private String callGeminiVision(String base64Image) {
