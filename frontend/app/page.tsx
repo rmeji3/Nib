@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { NibLogo } from './components/nib-logo';
@@ -37,9 +37,13 @@ const planFeatures: Record<string, string[]> = {
 export default function LandingPage() {
   const [activeCite, setActiveCite] = useState<number | null>(null);
   const { user } = useAuth();
+  // Wait until auth has hydrated from localStorage before rendering
+  // auth-dependent links — prevents SSR/client mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   return (
-    <div style={{ background: 'var(--bg-base)', color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: '15.5px', lineHeight: 1.5, WebkitFontSmoothing: 'antialiased', overflowX: 'hidden' }}>
+    <div suppressHydrationWarning style={{ background: 'var(--bg-base)', color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: '15.5px', lineHeight: 1.5, WebkitFontSmoothing: 'antialiased', overflowX: 'hidden' }}>
 
       {/* -- Nav -- */}
       <nav
@@ -67,16 +71,14 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="flex items-center gap-3.5">
-            {user ? (
-              <>
-                <Link
-                  href="/home"
-                  className="inline-flex items-center gap-2 rounded-[9px] px-4 py-2 text-sm font-medium no-underline transition-colors border-none"
-                  style={{ background: 'var(--text)', color: 'var(--bg-base)' }}
-                >
-                  Workspace
-                </Link>
-              </>
+            {mounted && user ? (
+              <Link
+                href="/home"
+                className="inline-flex items-center gap-2 rounded-[9px] px-4 py-2 text-sm font-medium no-underline transition-colors border-none"
+                style={{ background: 'var(--text)', color: 'var(--bg-base)' }}
+              >
+                Workspace
+              </Link>
             ) : (
               <>
                 <Link href="/signin" className="text-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors no-underline">Sign in</Link>
@@ -116,7 +118,7 @@ export default function LandingPage() {
             </p>
 
             <div className="flex gap-3 justify-center mb-7 flex-wrap">
-              <Link href={user ? "/file" : "/signup"} className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline transition-colors" style={{ background: 'var(--text)', color: 'var(--bg-base)' }}>
+              <Link href={mounted && user ? "/file" : "/signup"} className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline transition-colors" style={{ background: 'var(--text)', color: 'var(--bg-base)' }}>
                 Open the reader <ArrowRight />
               </Link>
               <a href="#how" className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text)', border: '1px solid var(--border)' }}>
@@ -607,7 +609,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  href={user ? "/home" : "/signup"}
+                  href={mounted && user ? "/home" : "/signup"}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-[9px] py-2.5 text-sm font-medium no-underline transition-colors mt-auto"
                   style={plan.featured ? { background: 'var(--text)', color: 'var(--bg-base)' } : { background: 'rgba(255,255,255,0.04)', color: 'var(--text)', border: '1px solid var(--border)' }}
                 >
@@ -628,7 +630,7 @@ export default function LandingPage() {
           </h2>
           <p className="text-[17px] m-0 mb-8" style={{ color: 'var(--text-dim)' }}>Open Nib with a sample whitepaper loaded. No sign-up.</p>
           <div className="flex gap-3 justify-center flex-wrap">
-            <Link href={user ? "/file" : "/signup"} className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline" style={{ background: 'var(--text)', color: 'var(--bg-base)' }}>
+            <Link href={mounted && user ? "/file" : "/signup"} className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline" style={{ background: 'var(--text)', color: 'var(--bg-base)' }}>
               Open the reader <ArrowRight />
             </Link>
             <a href="#" className="inline-flex items-center gap-2 rounded-[9px] px-5 py-3 text-[15px] font-medium no-underline" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text)', border: '1px solid var(--border)' }}>

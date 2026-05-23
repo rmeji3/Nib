@@ -113,16 +113,19 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`IngestionRunner`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionRunner.java)
 - [`IngestionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/IngestionService.java)
 - [`JwtService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
+- [`PositionedTextExtractor`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/PositionedTextExtractor.java)
 - [`SupabaseStorageService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
 - [`TestIService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
 - [`TestService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TestService.java)
 - [`TextExtractionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/TextExtractionService.java)
 - [`VectorSearchService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/VectorSearchService.java)
+- [`VisionService`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/service/VisionService.java)
 
 ### Data Transfer Objects (`backend/src/.../dto`)
 
 - [`AuthRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
 - [`AuthResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
+- [`BBox`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/BBox.java)
 - [`ChatMessageResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatMessageResponse.java)
 - [`ChatQueryRequest`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryRequest.java)
 - [`ChatQueryResponse`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryResponse.java)
@@ -146,6 +149,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
+- **2026-05-22**: Phase 3 accuracy hardening. `ChatService` extended with: `rerank()` (visual boost +0.10 / per-page diversity penalty -0.05), `computeConfidence()` (1 - mean cosine distance of top-3 chunks, clamped to [0,1]), `computeGroundedness()` (fraction of answer sentences containing `[Page N]`), and a refusal guard that returns a canned "not enough info" answer when confidence falls below `chat.refusal.threshold` (default 0.25) and the query isn't an aggregation query. Prompt rule #3 added: every factual sentence MUST end with a `[Page X]` citation. `ChatQueryResponse` extended with `confidence`, `groundedness`, `refused`. `IngestionRunner.updateProgress()` writes `pages_processed` to `ingestion_jobs` after each Gemini Vision task completes (via `CompletableFuture#whenComplete`), giving the frontend real-time progress instead of a single end-of-run jump. New tunables in `application.properties`: `chat.refusal.threshold`, `chat.rerank.visual-boost`, `chat.rerank.diversity-penalty`.
 - **2026-05-20**: Renamed package structure from `com.aipdfviewer.backend` to `com.nib.backend`. Removed deprecated `spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS` config due to Jackson 3/Spring Boot 4.0.6 upgrade compatibility. Moved JWT Secret Key to environment variable `JWT_SECRET_KEY` in `.env` and loaded it dynamically in `application.properties` with a newly generated cryptographically secure 256-bit key.
 - **2026-05-20**: Phase 1 RAG pipeline implemented. New: `ContentBlock`, `IngestionJob`, `ChatSession`, `ChatMessage` entities + repositories; `TextExtractionService` (PDFBox), `ChunkingService` (sliding window, 2000 char / 200 overlap), `EmbeddingService` (Mistral `mistral-embed`, float[1024]), `VectorSearchService` (JdbcTemplate → pgvector match_chunks()), `IngestionService` (@Async orchestrator), `ChatService` (Gemini 2.0 Flash RAG loop with [Page X] citation parsing); `IngestionController` + `ChatController`; `AsyncConfig` (ingestionExecutor 4/8 threads); `ObjectMapper` bean added to `ApplicationConfig`; `DocumentService.uploadDocuments()` now auto-triggers ingestion after save. API keys: `MISTRAL_API_KEY`, `GEMINI_API_KEY` required in `.env`.
 - **2026-05-20**: Created the initial `GUIDE.md` skeleton and implemented the guide update automation script.
