@@ -33,5 +33,6 @@ export function useIngestionStatus(documentId: string | null) {
     pagesProcessed: data?.pagesProcessed ?? 0,
     progress,
     isLoading,
+    completedAt: data?.completedAt ?? null,
   };
 }

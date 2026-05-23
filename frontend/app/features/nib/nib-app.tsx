@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChatPanel } from './nib-chat';
 import { EvidenceDrawer } from './nib-evidence-drawer';
@@ -123,8 +124,19 @@ export default function NibApp() {
     onDividerPointerUp,
   } = useNibState();
 
-  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat(documentId);
-  const { isIndexing, isComplete, isFailed, progress, pagesProcessed, pagesTotal, isLoading: statusLoading } = useIngestionStatus(documentId);
+  const { messages, busy, sendPrompt, onPickSuggestion, sessionCreatedAt } = useNibChat(documentId);
+  const { isIndexing, isComplete, isFailed, progress, pagesProcessed, pagesTotal, isLoading: statusLoading, completedAt } = useIngestionStatus(documentId);
+
+  // Detect stale chat: session was created before the latest ingestion finished.
+  // This means old messages reference content that may have changed (e.g. after
+  // a PDF merge + re-ingestion). We show a banner so the user can start fresh.
+  const [staleDismissed, setStaleDismissed] = useState(false);
+  const isSessionStale = !!(
+    sessionCreatedAt &&
+    completedAt &&
+    new Date(sessionCreatedAt) < new Date(completedAt) &&
+    !staleDismissed
+  );
 
   const chatWidthPct = 100 - splitRatio;
 
@@ -209,6 +221,8 @@ export default function NibApp() {
                   progress={100}
                   pagesProcessed={pagesProcessed}
                   pagesTotal={pagesTotal}
+                  isSessionStale={isSessionStale}
+                  onDismissStale={() => setStaleDismissed(true)}
                 />
                 <EvidenceDrawer
                   citations={evidenceCitations}

@@ -118,6 +118,43 @@ public class VectorSearchService {
     }
 
     /**
+     * Returns all content blocks for the specified pages of a document, ordered by
+     * page number and chunk index.  Used for page-reference queries ("what is page 5
+     * about") where top-k similarity may miss the targeted page entirely — embeddings
+     * don't encode page numbers as metadata, so the query vector matches general
+     * document content rather than a specific page.
+     * Similarity is set to 0.0 since it's unused in this context.
+     */
+    public List<ChunkMatch> getBlocksForPages(UUID documentId, List<Integer> pageNumbers) {
+        if (pageNumbers.isEmpty()) return List.of();
+        StringBuilder inClause = new StringBuilder();
+        for (int i = 0; i < pageNumbers.size(); i++) {
+            if (i > 0) inClause.append(", ");
+            inClause.append(pageNumbers.get(i));
+        }
+        String sql = """
+                SELECT cb.id          AS block_id,
+                       cb.document_id,
+                       cb.page_number,
+                       cb.chunk_index,
+                       cb.extracted_text,
+                       cb.block_type,
+                       cb.bbox_x,
+                       cb.bbox_y,
+                       cb.bbox_width,
+                       cb.bbox_height,
+                       cb.page_width,
+                       cb.page_height,
+                       0.0            AS similarity
+                FROM   content_blocks cb
+                WHERE  cb.document_id = ?
+                  AND  cb.page_number IN (%s)
+                ORDER  BY cb.page_number, cb.chunk_index
+                """.formatted(inClause);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), documentId);
+    }
+
+    /**
      * Retrieves the top-k most similar chunks for a given query embedding and document.
      *
      * Uses a MATERIALIZED CTE to force PostgreSQL to pre-filter embeddings by

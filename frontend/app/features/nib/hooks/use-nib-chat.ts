@@ -156,6 +156,7 @@ const REASONING_STEPS = [
 
 export function useNibChat(documentId: string | null) {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionCreatedAt, setSessionCreatedAt] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -171,6 +172,7 @@ export function useNibChat(documentId: string | null) {
     getOrCreateSession(documentId)
       .then(async (session) => {
         setSessionId(session.id);
+        setSessionCreatedAt(session.createdAt);
         const apiMessages = await fetchSessionMessages(session.id);
         if (apiMessages.length > 0) setMessages(mapApiMessages(apiMessages));
       })
@@ -293,5 +295,5 @@ export function useNibChat(documentId: string | null) {
     [sendPrompt],
   );
 
-  return { messages, busy, chatError, sendPrompt, onPickSuggestion };
+  return { messages, busy, chatError, sendPrompt, onPickSuggestion, sessionCreatedAt };
 }

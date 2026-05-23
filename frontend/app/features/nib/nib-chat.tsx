@@ -236,6 +236,31 @@ function UserMessageView({ msg }: { msg: UserMessage }) {
   );
 }
 
+function DocumentUpdatedBanner({
+  onStartFresh,
+}: {
+  onStartFresh: () => void;
+}) {
+  return (
+    <div className="mx-1 mb-2 rounded-lg border border-sky-500/25 bg-sky-500/10 px-3.5 py-3 text-[12.5px] leading-snug text-sky-200">
+      <div className="flex items-start gap-2.5">
+        <span aria-hidden className="mt-0.5 text-sky-300">&#x21bb;</span>
+        <div className="flex-1">
+          <span className="font-medium text-sky-100">Document re-indexed.</span>{' '}
+          Previous answers may reference outdated content.
+          <button
+            type="button"
+            onClick={onStartFresh}
+            className="ml-2 inline-flex items-center gap-1 rounded-md bg-sky-500/20 px-2 py-0.5 text-[11.5px] font-medium text-sky-100 transition hover:bg-sky-500/30"
+          >
+            Start fresh
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Suggestions({ onPick }: { onPick: (prompt: PromptLibraryEntry) => void }) {
   return (
     <div className="suggestions flex flex-col gap-2">
@@ -375,6 +400,8 @@ export function ChatPanel({
   progress,
   pagesProcessed,
   pagesTotal,
+  isSessionStale = false,
+  onDismissStale,
 }: {
   messages: Array<UserMessage | AssistantMessage>;
   onSendPrompt: (value: string) => void;
@@ -387,6 +414,8 @@ export function ChatPanel({
   progress: number;
   pagesProcessed: number;
   pagesTotal: number | null;
+  isSessionStale?: boolean;
+  onDismissStale?: () => void;
 }) {
   const [hover, setHover] = useState<{ citation: Citation; anchor: HTMLElement } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -437,6 +466,15 @@ export function ChatPanel({
           />
         ) : (
           <>
+            {isSessionStale && !isEmpty && (
+              <DocumentUpdatedBanner
+                onStartFresh={() => {
+                  onPickSuggestion({ reset: true });
+                  onDismissStale?.();
+                }}
+              />
+            )}
+
             {isEmpty ? (
               <div className="chat-empty flex flex-col gap-4">
                 <div className="chat-welcome pb-3">

@@ -99,6 +99,23 @@ public class ChatService {
 
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
 
+    /**
+     * Detects explicit page references in user questions ("page 5", "pages 3").
+     * When found, we augment the retrieved chunks with all blocks from those pages
+     * so Gemini has the right context even when the embedding didn't rank them in
+     * top-k (embeddings don't understand page numbers as structured metadata).
+     */
+    private static final Pattern PAGE_REF_PATTERN = Pattern.compile(
+            "\\bpages?\\s+(\\d+)\\b", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Maximum text blocks to pull in per referenced page. Visual and document
+     * summary blocks are always included (typically 1–2 per page). 20 text
+     * blocks ≈ 10k chars — plenty for page-level questions without blowing
+     * up the Gemini prompt.
+     */
+    private static final int MAX_TEXT_BLOCKS_PER_PAGE_REF = 20;
+
     /** Split answer into sentence-ish units for groundedness scoring. */
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+(?=[A-Z\\[])");
 
@@ -153,6 +170,17 @@ public class ChatService {
             if (lower.contains(phrase)) return true;
         }
         return false;
+    }
+
+    /** Extract page numbers explicitly mentioned in the question ("page 5", "pages 3"). */
+    private static List<Integer> extractPageReferences(String question) {
+        List<Integer> pages = new ArrayList<>();
+        Matcher m = PAGE_REF_PATTERN.matcher(question);
+        while (m.find()) {
+            int page = Integer.parseInt(m.group(1));
+            if (!pages.contains(page)) pages.add(page);
+        }
+        return pages;
     }
 
     // ── Sessions ──────────────────────────────────────────────────────────────
@@ -236,12 +264,47 @@ public class ChatService {
                     added, chunks.size());
         }
 
+        // ── Page-reference augmentation ────────────────────────────────────
+        // When the question explicitly mentions page numbers ("page 5", "page 3"),
+        // ensure those pages' blocks are in context regardless of similarity rank.
+        // Embeddings don't encode page numbers as metadata, so "what is page 5
+        // about" retrieves chunks by semantic similarity to general document
+        // content — which can easily miss page 5 entirely.
+        List<Integer> referencedPages = extractPageReferences(question);
+        if (!referencedPages.isEmpty()) {
+            Set<UUID> seenBlockIds = chunks.stream()
+                    .map(VectorSearchService.ChunkMatch::blockId)
+                    .collect(Collectors.toCollection(HashSet::new));
+            List<VectorSearchService.ChunkMatch> pageBlocks =
+                    vectorSearchService.getBlocksForPages(session.getDocumentId(), referencedPages);
+            int added = 0;
+            Map<Integer, Integer> textCountByPage = new HashMap<>();
+            for (VectorSearchService.ChunkMatch block : pageBlocks) {
+                if (!seenBlockIds.add(block.blockId())) continue;
+                // Always include visual/document summaries; cap text blocks per page.
+                if ("text".equals(block.blockType())) {
+                    int count = textCountByPage.getOrDefault(block.pageNumber(), 0);
+                    if (count >= MAX_TEXT_BLOCKS_PER_PAGE_REF) continue;
+                    textCountByPage.put(block.pageNumber(), count + 1);
+                }
+                chunks.add(block);
+                added++;
+            }
+            if (added > 0) {
+                chunks.sort(Comparator.comparingInt(VectorSearchService.ChunkMatch::pageNumber)
+                        .thenComparingInt(VectorSearchService.ChunkMatch::chunkIndex));
+                log.info("Page-reference query — added {} block(s) from page(s) {} to context; {} total",
+                        added, referencedPages, chunks.size());
+            }
+        }
+
         // ── Refusal guard ────────────────────────────────────────────────────
         // If confidence is below threshold, don't even call Gemini — return a
         // canned response. This kills hallucinations on off-topic queries and
-        // saves API spend. Skipped for aggregation queries because they
-        // intentionally have weaker per-chunk similarity but legitimate intent.
-        if (confidence < refusalThreshold && !isAggregationQuery(question)) {
+        // saves API spend. Skipped for aggregation queries and page-reference
+        // queries because those have legitimate intent despite potentially
+        // weaker per-chunk similarity.
+        if (confidence < refusalThreshold && !isAggregationQuery(question) && referencedPages.isEmpty()) {
             log.info("Refusing query: confidence {} below threshold {} (question='{}')",
                     String.format("%.3f", confidence), refusalThreshold, question);
 
