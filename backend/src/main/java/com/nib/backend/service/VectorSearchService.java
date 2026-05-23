@@ -67,7 +67,22 @@ public class VectorSearchService {
         // Refresh planner statistics so the HNSW index covers the new rows immediately.
         // Without this, the first query after a bulk insert can return 0 results.
         jdbcTemplate.execute("ANALYZE embeddings");
-        log.debug("Batch-inserted {} embeddings and ran ANALYZE", blocks.size());
+
+        // Clean up dead tuples left by cascade-deleted embeddings (e.g. after a
+        // document merge/re-ingestion). Dead tuples fragment the HNSW index graph,
+        // causing approximate search to miss live rows. VACUUM removes them and
+        // lets the index navigate correctly. Safe to run here: no enclosing
+        // transaction (the @Async ingestion runner uses auto-commit), and the
+        // SHARE UPDATE EXCLUSIVE lock doesn't block concurrent reads/writes.
+        try {
+            jdbcTemplate.execute("VACUUM embeddings");
+            log.debug("Vacuumed embeddings table after batch insert");
+        } catch (Exception ex) {
+            // Non-fatal — the increased ef_search in search() compensates.
+            log.warn("VACUUM embeddings failed (non-fatal): {}", ex.getMessage());
+        }
+
+        log.debug("Batch-inserted {} embeddings, ran ANALYZE + VACUUM", blocks.size());
     }
 
     /**
@@ -111,6 +126,14 @@ public class VectorSearchService {
      */
     public List<ChunkMatch> search(UUID documentId, float[] queryEmbedding, int topK) {
         String vectorStr = EmbeddingService.toVectorString(queryEmbedding);
+
+        // Increase HNSW exploration budget so the approximate search finds enough
+        // live candidates even when dead tuples (from re-ingested/merged documents)
+        // haven't been vacuumed yet. Default ef_search = 40 is too low when the
+        // WHERE document_id filter removes most nearest-neighbour candidates.
+        // SET LOCAL is transaction-scoped — safe and doesn't leak to other queries.
+        jdbcTemplate.execute("SET LOCAL hnsw.ef_search = 200");
+
         return jdbcTemplate.query(
                 """
                 SELECT cb.id          AS block_id,
