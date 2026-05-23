@@ -52,7 +52,12 @@ export interface AssistantMessage {
   reasoningShown: string[];
   segments: MessageSegment[];
   citations: Citation[];
+  /** Backend-computed retrieval confidence in [0,1]. */
   confidence: number;
+  /** Backend-computed groundedness: fraction of sentences carrying a citation, in [0,1]. */
+  groundedness?: number;
+  /** True when the backend refused to answer due to weak retrieval (no Gemini call). */
+  refused?: boolean;
   streaming: boolean;
   streamDone: boolean;
   streamedText?: string;

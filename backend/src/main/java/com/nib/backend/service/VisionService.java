@@ -42,8 +42,14 @@ public class VisionService {
     @Value("${gemini.model:gemini-2.5-flash}")
     private String geminiModel;
 
-    /** Rendering DPI — 150 gives a clear image without bloating request size. */
-    private static final int RENDER_DPI = 150;
+    /**
+     * Rendering DPI for the page-to-PNG conversion.
+     * 120 is the sweet spot: Gemini Vision reads text/charts cleanly at this
+     * resolution, and the render is ~40% faster than at 150 DPI (and the PNG
+     * payload to Gemini is smaller, so the HTTP upload is faster too).
+     * Don't go below ~100 — small chart axis labels start losing legibility.
+     */
+    private static final int RENDER_DPI = 120;
 
     private static final String VISION_PROMPT = """
             Analyze this PDF page and provide a thorough plain-text description of everything visible.
@@ -133,6 +139,121 @@ public class VisionService {
             return description;
         } catch (Exception ex) {
             log.warn("Vision analysis failed for page {}: {}", pageNumberForLog, ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Generate a dense overview of a document for retrieval by meta-questions
+     * like "what is this about" or "what is the name of the company / cafe /
+     * paper". This block is added once per document at ingest time and embedded
+     * alongside the regular content chunks.
+     *
+     * Multimodal by design: we send the FIRST PAGE IMAGE alongside the extracted
+     * text content. The first page is where titles, logos, brand names, paper
+     * titles, contract parties, and cover-art live — and the per-page vision
+     * prompt can miss stylised logos when it's also trying to enumerate menu
+     * items, table rows, and chart data. Giving the summary model a dedicated
+     * look at the cover image plus the full document text guarantees the
+     * document's identity is captured.
+     *
+     * The summary is constrained to start with "TITLE: <name>" so direct queries
+     * like "what is the cafe called" embed close to it.
+     *
+     * Returns null on failure; the caller treats that as "no summary block,
+     * continue with text + visual blocks only".
+     */
+    @SuppressWarnings("unchecked")
+    public String generateDocumentSummary(byte[] firstPageImage, String combinedContent) {
+        if (combinedContent == null || combinedContent.isBlank()) return null;
+        // Cap input so we don't blow the context window on a 200-page report.
+        // 16k chars is enough for Gemini to grasp the document's scope without
+        // making the API call expensive.
+        String trimmed = combinedContent.length() > 16000
+                ? combinedContent.substring(0, 16000)
+                : combinedContent;
+
+        String prompt = """
+                You are creating the definitive overview of this document so that future questions
+                about it ("what is this about", "what is the title", "who wrote this", "what cafe
+                is this") can find this overview through semantic search.
+
+                You are given TWO inputs:
+                  1. An image of the FIRST PAGE of the document — use this to read the title, logo,
+                     establishment name, brand, author byline, or any cover-page identity. Look
+                     carefully at large text, logos, mastheads, headers, and footers.
+                  2. The full extracted text + visual descriptions of the document, below.
+
+                Output format — strict:
+                Line 1 must be exactly:
+                  TITLE: <the document's title, establishment name, brand, or paper title>
+                If the cover page shows a stylised logo (e.g. "Subah Cafe"), use the readable
+                brand text exactly as shown. If genuinely no identifying text is visible, write
+                "TITLE: Untitled document".
+
+                Line 2 must be exactly:
+                  TYPE: <one short noun phrase, e.g. "Cafe menu", "Research paper on liquid cooling",
+                          "Quarterly earnings report", "Insurance policy contract", "Restaurant takeout menu">
+
+                Then write a paragraph of 3–5 sentences (separated from the TITLE/TYPE lines by a
+                blank line) that captures:
+                  • The document's main purpose and audience
+                  • The major sections, products, themes, or findings it contains
+                  • Any especially notable facts, figures, prices, dates, or conclusions
+                  • Names of people, places, or organisations central to the document
+
+                Plain text only. No markdown, no headings, no citations, no bullet points in the
+                paragraph (TITLE/TYPE on their own lines are fine).
+
+                Be specific. Prefer concrete nouns ("offers espresso drinks, pastries, sandwiches,
+                and salads") over abstractions ("offers various food items").
+
+                === DOCUMENT TEXT + VISUAL DESCRIPTIONS ===
+                %s
+                === END OF DOCUMENT ===
+
+                SUMMARY:
+                """.formatted(trimmed);
+
+        try {
+            // Build multimodal payload: image (if available) + prompt text.
+            List<Map<String, Object>> parts = new java.util.ArrayList<>();
+            if (firstPageImage != null && firstPageImage.length > 0) {
+                String base64 = Base64.getEncoder().encodeToString(firstPageImage);
+                parts.add(Map.of("inline_data", Map.of(
+                        "mime_type", "image/png",
+                        "data", base64
+                )));
+            }
+            parts.add(Map.of("text", prompt));
+
+            Map<String, Object> body = Map.of(
+                    "contents", List.of(Map.of("parts", parts)),
+                    "generationConfig", Map.of(
+                            "temperature", 0.2,
+                            "maxOutputTokens", 768
+                    )
+            );
+            String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
+            Map<String, Object> response = restClient.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(Map.class);
+            if (response == null) return null;
+            List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+            if (candidates == null || candidates.isEmpty()) return null;
+            Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+            List<Map<String, Object>> responseParts = (List<Map<String, Object>>) content.get("parts");
+            String summary = (String) responseParts.get(0).get("text");
+            log.info("Generated document summary ({} chars from {} chars of text + {} byte image)",
+                    summary != null ? summary.length() : 0,
+                    trimmed.length(),
+                    firstPageImage != null ? firstPageImage.length : 0);
+            return summary;
+        } catch (Exception ex) {
+            log.warn("Document summary generation failed: {}", ex.getMessage());
             return null;
         }
     }
