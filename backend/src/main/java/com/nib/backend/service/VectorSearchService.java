@@ -76,13 +76,13 @@ public class VectorSearchService {
         // SHARE UPDATE EXCLUSIVE lock doesn't block concurrent reads/writes.
         try {
             jdbcTemplate.execute("VACUUM embeddings");
-            log.debug("Vacuumed embeddings table after batch insert");
+            log.info("Vacuumed embeddings table after batch insert ({} rows)", blocks.size());
         } catch (Exception ex) {
-            // Non-fatal — the increased ef_search in search() compensates.
+            // Non-fatal — the exact-scan fallback in search() compensates.
             log.warn("VACUUM embeddings failed (non-fatal): {}", ex.getMessage());
         }
 
-        log.debug("Batch-inserted {} embeddings, ran ANALYZE + VACUUM", blocks.size());
+        log.info("Batch-inserted {} embeddings, ran ANALYZE + VACUUM", blocks.size());
     }
 
     /**
@@ -120,43 +120,50 @@ public class VectorSearchService {
     /**
      * Retrieves the top-k most similar chunks for a given query embedding and document.
      *
-     * Uses a direct JOIN rather than the match_chunks() SQL function so we can
-     * return block_type (needed to label text vs visual context in the chat prompt).
-     * Postgres will use the HNSW index via the ORDER BY embedding <=> ? ... LIMIT clause.
+     * Uses a MATERIALIZED CTE to force PostgreSQL to pre-filter embeddings by
+     * document_id BEFORE computing cosine distances. This bypasses the global
+     * HNSW index entirely, which is critical after document re-ingestion: dead
+     * tuples from cascade-deleted embeddings fragment the HNSW graph, causing
+     * the approximate search to miss live rows.
+     *
+     * For per-document search (typically <3000 embeddings), exact scan is fast
+     * enough (<50 ms) and 100% reliable. The HNSW index is only useful for
+     * cross-document search across millions of rows, which we don't do.
      */
     public List<ChunkMatch> search(UUID documentId, float[] queryEmbedding, int topK) {
         String vectorStr = EmbeddingService.toVectorString(queryEmbedding);
 
-        // Increase HNSW exploration budget so the approximate search finds enough
-        // live candidates even when dead tuples (from re-ingested/merged documents)
-        // haven't been vacuumed yet. Default ef_search = 40 is too low when the
-        // WHERE document_id filter removes most nearest-neighbour candidates.
-        // SET LOCAL is transaction-scoped — safe and doesn't leak to other queries.
-        jdbcTemplate.execute("SET LOCAL hnsw.ef_search = 200");
-
         return jdbcTemplate.query(
                 """
-                SELECT cb.id          AS block_id,
-                       cb.document_id,
-                       cb.page_number,
-                       cb.chunk_index,
-                       cb.extracted_text,
-                       cb.block_type,
-                       cb.bbox_x,
-                       cb.bbox_y,
-                       cb.bbox_width,
-                       cb.bbox_height,
-                       cb.page_width,
-                       cb.page_height,
-                       e.embedding <=> ?::vector AS similarity
-                FROM   embeddings e
-                JOIN   content_blocks cb ON cb.id = e.block_id
-                WHERE  cb.document_id = ?
+                WITH doc_embeddings AS MATERIALIZED (
+                    SELECT e.embedding,
+                           cb.id          AS block_id,
+                           cb.document_id,
+                           cb.page_number,
+                           cb.chunk_index,
+                           cb.extracted_text,
+                           cb.block_type,
+                           cb.bbox_x,
+                           cb.bbox_y,
+                           cb.bbox_width,
+                           cb.bbox_height,
+                           cb.page_width,
+                           cb.page_height
+                    FROM   content_blocks cb
+                    JOIN   embeddings e ON e.block_id = cb.id
+                    WHERE  cb.document_id = ?
+                )
+                SELECT block_id, document_id, page_number, chunk_index,
+                       extracted_text, block_type,
+                       bbox_x, bbox_y, bbox_width, bbox_height,
+                       page_width, page_height,
+                       embedding <=> ?::vector AS similarity
+                FROM   doc_embeddings
                 ORDER  BY similarity
                 LIMIT  ?
                 """,
                 (rs, rowNum) -> mapRow(rs),
-                vectorStr, documentId, topK
+                documentId, vectorStr, topK
         );
     }
 
