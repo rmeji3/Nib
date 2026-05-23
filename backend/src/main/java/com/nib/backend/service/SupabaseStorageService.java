@@ -99,19 +99,33 @@ public class SupabaseStorageService {
     }
 
     public byte[] downloadFile(String storagePath) {
-        try {
-            byte[] bytes = restClient.get()
-                    .uri(supabaseUrl + "/storage/v1/object/" + bucket + "/" + storagePath)
-                    .header("Authorization", authHeader())
-                    .retrieve()
-                    .body(byte[].class);
-            if (bytes == null) throw new StorageException("Empty response for: " + storagePath, null);
-            return bytes;
-        } catch (StorageException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new StorageException("Failed to download file: " + storagePath, ex);
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
+            try {
+                byte[] bytes = restClient.get()
+                        .uri(supabaseUrl + "/storage/v1/object/" + bucket + "/" + storagePath)
+                        .header("Authorization", authHeader())
+                        .retrieve()
+                        .body(byte[].class);
+                if (bytes == null) throw new StorageException("Empty response for: " + storagePath, null);
+                return bytes;
+            } catch (StorageException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                lastException = ex;
+                if (!isTransientError(ex) || attempt == UPLOAD_MAX_RETRIES) break;
+                long delay = UPLOAD_BASE_DELAY_MS * (1L << (attempt - 1));
+                log.warn("Transient download error on attempt {}/{} for {} — retrying in {}ms: {}",
+                        attempt, UPLOAD_MAX_RETRIES, storagePath, delay, ex.getMessage());
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
+        throw new StorageException("Failed to download file: " + storagePath, lastException);
     }
 
     @SuppressWarnings("unchecked")
