@@ -6,6 +6,7 @@ import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.exception.StorageException;
 import com.nib.backend.model.Document;
 import com.nib.backend.model.User;
+import com.nib.backend.repository.ContentBlockRepository;
 import com.nib.backend.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final ContentBlockRepository contentBlockRepository;
     private final SupabaseStorageService storageService;
     private final IngestionService ingestionService;
 
@@ -258,6 +260,15 @@ public class DocumentService {
         }
 
         log.info("Merged document {} for user {}", document.getId(), user.getId());
+
+        // ── Re-ingest the merged document so the new pages are indexed ──
+        // Delete old content blocks first — cascade deletes their embeddings.
+        long deletedBlocks = contentBlockRepository.countByDocumentId(document.getId());
+        contentBlockRepository.deleteByDocumentId(document.getId());
+        log.info("Deleted {} old content blocks for document {} before re-ingestion", deletedBlocks, document.getId());
+
+        ingestionService.createAndTrigger(document.getId());
+
         return toResponse(document, storageService.generateSignedUrl(storagePath, 3600));
     }
 
