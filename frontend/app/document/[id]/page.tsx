@@ -7,15 +7,19 @@ import { ProtectedRoute } from '../../features/auth/components/protected-route';
 import { NibLogoSpinner } from '../../components/nib-logo-spinner';
 import { useUpload } from '../../features/upload/upload-context';
 import { fetchDocument } from '../../../lib/api/documents';
+import { useTrackDocumentOpen } from '../../home/hooks/use-documents';
 
 const NibApp = dynamic(() => import('../../features/nib/nib-app'), { ssr: false });
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { documentId, setDocument } = useUpload();
+  const trackOpen = useTrackDocumentOpen();
 
   // Only hit the API when this document isn't already in context
   const needsFetch = documentId !== id;
+  // Must be declared before the effects that reference it
+  const isContextReady = documentId === id;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['document', id],
@@ -32,10 +36,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // Wait until the context actually holds this document before rendering the viewer.
-  // This prevents react-pdf from trying to load an undefined source in the render
-  // cycle between the query completing and the useEffect calling setDocument.
-  const isContextReady = documentId === id;
+  // Stamp lastOpenedAt once the document is ready in context
+  useEffect(() => {
+    if (isContextReady) {
+      trackOpen.mutate(id);
+    }
+  // Fire once per mount — intentionally omitting trackOpen from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isContextReady, id]);
 
   if (!isContextReady || (needsFetch && isLoading)) {
     return (

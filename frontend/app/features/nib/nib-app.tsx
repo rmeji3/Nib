@@ -7,6 +7,8 @@ import { EvidenceDrawer } from './nib-evidence-drawer';
 import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
+import { usePdfSearch } from './hooks/use-pdf-search';
+import { useEffect } from 'react';
 import { useIngestionStatus } from './hooks/use-ingestion-status';
 import { useUpload } from '../upload/upload-context';
 
@@ -106,6 +108,8 @@ export default function NibApp() {
     currentPage,
     totalPages,
     chatMinimized,
+    pdf,
+    setPdf,
     highlight,
     evidenceOpen,
     evidenceCitations,
@@ -115,6 +119,7 @@ export default function NibApp() {
     setTotalPages,
     setChatMinimized,
     scrollContainerRef,
+    scrollToPageRef,
     scrollToPage,
     onCiteClick,
     openEvidence,
@@ -124,19 +129,31 @@ export default function NibApp() {
     onDividerPointerUp,
   } = useNibState();
 
-  const { messages, busy, sendPrompt, onPickSuggestion, sessionCreatedAt } = useNibChat(documentId);
-  const { isIndexing, isComplete, isFailed, progress, pagesProcessed, pagesTotal, isLoading: statusLoading, completedAt } = useIngestionStatus(documentId);
+  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat(documentId);
+  const searchState = usePdfSearch(pdf);
+  const { isIndexing, progress, pagesProcessed, pagesTotal } = useIngestionStatus(documentId);
 
-  // Detect stale chat: session was created before the latest ingestion finished.
-  // This means old messages reference content that may have changed (e.g. after
-  // a PDF merge + re-ingestion). We show a banner so the user can start fresh.
-  const [staleDismissed, setStaleDismissed] = useState(false);
-  const isSessionStale = !!(
-    sessionCreatedAt &&
-    completedAt &&
-    new Date(sessionCreatedAt) < new Date(completedAt) &&
-    !staleDismissed
-  );
+  useEffect(() => {
+    // Jump to match when next/prev is clicked
+    if (searchState.currentMatch) {
+      scrollToPage(searchState.currentMatch.pageIndex);
+    }
+  }, [searchState.currentMatch, scrollToPage]);
+
+  // Handle Ctrl+F globally
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        // The toolbar manages the 'showSearch' state implicitly when search query is updated,
+        // but since we want to toggle the UI cleanly, it might be better handled inside ViewerToolbar.
+        // For now, we can just focus the search input if it exists, or dispatch a custom event.
+        window.dispatchEvent(new CustomEvent('nib:open-search'));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const chatWidthPct = 100 - splitRatio;
 
@@ -164,6 +181,13 @@ export default function NibApp() {
         setZoom={setZoom}
         chatMinimized={chatMinimized}
         onToggleChat={() => setChatMinimized((v) => !v)}
+        searchQuery={searchState.query}
+        setSearchQuery={searchState.search}
+        onSearchNext={searchState.nextMatch}
+        onSearchPrev={searchState.prevMatch}
+        matchCount={searchState.matches.length}
+        currentMatchIndex={searchState.currentMatchIndex}
+        isSearching={searchState.isSearching}
       />
 
       {/* Main content row */}
@@ -181,6 +205,9 @@ export default function NibApp() {
             zoom={zoom}
             setZoom={setZoom}
             scrollContainerRef={scrollContainerRef}
+            scrollToPageRef={scrollToPageRef}
+            searchQuery={searchState.query}
+            setPdf={setPdf}
             highlight={highlight}
           />
         </div>

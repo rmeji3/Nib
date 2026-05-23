@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSettings } from '../../settings/hooks/use-settings';
 import { Icon } from './nib-viewer';
 import type {
   AssistantMessage,
@@ -167,11 +168,13 @@ function AssistantMessageView({
   onCiteHover,
   onCiteClick,
   onEvidenceOpen,
+  showConfidence,
 }: {
   msg: AssistantMessage;
   onCiteHover: (citation: Citation | null, anchor?: HTMLElement) => void;
   onCiteClick: (citation: Citation) => void;
   onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
+  showConfidence: boolean;
 }) {
   return (
     <div className={`msg msg-assistant${msg.streaming ? ' is-streaming' : ''}`}>
@@ -213,10 +216,7 @@ function AssistantMessageView({
           ))}
         </div>
       ) : null}
-      {!msg.streaming ? <ConfidenceBar value={msg.confidence} groundedness={msg.groundedness} /> : null}
-      {!msg.streaming && (msg.refused || msg.confidence < 0.4) ? (
-        <LowConfidenceBanner refused={!!msg.refused} />
-      ) : null}
+      {!msg.streaming && showConfidence ? <ConfidenceBar value={msg.confidence} /> : null}
       {!msg.streaming ? (
         <div className="assistant-actions mt-2 flex gap-1">
           <button className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]" type="button" title="Copy"><Icon name="copy" /></button>
@@ -417,6 +417,7 @@ export function ChatPanel({
   isSessionStale?: boolean;
   onDismissStale?: () => void;
 }) {
+  const { settings } = useSettings();
   const [hover, setHover] = useState<{ citation: Citation; anchor: HTMLElement } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -428,10 +429,10 @@ export function ChatPanel({
 
   useEffect(() => {
     const body = bodyRef.current;
-    if (body) {
+    if (body && settings.autoScrollOnAnswer) {
       body.scrollTop = body.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, settings.autoScrollOnAnswer]);
 
   const isEmpty = messages.length === 0;
 
@@ -503,6 +504,7 @@ export function ChatPanel({
                   }}
                   onCiteClick={onCiteClick}
                   onEvidenceOpen={onEvidenceOpen}
+                  showConfidence={settings.showConfidence}
                 />
               ),
             )}

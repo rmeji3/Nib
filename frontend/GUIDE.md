@@ -40,13 +40,14 @@ This is a live developer guide and project directory index for the Next.js front
 
 | URL Route | Type | File Path |
 | --- | --- | --- |
-| `/` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/page.tsx) |
-| `/document/[id]` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/document/[id]/page.tsx) |
-| `/document/uploading` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/document/uploading/page.tsx) |
-| `/file` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/file/page.tsx) |
-| `/home` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/home/page.tsx) |
-| `/signin` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/signin/page.tsx) |
-| `/signup` | Page | [`page.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/signup/page.tsx) |
+| `/` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/page.tsx) |
+| `/document/[id]` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/[id]/page.tsx) |
+| `/document/uploading` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/uploading/page.tsx) |
+| `/file` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/file/page.tsx) |
+| `/home` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/home/page.tsx) |
+| `/settings` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/settings/page.tsx) |
+| `/signin` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signin/page.tsx) |
+| `/signup` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signup/page.tsx) |
 
 ### Feature Modules (`frontend/app/features`)
 
@@ -87,5 +88,8 @@ This section is maintained by AI coding agents to track architectural updates, n
 - **2026-05-20**: Implemented global cursor-pointer styles for all buttons/interactive elements, and explicitly changed radix dropdown items from cursor-default to cursor-pointer in `ui/dropdown-menu.tsx`.
 - **2026-05-19**: Added document upload, listing, and PDF merge features. New files: `lib/api/documents.ts` (API client), `app/features/nib/hooks/use-nib-upload.ts` (auto-upload local file to backend), `app/features/nib/hooks/use-merge-pdf.ts` (merge PDFs via backend). Updated: `upload-context.tsx` (added `documentId`, `documentUrl`, `setDocument`), `home/hooks/use-documents.ts` (real API replacing mock data), `home/page.tsx` (document grid now real, click navigates to viewer), `nib-viewer.tsx` (uses `documentUrl` for loaded documents, combine button triggers real merge), `nib-app.tsx` (mounts `useNibUpload`).
 - **2026-05-20**: Wired up `@tanstack/react-virtual` in `nib-viewer.tsx` for the thumbnail sidebar to prevent performance tanking on large PDFs, and limited thumbnail `devicePixelRatio` to 1.
+- **2026-05-20**: Replaced dead "Filter" button with a working `SearchFilterPopover` component (`app/home/components/search-filter-popover.tsx`). Added `sortBy` state (client-side sort across all views), active filter chips inline in the search bar (mobile fallback row below), and "Jump to" view shortcuts + collection combobox inside the popover. Sort applies to currently-loaded pages only.
+- **2026-05-20**: Added `/settings` page with 7 tabs (Profile, Appearance, PDF Reader, AI & Chat, Privacy & Data, Shortcuts, About). Created `app/settings/hooks/use-settings.ts` (localStorage-backed settings with accent color applied via CSS custom properties). Replaced the inline user panel + sign-out icon in `home/page.tsx` with `app/home/components/user-menu.tsx`, a Radix DropdownMenu that links to Settings, Keyboard shortcuts, and Sign out.
+- **2026-05-20**: Implemented ViewPanel to lazily mount and persist views (prevents PDF canvas destruction/remount logic). Split docsGridRef for grid animations per-view. Fixed selectedCollectionId hydration when returning to library view.
 - **2026-05-21**: Phase 1 RAG frontend wiring. New files: `lib/api/chat.ts` (getOrCreateSession, sendChatQuery, fetchSessionMessages), `app/features/nib/hooks/use-ingestion-status.ts` (TanStack Query polling every 2 s until COMPLETE/FAILED). Modified: `lib/api/documents.ts` (added IngestionStatus interface + fetchIngestionStatus), `hooks/use-nib-chat.ts` (full rewrite — real Gemini chat via sendChatQuery, session init on mount, historical message hydration, parseSegments maps [Page X] → Citation chips, animated reasoning steps during fetch), `nib-app.tsx` (reads documentId from useUpload context, passes isIndexing/progress/pagesTotal/pagesProcessed to ChatPanel), `nib-chat.tsx` (IndexingBanner component with progress bar + pulse dot, dynamic subtitle, composer disabled while indexing).
 - **2026-05-22**: Phase 3 accuracy hardening — frontend wiring for real backend signals. Modified: `lib/api/chat.ts` (`ChatQueryResponse` now includes `confidence`, `groundedness`, `refused`), `nib-types.ts` (`AssistantMessage` extended with `groundedness` and `refused`), `hooks/use-nib-chat.ts` (uses `response.confidence` from backend instead of the hardcoded `0.85`; refusal path renders a different reasoning trace), `nib-chat.tsx` (replaced four hardcoded "demo" `PROMPT_LIBRARY` entries with four document-agnostic question stems, new `ConfidenceBar` with high/medium/low bands and groundedness suffix, new `LowConfidenceBanner` shown when `confidence < 0.4 || refused`, `IndexingBanner` now infers the current stage from `pagesProcessed/pagesTotal`), `globals.css` (`.confidence.medium` band).

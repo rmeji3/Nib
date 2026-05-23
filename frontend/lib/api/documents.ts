@@ -10,6 +10,7 @@ export interface DocumentResponse {
   createdAt: string;
   deletedAt: string | null;
   isStarred: boolean;
+  lastOpenedAt: string | null;
 }
 
 export interface PagedResponse<T> {
@@ -128,6 +129,18 @@ export async function permanentDeleteDocument(id: string): Promise<void> {
     const err = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error((err as { message?: string }).message || 'Permanent delete failed');
   }
+}
+
+export async function fetchRecentDocuments(page = 0): Promise<PagedResponse<DocumentResponse>> {
+  const res = await apiFetch(`/api/v1/documents/recent?page=${page}`);
+  if (!res.ok) throw new Error(`Failed to fetch recent documents: ${res.statusText}`);
+  return res.json();
+}
+
+export async function trackDocumentOpen(id: string): Promise<DocumentResponse> {
+  const res = await apiFetch(`/api/v1/documents/${id}/open`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Failed to record open: ${res.statusText}`);
+  return res.json();
 }
 
 // ── Ingestion ─────────────────────────────────────────────────────────────────

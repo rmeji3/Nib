@@ -14,11 +14,10 @@ export function useMergePdf() {
     mutationFn: (mergeFile: File) => mergeDocuments(documentId, file, mergeFile),
     onSuccess: (data) => {
       setDocument(null, data.id, data.storageUrl, documentName);
+      // Invalidate both the list and the individual doc so the new storageUrl
+      // is fetched fresh if the same document page re-renders.
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      // Force the document page to refetch the new merged PDF content
       queryClient.invalidateQueries({ queryKey: ['document', data.id] });
-      // Reset ingestion status so the UI gates on the new ingestion run
-      queryClient.invalidateQueries({ queryKey: ['ingestion-status', data.id] });
       router.push(`/document/${data.id}`);
     },
   });

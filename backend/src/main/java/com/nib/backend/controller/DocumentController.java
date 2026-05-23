@@ -58,6 +58,23 @@ public class DocumentController {
         return ResponseEntity.ok(documentService.listTrash(user, PageRequest.of(page, size)));
     }
 
+    @GetMapping("/recent")
+    public ResponseEntity<PagedResponse<DocumentResponse>> listRecent(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.listRecentDocuments(user, PageRequest.of(page, size)));
+    }
+
+    @PostMapping("/{id}/open")
+    public ResponseEntity<DocumentResponse> recordOpen(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(documentService.recordOpen(id, user));
+    }
+
     @GetMapping("/starred")
     public ResponseEntity<PagedResponse<DocumentResponse>> listStarred(
             @RequestParam(defaultValue = "0") int page,

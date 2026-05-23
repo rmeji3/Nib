@@ -19,7 +19,6 @@ For all tasks modifying the Next.js frontend (in `/frontend`), you MUST read and
 - **Event Optimization**: Use debouncing for input searches, filters, or resize triggers to prevent redundant API queries.
 - **Accessibility & UX**: Use accessible 3rd-party components (e.g. Radix, Headless UI, Shadcn) for complex controls (Dialogs, Tooltips, Selects). Ensure keyboard navigability and focus states.
 - **Code Quality**: Enforce strict TypeScript types. Avoid the `any` type completely.
-- **Design Inspiration**: Refer to the analysed design system guides in [design-md](file:///a:/Coding/nib/design-md) (e.g., Stripe, Linear, Apple, Vercel) for inspiration on premium aesthetics, layout, colors, typography, cards, and interactive behaviors.
 - **Documentation Sync**: When you add, remove, or modify folders, files, or hooks on the frontend, you MUST run `npm run update-guides` to update the directory map in `frontend/GUIDE.md`, and manually append a brief note under its "Agent Changelog & Decisions" section.
 <!-- END:nextjs-agent-rules -->
 
