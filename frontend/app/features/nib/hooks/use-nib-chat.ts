@@ -229,7 +229,7 @@ export function useNibChat(documentId: string | null) {
               reasoningShown: finalReasoning,
               segments,
               citations,
-              confidence: citations.length > 0 ? 0.85 : 0.5,
+              confidence: response.confidence,
               streaming: false,
               streamDone: true,
               streamedText: response.answer,

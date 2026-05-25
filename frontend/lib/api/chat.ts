@@ -47,6 +47,9 @@ export interface ChatQueryResponse {
   citations: ApiCitation[];
   modelVersion: string;
   createdAt: string;
+  confidence: number;
+  groundedness: number;
+  refused: boolean;
 }
 
 export interface ApiChatMessage {
