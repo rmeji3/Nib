@@ -32,20 +32,44 @@ public class SupabaseStorageService {
         return "Bearer " + serviceRoleKey;
     }
 
+    /**
+     * Uploads a file to Supabase Storage with up to 3 attempts and exponential
+     * back-off (1 s → 2 s → 4 s). Large merged PDFs occasionally hit transient
+     * 5xx errors on the first attempt; retrying recovers silently.
+     */
     public void uploadFile(String storagePath, byte[] content, String contentType) {
-        try {
-            restClient.post()
-                    .uri(supabaseUrl + "/storage/v1/object/" + bucket + "/" + storagePath)
-                    .header("Authorization", authHeader())
-                    .header("x-upsert", "true")
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .body(content)
-                    .retrieve()
-                    .toBodilessEntity();
-            log.info("Uploaded file to storage: {}", storagePath);
-        } catch (Exception ex) {
-            throw new StorageException("Failed to upload file: " + storagePath, ex);
+        int maxAttempts = 3;
+        long delayMs = 1_000;
+        Exception lastEx = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                restClient.post()
+                        .uri(supabaseUrl + "/storage/v1/object/" + bucket + "/" + storagePath)
+                        .header("Authorization", authHeader())
+                        .header("x-upsert", "true")
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .body(content)
+                        .retrieve()
+                        .toBodilessEntity();
+                log.info("Uploaded {} bytes to storage: {} (attempt {})",
+                        content.length, storagePath, attempt);
+                return;
+            } catch (Exception ex) {
+                lastEx = ex;
+                if (attempt < maxAttempts) {
+                    log.warn("Upload attempt {}/{} failed for {}; retrying in {} ms: {}",
+                            attempt, maxAttempts, storagePath, delayMs, ex.getMessage());
+                    try { Thread.sleep(delayMs); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new StorageException("Upload interrupted: " + storagePath, ie);
+                    }
+                    delayMs *= 2;
+                }
+            }
         }
+        throw new StorageException(
+                "Failed to upload file after " + maxAttempts + " attempts: " + storagePath, lastEx);
     }
 
     public byte[] downloadFile(String storagePath) {

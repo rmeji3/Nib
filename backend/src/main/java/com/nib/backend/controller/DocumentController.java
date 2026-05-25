@@ -157,10 +157,10 @@ public class DocumentController {
     public ResponseEntity<DocumentResponse> merge(
             @RequestParam(required = false) UUID baseDocumentId,
             @RequestParam(name = "baseFile", required = false) MultipartFile baseFile,
-            @RequestParam("mergeFile") MultipartFile mergeFile,
+            @RequestParam("mergeFiles") List<MultipartFile> mergeFiles,
             @AuthenticationPrincipal User user
     ) {
-        log.info("Merge request from user {}", user.getId());
-        return ResponseEntity.ok(documentService.mergeDocuments(baseDocumentId, baseFile, mergeFile, user));
+        log.info("Merge request from user {} ({} file(s))", user.getId(), mergeFiles.size());
+        return ResponseEntity.ok(documentService.mergeDocuments(baseDocumentId, baseFile, mergeFiles, user));
     }
 }

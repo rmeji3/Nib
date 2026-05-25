@@ -162,15 +162,18 @@ export async function fetchIngestionStatus(documentId: string): Promise<Ingestio
   return res.json();
 }
 
+/** Merge one or more PDFs into an existing document (or a freshly uploaded base file).
+ *  Accepts 1–N merge files so the user can combine 3+ PDFs in a single request. */
 export async function mergeDocuments(
   baseDocumentId: string | null,
   baseFile: File | null,
-  mergeFile: File
+  mergeFiles: File[]
 ): Promise<DocumentResponse> {
   const formData = new FormData();
   if (baseDocumentId) formData.append('baseDocumentId', baseDocumentId);
   if (baseFile) formData.append('baseFile', baseFile);
-  formData.append('mergeFile', mergeFile);
+  // Backend @RequestParam("mergeFiles") List<MultipartFile> — append each file separately
+  mergeFiles.forEach((f) => formData.append('mergeFiles', f));
   const res = await apiFetch('/api/v1/documents/merge', { method: 'POST', body: formData });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));

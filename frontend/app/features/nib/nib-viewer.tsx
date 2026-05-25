@@ -777,10 +777,11 @@ export function Viewer({
                 id="thumb-combine-input"
                 type="file"
                 accept=".pdf,application/pdf"
+                multiple
                 className="hidden"
                 onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  if (picked) mergeMutation.mutate(picked);
+                  const picked = e.target.files ? Array.from(e.target.files) : [];
+                  if (picked.length > 0) mergeMutation.mutate(picked);
                   e.target.value = '';
                 }}
               />

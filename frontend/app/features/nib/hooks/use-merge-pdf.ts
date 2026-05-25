@@ -11,7 +11,7 @@ export function useMergePdf() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: (mergeFile: File) => mergeDocuments(documentId, file, mergeFile),
+    mutationFn: (mergeFiles: File[]) => mergeDocuments(documentId, file, mergeFiles),
     onSuccess: (data) => {
       setDocument(null, data.id, data.storageUrl, documentName);
       // Invalidate both the list and the individual doc so the new storageUrl
