@@ -215,6 +215,56 @@ public class IngestionRunner {
                     pending.stream().filter(p -> BLOCK_VISUAL.equals(p.blockType())).count(),
                     documentId);
 
+            // ── 3d. Generate document-summary block ──────────────────────────
+            // A single embedded "what is this document about" paragraph at
+            // page 1. Meta-questions ("summarize this", "what is this about",
+            // "what cafe is this") otherwise have nothing close to them in
+            // embedding space — every chunk is about specific facts. This
+            // block fixes that and is the biggest win for vague top-of-funnel
+            // questions. The summary is multimodal: Gemini Vision sees the
+            // first page image alongside the document text, so titles and
+            // logos (often stylised graphics that text extraction misses) are
+            // captured reliably.
+            if (!pending.isEmpty()) {
+                String combined = pending.stream()
+                        .filter(p -> p.text() != null)
+                        .map(PendingBlock::text)
+                        .collect(Collectors.joining("\n\n"));
+
+                // Render page 1 once for the summary call. This is cheap
+                // (~50 ms) compared to the Gemini call itself.
+                byte[] firstPageImage = null;
+                try (PDDocument coverDoc = Loader.loadPDF(pdfBytes)) {
+                    if (coverDoc.getNumberOfPages() > 0) {
+                        firstPageImage = visionService.renderPageFromDocument(coverDoc, 0);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Could not render first page for summary — falling back to text-only: {}",
+                            ex.getMessage());
+                }
+
+                String summary = visionService.generateDocumentSummary(firstPageImage, combined);
+                if (summary != null && !summary.isBlank()) {
+                    pending.add(new PendingBlock(
+                            1,                  // anchored to page 1 for citation purposes
+                            0,
+                            summary,
+                            BLOCK_DOC_SUMMARY,
+                            null, null, null    // no bbox — this is a synthetic block
+                    ));
+                    log.info("Added document_summary block for document {}", documentId);
+
+                    // Phase 4 — extract document type from the summary's TYPE: line
+                    // and persist it on the document for type-aware prompting.
+                    String docType = extractDocType(summary);
+                    if (docType != null) {
+                        doc.setDocType(docType);
+                        documentRepository.save(doc);
+                        log.info("Document type classified as '{}' for document {}", docType, documentId);
+                    }
+                }
+            }
+
             if (!pending.isEmpty()) {
                 // ── 4. Batch embed ALL blocks in minimal Mistral API calls ─────────
                 List<String> allTexts = pending.stream().map(PendingBlock::text).toList();
@@ -281,5 +331,36 @@ public class IngestionRunner {
         long singleCharCount = 0;
         for (String t : tokens) if (t.length() == 1) singleCharCount++;
         return (double) singleCharCount / tokens.length > 0.65;
+    }
+
+    /**
+     * Phase 4 — extract a normalized document type from the summary's TYPE: line.
+     * The summary format guarantees "TYPE: <phrase>" on the second line (e.g.
+     * "TYPE: Cafe menu", "TYPE: Research paper on liquid cooling"). We map the
+     * phrase to a short canonical category for type-aware prompt selection.
+     */
+    private static String extractDocType(String summary) {
+        for (String line : summary.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.toUpperCase().startsWith("TYPE:")) {
+                String raw = trimmed.substring(5).trim().toLowerCase();
+                if (raw.isEmpty()) return null;
+                // Map to canonical categories
+                if (raw.contains("menu") || raw.contains("cafe") || raw.contains("restaurant") || raw.contains("food"))
+                    return "menu";
+                if (raw.contains("research") || raw.contains("paper") || raw.contains("academic") || raw.contains("journal"))
+                    return "academic";
+                if (raw.contains("financial") || raw.contains("earnings") || raw.contains("quarterly") || raw.contains("annual report"))
+                    return "financial";
+                if (raw.contains("contract") || raw.contains("agreement") || raw.contains("legal") || raw.contains("policy") || raw.contains("terms"))
+                    return "legal";
+                if (raw.contains("technical") || raw.contains("specification") || raw.contains("manual") || raw.contains("engineering"))
+                    return "technical";
+                if (raw.contains("catalog") || raw.contains("catalogue") || raw.contains("product") || raw.contains("brochure"))
+                    return "catalog";
+                return "mixed";
+            }
+        }
+        return null;
     }
 }

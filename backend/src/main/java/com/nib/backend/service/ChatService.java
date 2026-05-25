@@ -9,6 +9,7 @@ import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.exception.DocumentNotFoundException;
+import com.nib.backend.model.IngestionJob;
 import com.nib.backend.exception.RateLimitException;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
@@ -16,6 +17,7 @@ import com.nib.backend.model.User;
 import com.nib.backend.repository.ChatMessageRepository;
 import com.nib.backend.repository.ChatSessionRepository;
 import com.nib.backend.repository.DocumentRepository;
+import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +49,7 @@ public class ChatService {
     private final DocumentRepository documentRepository;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
+    private final IngestionJobRepository ingestionJobRepository;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
@@ -131,16 +134,40 @@ public class ChatService {
                 .content(question)
                 .build());
 
-        // Embed the question and retrieve top-k chunks
-        float[] queryEmbedding = embeddingService.embed(question);
-        List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(
-                vectorSearchService.search(session.getDocumentId(), queryEmbedding, topK));
+        // Phase 4 — multi-turn query rewriting: if the conversation has prior
+        // turns, rewrite the question as a standalone query so embeddings match
+        // the right chunks. The rewritten query is also used in the final Gemini
+        // prompt so the model understands what "those", "it", "that" refer to.
+        String searchQuery = rewriteQueryIfNeeded(sessionId, question);
+
+        // Compute dynamic topK based on document page count:
+        //   small docs (3 pages) → 5, medium (5-7 pages) → 8-10,
+        //   large (50+ pages) → 20 (cap). Avoids noise on small docs
+        //   and missing-page issues on large ones.
+        int dynamicTopK = computeDynamicTopK(session.getDocumentId());
+
+        // Embed the rewritten query and retrieve top-k chunks via hybrid search
+        // (dense vector similarity + BM25 full-text, merged with RRF).
+        float[] queryEmbedding = embeddingService.embed(searchQuery);
+        VectorSearchService.HybridSearchResult hybridResult =
+                vectorSearchService.hybridSearch(session.getDocumentId(), queryEmbedding, searchQuery, dynamicTopK);
+        List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(hybridResult.chunks());
+
+        // Confidence is computed from the raw vector results (cosine distances),
+        // not the RRF-merged scores — the sigmoid operates on cosine distance scale.
+        double confidence = computeConfidence(hybridResult.vectorResults());
+        log.debug("Computed confidence={} for question '{}'", String.format("%.3f", confidence), question);
+
+        // Phase 3 — re-rank before any aggregation augmentation so we anchor on
+        // the genuinely most relevant blocks first, then optionally pad with all
+        // visual blocks when the user asks an aggregation question.
+        chunks = rerank(chunks);
 
         // For aggregation queries ("most expensive", "list all", "compare", etc.)
         // top-k similarity may miss pages whose embeddings don't sit close to the
         // query — even though those pages contain items we need to rank or list.
         // Pull every visual block for the document and add any not already retrieved.
-        if (isAggregationQuery(question)) {
+        if (isAggregationQuery(searchQuery)) {
             Set<UUID> seenBlockIds = chunks.stream()
                     .map(VectorSearchService.ChunkMatch::blockId)
                     .collect(Collectors.toCollection(HashSet::new));
@@ -159,8 +186,72 @@ public class ChatService {
                     added, chunks.size());
         }
 
-        // Build grounded prompt
-        String prompt = buildPrompt(question, chunks);
+        // ── Page-reference augmentation ────────────────────────────────────
+        // When the question explicitly mentions page numbers ("page 5", "page 3"),
+        // ensure those pages' blocks are in context regardless of similarity rank.
+        // Embeddings don't encode page numbers as metadata, so "what is page 5
+        // about" retrieves chunks by semantic similarity to general document
+        // content — which can easily miss page 5 entirely.
+        List<Integer> referencedPages = extractPageReferences(searchQuery);
+        if (!referencedPages.isEmpty()) {
+            Set<UUID> seenBlockIds = chunks.stream()
+                    .map(VectorSearchService.ChunkMatch::blockId)
+                    .collect(Collectors.toCollection(HashSet::new));
+            List<VectorSearchService.ChunkMatch> pageBlocks =
+                    vectorSearchService.getBlocksForPages(session.getDocumentId(), referencedPages);
+            int added = 0;
+            Map<Integer, Integer> textCountByPage = new HashMap<>();
+            for (VectorSearchService.ChunkMatch block : pageBlocks) {
+                if (!seenBlockIds.add(block.blockId())) continue;
+                // Always include visual/document summaries; cap text blocks per page.
+                if ("text".equals(block.blockType())) {
+                    int count = textCountByPage.getOrDefault(block.pageNumber(), 0);
+                    if (count >= MAX_TEXT_BLOCKS_PER_PAGE_REF) continue;
+                    textCountByPage.put(block.pageNumber(), count + 1);
+                }
+                chunks.add(block);
+                added++;
+            }
+            if (added > 0) {
+                chunks.sort(Comparator.comparingInt(VectorSearchService.ChunkMatch::pageNumber)
+                        .thenComparingInt(VectorSearchService.ChunkMatch::chunkIndex));
+                log.info("Page-reference query — added {} block(s) from page(s) {} to context; {} total",
+                        added, referencedPages, chunks.size());
+            }
+        }
+
+        // ── Refusal guard ────────────────────────────────────────────────────
+        // If confidence is below threshold, don't even call Gemini — return a
+        // canned response. This kills hallucinations on off-topic queries and
+        // saves API spend. Skipped for aggregation queries and page-reference
+        // queries because those have legitimate intent despite potentially
+        // weaker per-chunk similarity.
+        if (confidence < refusalThreshold && !isAggregationQuery(searchQuery) && referencedPages.isEmpty()) {
+            log.info("Refusing query: confidence {} below threshold {} (question='{}')",
+                    String.format("%.3f", confidence), refusalThreshold, question);
+
+            ChatMessage refusalMsg = chatMessageRepository.save(ChatMessage.builder()
+                    .sessionId(sessionId)
+                    .role("assistant")
+                    .content(REFUSAL_TEXT)
+                    .modelVersion(geminiModel)
+                    .build());
+
+            return new ChatQueryResponse(
+                    refusalMsg.getId(), sessionId, REFUSAL_TEXT, List.of(),
+                    geminiModel, refusalMsg.getCreatedAt().toString(),
+                    confidence, 0.0, true
+            );
+        }
+
+        // Look up document type for type-aware prompting (Phase 4)
+        String docType = documentRepository.findById(session.getDocumentId())
+                .map(com.nib.backend.model.Document::getDocType)
+                .orElse(null);
+
+        // Build grounded prompt — use the rewritten query (not the raw question)
+        // so Gemini understands resolved pronouns (e.g. "those" → "the omelets").
+        String prompt = buildPrompt(searchQuery, chunks, docType);
 
         // Call Gemini
         String answer = callGemini(prompt);
@@ -189,17 +280,333 @@ public class ChatService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("You are a document Q&A assistant. Answer the user's question using ONLY the document content provided below.\n\n");
-        sb.append("Rules:\n");
-        sb.append("1. Use information from ALL content sections — text extracts and visual descriptions are equally authoritative.\n");
-        sb.append("2. Cite every factual claim with [Page X] where X is the page number shown in the section header. " +
-                  "Write each page as its own separate tag — NEVER combine them: write [Page 1][Page 2] not [Page 1, Page 2].\n");
-        sb.append("3. When referencing a chart, table, or figure, describe what it shows and cite the page.\n");
-        sb.append("4. If the answer cannot be found in the provided content, respond: \"I don't have enough information in the retrieved sections to answer this question.\"\n");
-        sb.append("5. Be concise and accurate. Your citation format must be exactly [Page X] — nothing else.\n\n");
-        sb.append("=== DOCUMENT CONTENT ===\n");
+    /**
+     * Phase 4 — dynamic topK based on document page count. A 3-page menu needs
+     * topK=5 (more retrieves noise), a 50-page report needs 15+ (static 8 misses
+     * pages). Formula: clamp(pageCount * 1.5, 5, 20), falling back to the
+     * configured static topK if we can't determine page count.
+     */
+    private int computeDynamicTopK(UUID documentId) {
+        return ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId)
+                .map(job -> {
+                    Integer pages = job.getPagesTotal();
+                    if (pages == null || pages <= 0) return topK;
+                    int scaled = (int) Math.round(pages * 1.5);
+                    int dynamic = Math.max(5, Math.min(20, scaled));
+                    log.debug("Dynamic topK: {} pages → topK={}", pages, dynamic);
+                    return dynamic;
+                })
+                .orElse(topK);
+    }
+
+    /**
+     * Phase 4 — multi-turn query rewriting. When the conversation has prior turns,
+     * follow-up questions like "what about page 3?" or "compare that with the next
+     * section" produce embeddings that match nothing useful because they lack
+     * context. This method calls Gemini with the last few turns and asks it to
+     * rewrite the latest question as a self-contained standalone query.
+     *
+     * Returns the original question unchanged when there's no prior conversation
+     * (first question in a session) or when the rewrite call fails.
+     *
+     * The rewritten query is used ONLY for embedding + retrieval. The original
+     * user question is still shown in the final prompt and the chat UI.
+     */
+    private String rewriteQueryIfNeeded(UUID sessionId, String currentQuestion) {
+        // Grab the last 6 messages (3 user/assistant turn pairs).
+        // The current user message was already saved, so it's in this list.
+        List<ChatMessage> recentMessages = chatMessageRepository
+                .findBySessionIdOrderByCreatedAtDesc(sessionId, org.springframework.data.domain.Pageable.ofSize(6));
+
+        // Need at least 2 prior messages (1 prior user + 1 prior assistant)
+        // beyond the current user message to justify rewriting.
+        if (recentMessages.size() < 3) {
+            return currentQuestion;
+        }
+
+        // Build conversation history (reverse to chronological order)
+        List<ChatMessage> chronological = new ArrayList<>(recentMessages);
+        java.util.Collections.reverse(chronological);
+
+        StringBuilder history = new StringBuilder();
+        // Exclude the last message (current question — already in the prompt)
+        for (int i = 0; i < chronological.size() - 1; i++) {
+            ChatMessage msg = chronological.get(i);
+            String role = "user".equals(msg.getRole()) ? "User" : "Assistant";
+            // Truncate long assistant answers to save tokens
+            String content = msg.getContent();
+            if (content.length() > 500) {
+                content = content.substring(0, 500) + "...";
+            }
+            history.append(role).append(": ").append(content).append("\n");
+        }
+
+        String rewritePrompt = """
+                Given this conversation between a user and an AI assistant about a document:
+
+                %s
+
+                The user's latest question is: "%s"
+
+                Rewrite this question as a SHORT, self-contained search query. Rules:
+                1. Replace pronouns (those, that, it, they, there, them, this) with the \
+                specific nouns they refer to from the USER's prior questions.
+                2. Keep the rewrite SHORT — under 20 words. Do NOT add extra detail, \
+                categories, descriptions, or context from the assistant's answers.
+                3. If the question is already self-contained and has no ambiguous pronouns, \
+                return it EXACTLY unchanged.
+                4. Only add the minimum context needed to resolve ambiguity.
+
+                Output ONLY the rewritten query, nothing else. No quotes, no explanation."""
+                .formatted(history, currentQuestion);
+
+        try {
+            String rewritten = callGemini(rewritePrompt);
+            if (rewritten != null && !rewritten.isBlank()) {
+                String cleaned = rewritten.trim().replaceAll("^\"|\"$", ""); // strip surrounding quotes
+                // Guard: if the rewrite is way longer than the original, the model
+                // stuffed in document-summary noise. Fall back to original.
+                if (cleaned.length() > currentQuestion.length() * 3 && cleaned.length() > 150) {
+                    log.warn("Query rewrite too verbose ({} chars vs original {}), using original",
+                            cleaned.length(), currentQuestion.length());
+                    return currentQuestion;
+                }
+                log.info("Query rewrite: '{}' → '{}'", currentQuestion, cleaned);
+                return cleaned;
+            }
+        } catch (Exception ex) {
+            log.warn("Query rewrite failed (falling back to original): {}", ex.getMessage());
+        }
+        return currentQuestion;
+    }
+
+    /**
+     * Phase 3 — re-rank top-k chunks to balance similarity, visual coverage, and
+     * page diversity. pgvector's cosine-distance ordering over-favors text
+     * similarity; this pass:
+     *   • boosts {@code visual_summary} blocks slightly so charts/tables aren't
+     *     hidden behind nearby prose;
+     *   • penalises duplicate pages so a long page can't dominate the context.
+     *
+     * Note: pgvector returns cosine distance (0 = identical, 2 = opposite) under
+     * the {@code <=>} operator, so similarity in code = (1 - cosineDistance).
+     */
+    private List<VectorSearchService.ChunkMatch> rerank(List<VectorSearchService.ChunkMatch> chunks) {
+        if (chunks.isEmpty()) return chunks;
+
+        // Track pages already counted so duplicates get a growing penalty.
+        Map<Integer, Integer> pageCount = new HashMap<>();
+
+        record Scored(VectorSearchService.ChunkMatch chunk, double score) {}
+        List<Scored> scored = new ArrayList<>(chunks.size());
+
+        for (VectorSearchService.ChunkMatch c : chunks) {
+            double base = 1.0 - c.similarity();                  // similarity in [~-1, 1], clamped below
+            double visualBoost = "visual_summary".equals(c.blockType()) ? rerankVisualBoost : 0.0;
+            // Document summary blocks get a small static boost so meta-questions
+            // ("what is this about", "summarize") that retrieve them at all get
+            // them ranked first in the prompt context.
+            double summaryBoost = "document_summary".equals(c.blockType()) ? 0.15 : 0.0;
+            int seen = pageCount.getOrDefault(c.pageNumber(), 0);
+            double diversityPenalty = rerankDiversityPenalty * seen;
+            double score = base + visualBoost + summaryBoost - diversityPenalty;
+            pageCount.merge(c.pageNumber(), 1, Integer::sum);
+            scored.add(new Scored(c, score));
+        }
+
+        scored.sort(Comparator.comparingDouble(Scored::score).reversed());
+        return scored.stream().map(Scored::chunk).collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /**
+     * Phase 3 (calibrated) — compute a [0..1] confidence score from the top-k
+     * cosine distances. pgvector returns cosine distance via {@code <=>}: 0
+     * means identical, ~1 means orthogonal, 2 means opposite.
+     *
+     * The earlier linear {@code 1 - meanDistance} was too pessimistic: a
+     * perfectly relevant chunk often has distance 0.3-0.4 (because the user's
+     * question and the source phrasing are different sentences with similar
+     * meaning), and that mapped to only 60-70% — which read as "the system
+     * isn't sure" even on easy questions. RAG calibration research consistently
+     * puts the "good match" boundary at ~0.4 distance and the "no good match"
+     * cutoff at ~0.6 distance.
+     *
+     * New formula:
+     *   1. Sigmoid map per chunk: {@code 1 / (1 + exp(k * (d - midpoint)))}
+     *      gives distance 0.3 → 0.92, distance 0.5 → 0.69, distance 0.7 → 0.31.
+     *   2. Weight the best (top-1) match at 0.7 and the mean of the top-3 at 0.3.
+     *      Rationale: one strong match usually means we found the right info;
+     *      the mean acts as a consistency check so a single fluke doesn't claim
+     *      certainty.
+     */
+    private double computeConfidence(List<VectorSearchService.ChunkMatch> chunks) {
+        if (chunks.isEmpty()) return 0.0;
+        double bestDistance = chunks.get(0).similarity();
+        int n = Math.min(3, chunks.size());
+        double sum = 0.0;
+        for (int i = 0; i < n; i++) sum += chunks.get(i).similarity();
+        double meanDistance = sum / n;
+        double confBest = sigmoidScore(bestDistance);
+        double confMean = sigmoidScore(meanDistance);
+        double conf = 0.7 * confBest + 0.3 * confMean;
+        return Math.max(0.0, Math.min(1.0, conf));
+    }
+
+    /** Map a cosine distance to a [0,1] confidence using a sigmoid curve. */
+    private double sigmoidScore(double distance) {
+        double exponent = confidenceSigmoidK * (distance - confidenceMidpoint);
+        return 1.0 / (1.0 + Math.exp(exponent));
+    }
+
+    /**
+     * Phase 3 — fraction of answer sentences that contain at least one [Page N]
+     * citation. Used as a "did the model actually ground its claims?" signal.
+     * 1.0 means every sentence is cited, 0.0 means none.
+     */
+    private double computeGroundedness(String answer) {
+        if (answer == null || answer.isBlank()) return 0.0;
+        String[] sentences = SENTENCE_SPLIT.split(answer.trim());
+        if (sentences.length == 0) return 0.0;
+        int cited = 0;
+        int total = 0;
+        for (String s : sentences) {
+            String trimmed = s.trim();
+            if (trimmed.length() < 8) continue; // skip stubs like "OK." or fragments
+            total++;
+            if (PAGE_CITATION_PATTERN.matcher(trimmed).find()) cited++;
+        }
+        return total == 0 ? 0.0 : (double) cited / total;
+    }
+
+    /**
+     * Enterprise-grade prompt structure (informed by 2026 RAG best-practice
+     * research: multi-layer prompt with persona/system/few-shot/synthesis):
+     *
+     *  1. ROLE — primes the model to behave like a senior research analyst,
+     *     not a generic chatbot.
+     *  2. STRICT GROUNDING RULES — answers must come from the provided context;
+     *     anything not present must be refused, not invented.
+     *  3. CITATION FORMAT — exact format, with a few-shot example showing the
+     *     intended style.
+     *  4. CHAIN-OF-THOUGHT — instructs the model to first locate the relevant
+     *     pages, then synthesise. This produces more grounded answers than
+     *     letting it free-form.
+     *  5. NUMERICAL PRECISION — explicit rule to preserve numbers, units, and
+     *     dates exactly as written, never rounding or inferring.
+     *  6. STRUCTURE GUIDANCE — bullets for lists, prose for explanations.
+     *  7. FALLBACK — exact wording when the answer is not in the document.
+     */
+    private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks, String docType) {
+        StringBuilder sb = new StringBuilder(8192);
+        boolean meta = isMetaQuery(question);
+
+        // ── ROLE ───────────────────────────────────────────────────────────
+        sb.append("# Role\n");
+        sb.append("You are a senior research analyst at a professional services firm. ");
+        sb.append("You read enterprise documents (research papers, reports, contracts, financial filings, ");
+        sb.append("technical specifications, menus, catalogues) and produce precise, defensible answers for ");
+        sb.append("colleagues who will rely on them in real work. Accuracy and traceability are paramount; ");
+        sb.append("speculation is never acceptable.\n\n");
+
+        // ── GROUNDING RULES ────────────────────────────────────────────────
+        sb.append("# Grounding Rules\n");
+        sb.append("- Answer using ONLY the document content provided in the CONTEXT section below.\n");
+        sb.append("- Treat text extracts and visual descriptions as equally authoritative — visual descriptions ");
+        sb.append("come from analysing the page image and contain the most accurate reading of charts, tables, ");
+        sb.append("figures, and price lists.\n");
+        sb.append("- If the answer is not present in the context, respond exactly: ");
+        sb.append("\"I cannot find this information in the indexed pages of this document.\" Do not guess.\n");
+        sb.append("- Never invent numbers, names, dates, prices, or claims that are not explicitly in the context.\n");
+        sb.append("- Quote numerical values, units, dates, percentages, and proper nouns EXACTLY as written. ");
+        sb.append("Never round, simplify, or paraphrase a numeric figure.\n\n");
+
+        // ── CITATIONS ──────────────────────────────────────────────────────
+        sb.append("# Citation Format\n");
+        if (meta) {
+            // For summaries and overview questions, inline citations on every sentence
+            // feel robotic. Only cite when quoting a specific number, name, or claim
+            // that the reader might want to verify.
+            sb.append("- This is a summary / overview question. Write naturally without citing every sentence.\n");
+            sb.append("- Only add a [Page N] citation when you quote a specific number, date, price, name, ");
+            sb.append("or claim that the reader might want to verify.\n");
+            sb.append("- If no specific numbers or claims are mentioned, you may omit citations entirely.\n");
+        } else {
+            sb.append("- Every sentence that states a fact, number, name, or claim MUST end with at least one ");
+            sb.append("[Page N] citation, where N is the page number shown in the section header.\n");
+        }
+        sb.append("- Write each page as its own tag. NEVER combine: write \"[Page 1][Page 2]\", NEVER \"[Page 1, Page 2]\".\n");
+        sb.append("- Use the exact format [Page N] — no other citation style is accepted.\n");
+        sb.append("- Example of correct citation style:\n");
+        sb.append("    The system reached a peak load of 62.4 kW under sustained training [Page 4]. ");
+        sb.append("This exceeded the design budget by 95% [Page 4][Page 6].\n\n");
+
+        // ── REASONING APPROACH ─────────────────────────────────────────────
+        sb.append("# How to Answer\n");
+        sb.append("Before writing the final answer, mentally:\n");
+        sb.append("  1. Identify which pages in the context are directly relevant to the question.\n");
+        sb.append("  2. Extract the specific facts, figures, or descriptions needed.\n");
+        sb.append("  3. Compose a concise, professional answer that cites those pages.\n");
+        sb.append("Do NOT write out this reasoning — output only the final answer.\n\n");
+
+        // ── STRUCTURE ──────────────────────────────────────────────────────
+        sb.append("# Answer Structure\n");
+        sb.append("- For list / enumeration questions (\"what are\", \"list\", \"all the\"): use a bulleted list, ");
+        sb.append("one item per line, each with a citation.\n");
+        sb.append("- For comparison / aggregation questions (\"most\", \"highest\", \"compare\"): give the ");
+        sb.append("specific answer first, then briefly justify with the cited numbers.\n");
+        sb.append("- For explanatory questions (\"what is\", \"how does\", \"why\"): write 2-5 sentences of ");
+        sb.append("clear prose, each sentence cited.\n");
+        sb.append("- For factual lookups (\"what is the X of Y\"): give the direct answer in one sentence, cited.\n");
+        sb.append("- Be concise. Do not pad. Do not preface with \"Based on the document...\" — just answer.\n");
+        sb.append("- Do not use markdown headings (###). Plain text and bullet points only.\n\n");
+
+        // ── DOCUMENT-TYPE SPECIFIC INSTRUCTIONS ────────────────────────────
+        // Phase 4 — tailor prompting to the document category detected at
+        // ingestion. Each type has different failure modes and user expectations.
+        if (docType != null) {
+            sb.append("# Document-Specific Instructions\n");
+            switch (docType) {
+                case "menu" -> {
+                    sb.append("This is a MENU or PRICE LIST. Key rules:\n");
+                    sb.append("- Always list prices EXACTLY as shown (e.g. \"$12.50\" not \"around $12\").\n");
+                    sb.append("- When comparing items by price, state both the item name AND exact price.\n");
+                    sb.append("- Preserve section categories (e.g. \"Breakfast\", \"Drinks\") when listing items.\n");
+                    sb.append("- For \"most expensive\" / \"cheapest\" questions, show the item name, price, AND section.\n\n");
+                }
+                case "academic" -> {
+                    sb.append("This is an ACADEMIC / RESEARCH PAPER. Key rules:\n");
+                    sb.append("- Cite figures and tables by their labels (e.g. \"Figure 3\", \"Table 2\") alongside [Page N].\n");
+                    sb.append("- Preserve exact values from data tables and charts — never approximate.\n");
+                    sb.append("- When discussing findings, distinguish between what the paper claims vs. what the data shows.\n\n");
+                }
+                case "financial" -> {
+                    sb.append("This is a FINANCIAL document (earnings, filing, report). Key rules:\n");
+                    sb.append("- Always include the currency and exact figures (e.g. \"$42.3M\" not \"about $42 million\").\n");
+                    sb.append("- When comparing periods (Q1 vs Q2, YoY), state both numbers and the direction of change.\n");
+                    sb.append("- Preserve any disclaimers or qualifications the document attaches to projections.\n\n");
+                }
+                case "legal" -> {
+                    sb.append("This is a LEGAL / CONTRACT document. Key rules:\n");
+                    sb.append("- Quote exact clause references (e.g. \"Section 4.2(a)\") when answering.\n");
+                    sb.append("- Never paraphrase obligations, conditions, or defined terms — use the document's wording.\n");
+                    sb.append("- Flag when a question asks for legal interpretation — state you can only quote the text.\n\n");
+                }
+                case "technical" -> {
+                    sb.append("This is a TECHNICAL document (spec, manual, engineering). Key rules:\n");
+                    sb.append("- Preserve exact units, tolerances, and specifications (e.g. \"±0.5mm\" not \"about half a millimeter\").\n");
+                    sb.append("- Reference diagrams and figures by their labels when explaining procedures.\n");
+                    sb.append("- For step-by-step procedures, maintain the document's exact ordering.\n\n");
+                }
+                default -> {} // no extra instructions for "mixed" or unknown types
+            }
+        }
+
+        // ── CONTEXT ────────────────────────────────────────────────────────
+        sb.append("# Context (Document Content)\n");
+        sb.append("The following are the retrieved sections from the document, in order of relevance. ");
+        sb.append("Each section is labelled with its page number and content type. ");
+        sb.append("If a section is labelled \"(visual description)\" it was produced by analysing the page image ");
+        sb.append("and may include readings of charts, tables, prices, and other graphical content.\n\n");
 
         for (VectorSearchService.ChunkMatch chunk : chunks) {
             boolean isVisual = "visual_summary".equals(chunk.blockType());
