@@ -306,6 +306,15 @@ public class IngestionRunner {
                             null, null, null    // no bbox — this is a synthetic block
                     ));
                     log.info("Added document_summary block for document {}", documentId);
+
+                    // Phase 4 — extract document type from the summary's TYPE: line
+                    // and persist it on the document for type-aware prompting.
+                    String docType = extractDocType(summary);
+                    if (docType != null) {
+                        doc.setDocType(docType);
+                        documentRepository.save(doc);
+                        log.info("Document type classified as '{}' for document {}", docType, documentId);
+                    }
                 }
             }
 
@@ -456,5 +465,36 @@ public class IngestionRunner {
         long singleCharCount = 0;
         for (String t : tokens) if (t.length() == 1) singleCharCount++;
         return (double) singleCharCount / tokens.length > 0.65;
+    }
+
+    /**
+     * Phase 4 — extract a normalized document type from the summary's TYPE: line.
+     * The summary format guarantees "TYPE: <phrase>" on the second line (e.g.
+     * "TYPE: Cafe menu", "TYPE: Research paper on liquid cooling"). We map the
+     * phrase to a short canonical category for type-aware prompt selection.
+     */
+    private static String extractDocType(String summary) {
+        for (String line : summary.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.toUpperCase().startsWith("TYPE:")) {
+                String raw = trimmed.substring(5).trim().toLowerCase();
+                if (raw.isEmpty()) return null;
+                // Map to canonical categories
+                if (raw.contains("menu") || raw.contains("cafe") || raw.contains("restaurant") || raw.contains("food"))
+                    return "menu";
+                if (raw.contains("research") || raw.contains("paper") || raw.contains("academic") || raw.contains("journal"))
+                    return "academic";
+                if (raw.contains("financial") || raw.contains("earnings") || raw.contains("quarterly") || raw.contains("annual report"))
+                    return "financial";
+                if (raw.contains("contract") || raw.contains("agreement") || raw.contains("legal") || raw.contains("policy") || raw.contains("terms"))
+                    return "legal";
+                if (raw.contains("technical") || raw.contains("specification") || raw.contains("manual") || raw.contains("engineering"))
+                    return "technical";
+                if (raw.contains("catalog") || raw.contains("catalogue") || raw.contains("product") || raw.contains("brochure"))
+                    return "catalog";
+                return "mixed";
+            }
+        }
+        return null;
     }
 }

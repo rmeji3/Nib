@@ -50,6 +50,14 @@ public class Document {
     @Column(name = "is_starred", nullable = false, columnDefinition = "boolean default false")
     private boolean isStarred = false;
 
+    /**
+     * Phase 4 — document type classification, parsed from the document summary
+     * generated at ingestion time. Nullable for pre-Phase-4 documents.
+     * Values: "academic", "financial", "menu", "technical", "legal", "mixed", etc.
+     */
+    @Column(name = "doc_type")
+    private String docType;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

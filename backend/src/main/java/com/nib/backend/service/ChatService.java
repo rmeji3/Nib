@@ -9,6 +9,7 @@ import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.exception.DocumentNotFoundException;
+import com.nib.backend.model.IngestionJob;
 import com.nib.backend.exception.RateLimitException;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
@@ -16,6 +17,7 @@ import com.nib.backend.model.User;
 import com.nib.backend.repository.ChatMessageRepository;
 import com.nib.backend.repository.ChatSessionRepository;
 import com.nib.backend.repository.DocumentRepository;
+import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +50,7 @@ public class ChatService {
     private final DocumentRepository documentRepository;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
+    private final IngestionJobRepository ingestionJobRepository;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
@@ -226,26 +229,40 @@ public class ChatService {
                 .content(question)
                 .build());
 
-        // Embed the question and retrieve top-k chunks
-        float[] queryEmbedding = embeddingService.embed(question);
-        List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(
-                vectorSearchService.search(session.getDocumentId(), queryEmbedding, topK));
+        // Phase 4 — multi-turn query rewriting: if the conversation has prior
+        // turns, rewrite the question as a standalone query so embeddings match
+        // the right chunks. The rewritten query is also used in the final Gemini
+        // prompt so the model understands what "those", "it", "that" refer to.
+        String searchQuery = rewriteQueryIfNeeded(sessionId, question);
+
+        // Compute dynamic topK based on document page count:
+        //   small docs (3 pages) → 5, medium (5-7 pages) → 8-10,
+        //   large (50+ pages) → 20 (cap). Avoids noise on small docs
+        //   and missing-page issues on large ones.
+        int dynamicTopK = computeDynamicTopK(session.getDocumentId());
+
+        // Embed the rewritten query and retrieve top-k chunks via hybrid search
+        // (dense vector similarity + BM25 full-text, merged with RRF).
+        float[] queryEmbedding = embeddingService.embed(searchQuery);
+        VectorSearchService.HybridSearchResult hybridResult =
+                vectorSearchService.hybridSearch(session.getDocumentId(), queryEmbedding, searchQuery, dynamicTopK);
+        List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(hybridResult.chunks());
+
+        // Confidence is computed from the raw vector results (cosine distances),
+        // not the RRF-merged scores — the sigmoid operates on cosine distance scale.
+        double confidence = computeConfidence(hybridResult.vectorResults());
+        log.debug("Computed confidence={} for question '{}'", String.format("%.3f", confidence), question);
 
         // Phase 3 — re-rank before any aggregation augmentation so we anchor on
         // the genuinely most relevant blocks first, then optionally pad with all
         // visual blocks when the user asks an aggregation question.
         chunks = rerank(chunks);
 
-        // Compute confidence from the (re-ranked) top-k. This is the score the
-        // refusal guard and frontend banner both use.
-        double confidence = computeConfidence(chunks);
-        log.debug("Computed confidence={} for question '{}'", String.format("%.3f", confidence), question);
-
         // For aggregation queries ("most expensive", "list all", "compare", etc.)
         // top-k similarity may miss pages whose embeddings don't sit close to the
         // query — even though those pages contain items we need to rank or list.
         // Pull every visual block for the document and add any not already retrieved.
-        if (isAggregationQuery(question)) {
+        if (isAggregationQuery(searchQuery)) {
             Set<UUID> seenBlockIds = chunks.stream()
                     .map(VectorSearchService.ChunkMatch::blockId)
                     .collect(Collectors.toCollection(HashSet::new));
@@ -270,7 +287,7 @@ public class ChatService {
         // Embeddings don't encode page numbers as metadata, so "what is page 5
         // about" retrieves chunks by semantic similarity to general document
         // content — which can easily miss page 5 entirely.
-        List<Integer> referencedPages = extractPageReferences(question);
+        List<Integer> referencedPages = extractPageReferences(searchQuery);
         if (!referencedPages.isEmpty()) {
             Set<UUID> seenBlockIds = chunks.stream()
                     .map(VectorSearchService.ChunkMatch::blockId)
@@ -304,7 +321,7 @@ public class ChatService {
         // saves API spend. Skipped for aggregation queries and page-reference
         // queries because those have legitimate intent despite potentially
         // weaker per-chunk similarity.
-        if (confidence < refusalThreshold && !isAggregationQuery(question) && referencedPages.isEmpty()) {
+        if (confidence < refusalThreshold && !isAggregationQuery(searchQuery) && referencedPages.isEmpty()) {
             log.info("Refusing query: confidence {} below threshold {} (question='{}')",
                     String.format("%.3f", confidence), refusalThreshold, question);
 
@@ -322,8 +339,14 @@ public class ChatService {
             );
         }
 
-        // Build grounded prompt
-        String prompt = buildPrompt(question, chunks);
+        // Look up document type for type-aware prompting (Phase 4)
+        String docType = documentRepository.findById(session.getDocumentId())
+                .map(com.nib.backend.model.Document::getDocType)
+                .orElse(null);
+
+        // Build grounded prompt — use the rewritten query (not the raw question)
+        // so Gemini understands resolved pronouns (e.g. "those" → "the omelets").
+        String prompt = buildPrompt(searchQuery, chunks, docType);
 
         // Call Gemini
         String answer = callGemini(prompt);
@@ -361,6 +384,100 @@ public class ChatService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Phase 4 — dynamic topK based on document page count. A 3-page menu needs
+     * topK=5 (more retrieves noise), a 50-page report needs 15+ (static 8 misses
+     * pages). Formula: clamp(pageCount * 1.5, 5, 20), falling back to the
+     * configured static topK if we can't determine page count.
+     */
+    private int computeDynamicTopK(UUID documentId) {
+        return ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId)
+                .map(job -> {
+                    Integer pages = job.getPagesTotal();
+                    if (pages == null || pages <= 0) return topK;
+                    int scaled = (int) Math.round(pages * 1.5);
+                    int dynamic = Math.max(5, Math.min(20, scaled));
+                    log.debug("Dynamic topK: {} pages → topK={}", pages, dynamic);
+                    return dynamic;
+                })
+                .orElse(topK);
+    }
+
+    /**
+     * Phase 4 — multi-turn query rewriting. When the conversation has prior turns,
+     * follow-up questions like "what about page 3?" or "compare that with the next
+     * section" produce embeddings that match nothing useful because they lack
+     * context. This method calls Gemini with the last few turns and asks it to
+     * rewrite the latest question as a self-contained standalone query.
+     *
+     * Returns the original question unchanged when there's no prior conversation
+     * (first question in a session) or when the rewrite call fails.
+     *
+     * The rewritten query is used ONLY for embedding + retrieval. The original
+     * user question is still shown in the final prompt and the chat UI.
+     */
+    private String rewriteQueryIfNeeded(UUID sessionId, String currentQuestion) {
+        // Grab the last 6 messages (3 user/assistant turn pairs).
+        // The current user message was already saved, so it's in this list.
+        List<ChatMessage> recentMessages = chatMessageRepository
+                .findBySessionIdOrderByCreatedAtDesc(sessionId, org.springframework.data.domain.Pageable.ofSize(6));
+
+        // Need at least 2 prior messages (1 prior user + 1 prior assistant)
+        // beyond the current user message to justify rewriting.
+        if (recentMessages.size() < 3) {
+            return currentQuestion;
+        }
+
+        // Build conversation history (reverse to chronological order)
+        List<ChatMessage> chronological = new ArrayList<>(recentMessages);
+        java.util.Collections.reverse(chronological);
+
+        StringBuilder history = new StringBuilder();
+        // Exclude the last message (current question — already in the prompt)
+        for (int i = 0; i < chronological.size() - 1; i++) {
+            ChatMessage msg = chronological.get(i);
+            String role = "user".equals(msg.getRole()) ? "User" : "Assistant";
+            // Truncate long assistant answers to save tokens
+            String content = msg.getContent();
+            if (content.length() > 500) {
+                content = content.substring(0, 500) + "...";
+            }
+            history.append(role).append(": ").append(content).append("\n");
+        }
+
+        String rewritePrompt = """
+                Given this conversation between a user and an AI assistant about a document:
+
+                %s
+
+                The user's latest question is: "%s"
+
+                Rewrite this question as a single, self-contained search query that includes \
+                all necessary context from the conversation. Rules:
+                1. Replace ALL pronouns (those, that, it, they, there, them, this) with the \
+                specific nouns they refer to from the conversation.
+                2. Include specific names, items, page numbers, or categories mentioned in \
+                the prior turns that the question refers to.
+                3. The rewritten query must make complete sense to someone who has NOT read \
+                the conversation.
+                4. If the question is already self-contained, return it unchanged.
+
+                Output ONLY the rewritten query, nothing else. No quotes, no explanation."""
+                .formatted(history, currentQuestion);
+
+        try {
+            String rewritten = callGemini(rewritePrompt);
+            if (rewritten != null && !rewritten.isBlank() && rewritten.length() < 500) {
+                String cleaned = rewritten.trim().replaceAll("^\"|\"$", ""); // strip surrounding quotes
+                log.info("Query rewrite: '{}' → '{}'", currentQuestion, cleaned);
+                return cleaned;
+            }
+        } catch (Exception ex) {
+            log.warn("Query rewrite failed (falling back to original): {}", ex.getMessage());
+        }
+        return currentQuestion;
+    }
 
     /**
      * Phase 3 — re-rank top-k chunks to balance similarity, visual coverage, and
@@ -478,7 +595,7 @@ public class ChatService {
      *  6. STRUCTURE GUIDANCE — bullets for lists, prose for explanations.
      *  7. FALLBACK — exact wording when the answer is not in the document.
      */
-    private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks) {
+    private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks, String docType) {
         StringBuilder sb = new StringBuilder(8192);
         boolean meta = isMetaQuery(question);
 
@@ -541,6 +658,47 @@ public class ChatService {
         sb.append("- For factual lookups (\"what is the X of Y\"): give the direct answer in one sentence, cited.\n");
         sb.append("- Be concise. Do not pad. Do not preface with \"Based on the document...\" — just answer.\n");
         sb.append("- Do not use markdown headings (###). Plain text and bullet points only.\n\n");
+
+        // ── DOCUMENT-TYPE SPECIFIC INSTRUCTIONS ────────────────────────────
+        // Phase 4 — tailor prompting to the document category detected at
+        // ingestion. Each type has different failure modes and user expectations.
+        if (docType != null) {
+            sb.append("# Document-Specific Instructions\n");
+            switch (docType) {
+                case "menu" -> {
+                    sb.append("This is a MENU or PRICE LIST. Key rules:\n");
+                    sb.append("- Always list prices EXACTLY as shown (e.g. \"$12.50\" not \"around $12\").\n");
+                    sb.append("- When comparing items by price, state both the item name AND exact price.\n");
+                    sb.append("- Preserve section categories (e.g. \"Breakfast\", \"Drinks\") when listing items.\n");
+                    sb.append("- For \"most expensive\" / \"cheapest\" questions, show the item name, price, AND section.\n\n");
+                }
+                case "academic" -> {
+                    sb.append("This is an ACADEMIC / RESEARCH PAPER. Key rules:\n");
+                    sb.append("- Cite figures and tables by their labels (e.g. \"Figure 3\", \"Table 2\") alongside [Page N].\n");
+                    sb.append("- Preserve exact values from data tables and charts — never approximate.\n");
+                    sb.append("- When discussing findings, distinguish between what the paper claims vs. what the data shows.\n\n");
+                }
+                case "financial" -> {
+                    sb.append("This is a FINANCIAL document (earnings, filing, report). Key rules:\n");
+                    sb.append("- Always include the currency and exact figures (e.g. \"$42.3M\" not \"about $42 million\").\n");
+                    sb.append("- When comparing periods (Q1 vs Q2, YoY), state both numbers and the direction of change.\n");
+                    sb.append("- Preserve any disclaimers or qualifications the document attaches to projections.\n\n");
+                }
+                case "legal" -> {
+                    sb.append("This is a LEGAL / CONTRACT document. Key rules:\n");
+                    sb.append("- Quote exact clause references (e.g. \"Section 4.2(a)\") when answering.\n");
+                    sb.append("- Never paraphrase obligations, conditions, or defined terms — use the document's wording.\n");
+                    sb.append("- Flag when a question asks for legal interpretation — state you can only quote the text.\n\n");
+                }
+                case "technical" -> {
+                    sb.append("This is a TECHNICAL document (spec, manual, engineering). Key rules:\n");
+                    sb.append("- Preserve exact units, tolerances, and specifications (e.g. \"±0.5mm\" not \"about half a millimeter\").\n");
+                    sb.append("- Reference diagrams and figures by their labels when explaining procedures.\n");
+                    sb.append("- For step-by-step procedures, maintain the document's exact ordering.\n\n");
+                }
+                default -> {} // no extra instructions for "mixed" or unknown types
+            }
+        }
 
         // ── CONTEXT ────────────────────────────────────────────────────────
         sb.append("# Context (Document Content)\n");
