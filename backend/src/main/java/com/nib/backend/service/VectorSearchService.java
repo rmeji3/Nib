@@ -268,6 +268,49 @@ public class VectorSearchService {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
+    /**
+     * Returns all content blocks for specific pages of a document, ordered by
+     * page number then chunk index. Used for page-reference queries ("what is
+     * on page 5?") where embedding similarity can't find the right chunks
+     * because embeddings don't encode page numbers.
+     */
+    public List<ChunkMatch> getBlocksForPages(UUID documentId, List<Integer> pageNumbers) {
+        if (pageNumbers == null || pageNumbers.isEmpty()) return List.of();
+
+        // Build IN clause with parameter placeholders
+        String placeholders = pageNumbers.stream()
+                .map(p -> "?")
+                .collect(Collectors.joining(", "));
+
+        String sql = """
+                SELECT cb.id          AS block_id,
+                       cb.document_id,
+                       cb.page_number,
+                       cb.chunk_index,
+                       cb.extracted_text,
+                       cb.block_type,
+                       cb.bbox_x,
+                       cb.bbox_y,
+                       cb.bbox_width,
+                       cb.bbox_height,
+                       cb.page_width,
+                       cb.page_height,
+                       0.0            AS similarity
+                FROM   content_blocks cb
+                WHERE  cb.document_id = ?
+                  AND  cb.page_number IN (%s)
+                ORDER  BY cb.page_number, cb.chunk_index
+                """.formatted(placeholders);
+
+        Object[] params = new Object[1 + pageNumbers.size()];
+        params[0] = documentId;
+        for (int i = 0; i < pageNumbers.size(); i++) {
+            params[i + 1] = pageNumbers.get(i);
+        }
+
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), params);
+    }
+
     /** Shared row mapper for ChunkMatch — bbox + page dims are nullable. */
     private static ChunkMatch mapRow(ResultSet rs) throws SQLException {
         BBox bbox = null;

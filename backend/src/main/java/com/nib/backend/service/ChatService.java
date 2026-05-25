@@ -29,6 +29,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,36 @@ public class ChatService {
 
     @Value("${ingestion.top-k:5}")
     private int topK;
+
+    // ── Phase 3 tunables ─────────────────────────────────────────────────────
+    @Value("${chat.refusal.threshold:0.25}")
+    private double refusalThreshold;
+
+    @Value("${chat.rerank.visual-boost:0.10}")
+    private double rerankVisualBoost;
+
+    @Value("${chat.rerank.diversity-penalty:0.05}")
+    private double rerankDiversityPenalty;
+
+    @Value("${chat.confidence.sigmoid-k:8.0}")
+    private double confidenceSigmoidK;
+
+    @Value("${chat.confidence.midpoint:0.45}")
+    private double confidenceMidpoint;
+
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
+
+    /** Sentence boundary — split on `.` / `!` / `?` followed by whitespace or end. */
+    private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
+
+    /** Canned answer when confidence is below refusal threshold. */
+    private static final String REFUSAL_TEXT =
+            "I cannot find enough relevant information in the indexed pages of this document to "
+            + "answer this question confidently. Try rephrasing your question, or ask about a "
+            + "topic that is covered in the document.";
+
+    /** Max text blocks to add per explicitly-referenced page (prevents token explosion). */
+    private static final int MAX_TEXT_BLOCKS_PER_PAGE_REF = 3;
 
     /**
      * Phrases that signal the user wants to aggregate or compare across the whole
@@ -744,5 +774,34 @@ public class ChatService {
     private ChatMessageResponse toMessageResponse(ChatMessage m) {
         return new ChatMessageResponse(m.getId(), m.getRole(), m.getContent(),
                 deserializeCitations(m.getCitations()), m.getCreatedAt().toString());
+    }
+
+    /**
+     * Extracts explicit page references from the user query. Matches patterns
+     * like "page 5", "page 3 and 4", "pages 1-3". Used to augment the retrieval
+     * context with those pages' blocks regardless of similarity ranking.
+     */
+    private static List<Integer> extractPageReferences(String query) {
+        List<Integer> pages = new ArrayList<>();
+        // Match "page N" or "pages N"
+        Matcher m = Pattern.compile("pages?\\s+(\\d+)", Pattern.CASE_INSENSITIVE).matcher(query);
+        while (m.find()) {
+            pages.add(Integer.parseInt(m.group(1)));
+        }
+        return pages;
+    }
+
+    /**
+     * Detects meta/summary questions where per-sentence citations feel robotic.
+     * E.g. "summarize this", "what is this document about", "give me an overview".
+     */
+    private static boolean isMetaQuery(String question) {
+        String lower = question.toLowerCase();
+        return lower.contains("summarize") || lower.contains("summary")
+                || lower.contains("what is this document about")
+                || lower.contains("what is this about")
+                || lower.contains("overview")
+                || lower.contains("what is this pdf")
+                || lower.contains("tell me about this");
     }
 }
