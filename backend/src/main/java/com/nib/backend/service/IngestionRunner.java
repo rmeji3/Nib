@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -259,6 +260,9 @@ public class IngestionRunner {
                     // Phase 4 — extract document type from the summary's TYPE: line
                     // and persist it on the document for type-aware prompting.
                     String docType = extractDocType(summary);
+                    if (docType == null) {
+                        log.warn("Could not extract doc type from summary for document {}", documentId);
+                    }
                     if (docType != null) {
                         doc.setDocType(docType);
                         documentRepository.save(doc);

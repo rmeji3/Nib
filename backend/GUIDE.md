@@ -49,7 +49,6 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
-<<<<<<< HEAD
 #### Controller: [`CollectionController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/CollectionController.java)
 | Verb | Endpoint Route |
 | --- | --- |

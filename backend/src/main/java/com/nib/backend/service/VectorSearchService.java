@@ -269,16 +269,19 @@ public class VectorSearchService {
     }
 
     /**
-     * Returns all content blocks for the given page numbers of a document,
-     * ordered by page number then chunk index. Used by page-reference augmentation
-     * in ChatService to ensure that explicitly mentioned pages are in context
-     * regardless of similarity rank.
+     * Returns all content blocks for specific pages of a document, ordered by
+     * page number then chunk index. Used for page-reference queries ("what is
+     * on page 5?") where embedding similarity can't find the right chunks
+     * because embeddings don't encode page numbers.
      */
     public List<ChunkMatch> getBlocksForPages(UUID documentId, List<Integer> pageNumbers) {
         if (pageNumbers == null || pageNumbers.isEmpty()) return List.of();
 
-        // Build a safe IN-clause with positional parameters
-        String placeholders = pageNumbers.stream().map(p -> "?").collect(Collectors.joining(", "));
+        // Build IN clause with parameter placeholders
+        String placeholders = pageNumbers.stream()
+                .map(p -> "?")
+                .collect(Collectors.joining(", "));
+
         String sql = """
                 SELECT cb.id          AS block_id,
                        cb.document_id,

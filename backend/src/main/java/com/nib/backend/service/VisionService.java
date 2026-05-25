@@ -138,44 +138,46 @@ public class VisionService {
     }
 
     /**
-     * Generates a short document summary suitable for embedding. Called once per
-     * ingestion job with the first page image (for title/logo recognition) and the
-     * concatenated text of all blocks. Returns a structured summary with a TYPE:
-     * line that IngestionRunner.extractDocType() parses for type-aware prompting.
+     * Generates a concise document-level summary for embedding, using Gemini.
+     * When a first-page image is available, the call is multimodal (image + text)
+     * so titles, logos, and graphical headers that text extraction misses are
+     * captured. Falls back to text-only when the image is null.
      *
-     * The summary is multimodal: Gemini sees the first-page image alongside the
-     * text, so titles and logos (often stylised graphics that text extraction misses)
-     * are captured reliably.
-     *
-     * Returns null on failure — the caller should skip the summary block rather
-     * than failing the entire ingestion.
+     * The summary MUST include a "TYPE: &lt;category&gt;" line (second line) so
+     * {@code IngestionRunner.extractDocType()} can classify the document.
      */
+    @SuppressWarnings("unchecked")
     public String generateDocumentSummary(byte[] firstPageImage, String combinedText) {
+        String truncated = combinedText.length() > 12_000
+                ? combinedText.substring(0, 12_000) + "\n[...truncated...]"
+                : combinedText;
+
+        String summaryPrompt = """
+                You are analysing a PDF document. Produce a summary that answers \
+                "what is this document about?".
+
+                You MUST follow this EXACT format (no markdown, no extra lines):
+
+                Line 1: A one-sentence overview of the document.
+                Line 2: TYPE: <document category phrase>
+                Line 3+: 2-3 sentences with the most important facts, names, or numbers.
+
+                The TYPE line is MANDATORY. Examples of correct TYPE lines:
+                TYPE: Cafe menu
+                TYPE: Research paper on liquid cooling
+                TYPE: Financial quarterly report
+                TYPE: Legal services agreement
+                TYPE: Product catalog
+                TYPE: Technical specification
+
+                Here is the document text (may be truncated):
+                ---
+                """ + truncated + "\n---";
+
         try {
-            // Truncate text to ~12,000 chars to stay within input limits
-            String truncated = combinedText;
-            if (truncated != null && truncated.length() > 12_000) {
-                truncated = truncated.substring(0, 12_000) + "\n\n[... truncated ...]";
-            }
+            List<Object> parts = new java.util.ArrayList<>();
 
-            String summaryPrompt = """
-                    Summarize this document in plain text. \
-                    You MUST follow this EXACT format (no markdown, no extra lines):
-                    Line 1: A one-sentence overview of the document.
-                    Line 2: TYPE: <document category phrase>
-                    Line 3+: 2-3 sentences with the most important facts, names, or numbers.
-
-                    The TYPE line is MANDATORY. Use a short descriptive phrase like:
-                    "Cafe menu", "Research paper on liquid cooling", "Quarterly earnings report", \
-                    "Legal services agreement", "Technical specification for GPU clusters", \
-                    "Product catalog".
-
-                    Here is the document text:
-
-                    """ + (truncated != null ? truncated : "");
-
-            // Build parts: image (if available) + text prompt
-            List<Map<String, Object>> parts = new java.util.ArrayList<>();
+            // If we have a first-page image, include it so Gemini can read titles/logos
             if (firstPageImage != null) {
                 String base64 = Base64.getEncoder().encodeToString(firstPageImage);
                 parts.add(Map.of("inline_data", Map.of(
@@ -188,14 +190,13 @@ public class VisionService {
             Map<String, Object> body = Map.of(
                     "contents", List.of(Map.of("parts", parts)),
                     "generationConfig", Map.of(
-                            "temperature", 0.1,
+                            "temperature", 0.2,
                             "maxOutputTokens", 512
                     )
             );
 
             String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> response = restClient.post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -205,16 +206,14 @@ public class VisionService {
 
             if (response == null) return null;
 
-            @SuppressWarnings("unchecked")
             List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
             if (candidates == null || candidates.isEmpty()) return null;
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> respParts = (List<Map<String, Object>>) content.get("parts");
-            return (String) respParts.get(0).get("text");
-
+            List<Map<String, Object>> responseParts = (List<Map<String, Object>>) content.get("parts");
+            String summary = (String) responseParts.get(0).get("text");
+            log.info("Generated document summary ({} chars)", summary != null ? summary.length() : 0);
+            return summary;
         } catch (Exception ex) {
             log.warn("Document summary generation failed: {}", ex.getMessage());
             return null;
