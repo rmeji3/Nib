@@ -153,16 +153,22 @@ public class VisionService {
                 : combinedText;
 
         String summaryPrompt = """
-                You are analysing a PDF document. Produce a SHORT summary (max 5 sentences) \
-                that answers the question "what is this document about?".
+                You are analysing a PDF document. Produce a summary that answers \
+                "what is this document about?".
 
-                FORMAT — exactly two parts, no markdown:
-                Line 1: a one-sentence overview.
-                Line 2: TYPE: <phrase describing the document category> \
-                (e.g. "TYPE: Cafe menu", "TYPE: Research paper on liquid cooling", \
-                "TYPE: Financial quarterly report", "TYPE: Legal services agreement").
-                Lines 3+: 2-3 bullet-style sentences with the most important facts, \
-                names, or numbers a reader would want to know up front.
+                You MUST follow this EXACT format (no markdown, no extra lines):
+
+                Line 1: A one-sentence overview of the document.
+                Line 2: TYPE: <document category phrase>
+                Line 3+: 2-3 sentences with the most important facts, names, or numbers.
+
+                The TYPE line is MANDATORY. Examples of correct TYPE lines:
+                TYPE: Cafe menu
+                TYPE: Research paper on liquid cooling
+                TYPE: Financial quarterly report
+                TYPE: Legal services agreement
+                TYPE: Product catalog
+                TYPE: Technical specification
 
                 Here is the document text (may be truncated):
                 ---

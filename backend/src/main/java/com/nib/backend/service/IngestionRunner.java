@@ -254,11 +254,14 @@ public class IngestionRunner {
                             BLOCK_DOC_SUMMARY,
                             null, null, null    // no bbox — this is a synthetic block
                     ));
-                    log.info("Added document_summary block for document {}", documentId);
+                    log.info("Added document_summary block for document {} — summary:\n{}", documentId, summary);
 
                     // Phase 4 — extract document type from the summary's TYPE: line
                     // and persist it on the document for type-aware prompting.
                     String docType = extractDocType(summary);
+                    if (docType == null) {
+                        log.warn("Could not extract doc type from summary for document {}", documentId);
+                    }
                     if (docType != null) {
                         doc.setDocType(docType);
                         documentRepository.save(doc);
