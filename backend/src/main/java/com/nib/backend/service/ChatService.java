@@ -453,23 +453,29 @@ public class ChatService {
 
                 The user's latest question is: "%s"
 
-                Rewrite this question as a single, self-contained search query that includes \
-                all necessary context from the conversation. Rules:
-                1. Replace ALL pronouns (those, that, it, they, there, them, this) with the \
-                specific nouns they refer to from the conversation.
-                2. Include specific names, items, page numbers, or categories mentioned in \
-                the prior turns that the question refers to.
-                3. The rewritten query must make complete sense to someone who has NOT read \
-                the conversation.
-                4. If the question is already self-contained, return it unchanged.
+                Rewrite this question as a SHORT, self-contained search query. Rules:
+                1. Replace pronouns (those, that, it, they, there, them, this) with the \
+                specific nouns they refer to from the USER's prior questions.
+                2. Keep the rewrite SHORT — under 20 words. Do NOT add extra detail, \
+                categories, descriptions, or context from the assistant's answers.
+                3. If the question is already self-contained and has no ambiguous pronouns, \
+                return it EXACTLY unchanged.
+                4. Only add the minimum context needed to resolve ambiguity.
 
                 Output ONLY the rewritten query, nothing else. No quotes, no explanation."""
                 .formatted(history, currentQuestion);
 
         try {
             String rewritten = callGemini(rewritePrompt);
-            if (rewritten != null && !rewritten.isBlank() && rewritten.length() < 500) {
+            if (rewritten != null && !rewritten.isBlank()) {
                 String cleaned = rewritten.trim().replaceAll("^\"|\"$", ""); // strip surrounding quotes
+                // Guard: if the rewrite is way longer than the original, the model
+                // stuffed in document-summary noise. Fall back to original.
+                if (cleaned.length() > currentQuestion.length() * 3 && cleaned.length() > 150) {
+                    log.warn("Query rewrite too verbose ({} chars vs original {}), using original",
+                            cleaned.length(), currentQuestion.length());
+                    return currentQuestion;
+                }
                 log.info("Query rewrite: '{}' → '{}'", currentQuestion, cleaned);
                 return cleaned;
             }

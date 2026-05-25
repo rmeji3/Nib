@@ -7,6 +7,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import org.springframework.web.client.HttpClientErrorException;
+
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +26,8 @@ public class EmbeddingService {
     private String apiUrl;
 
     private static final String MODEL = "mistral-embed";
+    private static final int MAX_RETRIES = 4;
+    private static final long INITIAL_BACKOFF_MS = 2_000;
 
     /**
      * Embeds a single text string. Delegates to embedBatch for consistency.
@@ -36,6 +40,7 @@ public class EmbeddingService {
      * Embeds multiple texts in a single Mistral API call.
      * Dramatically reduces API calls vs. calling embed() per chunk — avoids rate limits.
      * Returns a list of float arrays in the same order as the input list.
+     * Retries with exponential backoff on 429 rate-limit responses.
      */
     @SuppressWarnings("unchecked")
     public List<float[]> embedBatch(List<String> texts) {
@@ -46,13 +51,7 @@ public class EmbeddingService {
                 "input", texts
         );
 
-        Map<String, Object> response = restClient.post()
-                .uri(apiUrl + "/embeddings")
-                .header("Authorization", "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(Map.class);
+        Map<String, Object> response = callWithRetry(body);
 
         if (response == null) throw new RuntimeException("Empty response from Mistral embeddings API");
 
@@ -72,6 +71,40 @@ public class EmbeddingService {
             for (int i = 0; i < embedding.size(); i++) result[i] = embedding.get(i).floatValue();
             return result;
         }).toList();
+    }
+
+    /**
+     * Calls the Mistral embeddings API with exponential backoff retry on 429s.
+     * Backoff: 2s → 4s → 8s → 16s (total ~30s of waiting before giving up).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> callWithRetry(Map<String, Object> body) {
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return restClient.post()
+                        .uri(apiUrl + "/embeddings")
+                        .header("Authorization", "Bearer " + apiKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .retrieve()
+                        .body(Map.class);
+            } catch (HttpClientErrorException.TooManyRequests ex) {
+                if (attempt == MAX_RETRIES) {
+                    log.error("Mistral 429 rate limit: exhausted {} retries, giving up", MAX_RETRIES);
+                    throw ex;
+                }
+                long backoff = INITIAL_BACKOFF_MS * (1L << attempt);
+                log.warn("Mistral 429 rate limit — retrying in {}ms (attempt {}/{})",
+                        backoff, attempt + 1, MAX_RETRIES);
+                try {
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during rate-limit backoff", ie);
+                }
+            }
+        }
+        throw new RuntimeException("Unreachable — retry loop exited without return or throw");
     }
 
     /** Formats a float array into the pgvector string format: [0.1,0.2,...] */
