@@ -6,7 +6,6 @@ import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.exception.StorageException;
 import com.nib.backend.model.Document;
 import com.nib.backend.model.User;
-import com.nib.backend.repository.ContentBlockRepository;
 import com.nib.backend.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +32,6 @@ import java.util.stream.Collectors;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
-    private final ContentBlockRepository contentBlockRepository;
     private final SupabaseStorageService storageService;
     private final IngestionService ingestionService;
 
@@ -149,7 +147,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public byte[] getDocumentContent(UUID id, User user) {
-        Document doc = documentRepository.findByIdAndUserAndDeletedAtIsNull(id, user)
+        Document doc = documentRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new DocumentNotFoundException(id));
         return storageService.downloadFile(doc.getStoragePath());
     }
@@ -260,15 +258,6 @@ public class DocumentService {
         }
 
         log.info("Merged document {} for user {}", document.getId(), user.getId());
-
-        // ── Re-ingest the merged document so the new pages are indexed ──
-        // Delete old content blocks first — cascade deletes their embeddings.
-        long deletedBlocks = contentBlockRepository.countByDocumentId(document.getId());
-        contentBlockRepository.deleteByDocumentId(document.getId());
-        log.info("Deleted {} old content blocks for document {} before re-ingestion", deletedBlocks, document.getId());
-
-        ingestionService.createAndTrigger(document.getId());
-
         return toResponse(document, storageService.generateSignedUrl(storagePath, 3600));
     }
 
@@ -320,6 +309,25 @@ public class DocumentService {
         return filename.replaceAll("[^a-zA-Z0-9._\\-]", "_");
     }
 
+    @Transactional(readOnly = true)
+    public PagedResponse<DocumentResponse> listRecentDocuments(User user, Pageable pageable) {
+        Page<Document> docs = documentRepository
+                .findByUserAndLastOpenedAtIsNotNullAndDeletedAtIsNullOrderByLastOpenedAtDesc(user, pageable);
+        List<DocumentResponse> content = docs.stream()
+                .map(doc -> toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600)))
+                .collect(Collectors.toList());
+        return new PagedResponse<>(content, docs.getNumber(), docs.getSize(),
+                docs.getTotalElements(), docs.getTotalPages(), docs.isLast());
+    }
+
+    public DocumentResponse recordOpen(UUID id, User user) {
+        int updated = documentRepository.updateLastOpenedAt(id, user, LocalDateTime.now());
+        if (updated == 0) throw new DocumentNotFoundException(id);
+        Document doc = documentRepository.findByIdAndUserAndDeletedAtIsNull(id, user)
+                .orElseThrow(() -> new DocumentNotFoundException(id));
+        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+    }
+
     private DocumentResponse toResponse(Document doc, String signedUrl) {
         return new DocumentResponse(
                 doc.getId(),
@@ -330,7 +338,8 @@ public class DocumentService {
                 doc.getPageCount(),
                 doc.getCreatedAt() != null ? doc.getCreatedAt().toString() : null,
                 doc.getDeletedAt() != null ? doc.getDeletedAt().toString() : null,
-                doc.isStarred()
+                doc.isStarred(),
+                doc.getLastOpenedAt() != null ? doc.getLastOpenedAt().toString() : null
         );
     }
 }

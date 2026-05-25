@@ -49,8 +49,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files — block real secrets, allow committed example templates
 .env*
+!**/.env.example
+!**/.env.local.example
 
 # vercel
 /frontend/.vercel/
@@ -59,6 +61,3 @@ yarn-error.log*
 *.tsbuildinfo
 /frontend/next-env.d.ts
 
-
-# eval — credentials for the automated eval runner
-eval/.env.eval

@@ -20,6 +20,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("NOT_FOUND", ex.getMessage()));
     }
 
+    @ExceptionHandler(CollectionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCollectionNotFound(CollectionNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("NOT_FOUND", ex.getMessage()));
+    }
+
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorage(StorageException ex) {
         log.error("Storage error", ex);

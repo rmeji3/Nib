@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import type { TextHighlight } from './hooks/use-nib-state';
 import { motion, useAnimationControls } from 'framer-motion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { NibLogo as NibLogoBase } from '../../components/nib-logo';
 export { NibLogoBase as NibLogo };
 import { NibLogoSpinner } from '../../components/nib-logo-spinner';
@@ -24,6 +23,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../../components/ui/dropdown-menu';
+import { useAuth } from '../auth/hooks/use-auth';
+import { UserMenu } from '../../home/components/user-menu';
+import { useSettings } from '../../settings/hooks/use-settings';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -164,6 +166,13 @@ export function ViewerToolbar({
   totalPages,
   chatMinimized,
   onToggleChat,
+  searchQuery,
+  setSearchQuery,
+  onSearchPrev,
+  onSearchNext,
+  isSearching,
+  matchCount,
+  currentMatchIndex,
 }: {
   currentPage: number;
   onJumpPage: (index: number) => void;
@@ -172,13 +181,28 @@ export function ViewerToolbar({
   totalPages: number;
   chatMinimized: boolean;
   onToggleChat: () => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  onSearchPrev: () => void;
+  onSearchNext: () => void;
+  isSearching: boolean;
+  matchCount: number;
+  currentMatchIndex: number;
 }) {
   const router = useRouter();
+  const { user, signOut } = useAuth();
   const { file, documentId, documentUrl, documentName, setDocument } = useUpload();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState('');
+  const [titleInput, setTitleInput] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleOpenSearch = () => setShowSearch(true);
+    window.addEventListener('nib:open-search', handleOpenSearch);
+    return () => window.removeEventListener('nib:open-search', handleOpenSearch);
+  }, []);
 
   const renameMutation = useMutation({
     mutationFn: (name: string) => renameDocument(documentId!, name),
@@ -189,39 +213,9 @@ export function ViewerToolbar({
     },
   });
 
-  // Logo spin animation
-  const logoControls = useAnimationControls();
-  const logoAnimating = useRef(false);
-
-  const triggerLogoSpin = async (direction: 1 | -1) => {
-    if (logoAnimating.current) return;
-    logoAnimating.current = true;
-    try {
-      await logoControls.start({
-        rotate: direction * 360,
-        scale: [1, direction === 1 ? 1.3 : 1.15, 1],
-        transition: {
-          rotate: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
-          scale: { duration: 0.45, times: [0, 0.4, 1], ease: 'easeOut' },
-        },
-      });
-    } finally {
-      logoControls.set({ rotate: 0 });
-      logoAnimating.current = false;
-    }
-  };
-
-  const startEdit = () => {
-    if (!documentId) return;
-    setEditValue(documentName ?? '');
-    setIsEditing(true);
-    // Focus after state settles
-    setTimeout(() => titleInputRef.current?.select(), 0);
-  };
-
-  const commitEdit = () => {
+  const handleRename = () => {
     setIsEditing(false);
-    const trimmed = editValue.trim();
+    const trimmed = titleInput.trim();
     if (trimmed && trimmed !== documentName) {
       renameMutation.mutate(trimmed);
     }
@@ -229,90 +223,90 @@ export function ViewerToolbar({
 
   const iconButtonClass =
     'inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[var(--text-dim)] transition hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]';
-  const buttonClass =
-    'inline-flex h-7 items-center justify-center gap-1 rounded-md border border-transparent px-2 text-[12.5px] text-[var(--text-dim)] transition hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]';
 
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/10 bg-[var(--bg-base)] px-3.5">
       <div className="flex items-center gap-2">
-        {/* Logo + wordmark — single clickable button with spin-on-hover logo */}
         <button
           type="button"
           onClick={() => router.push('/home')}
           title="Go home"
-          onMouseEnter={() => triggerLogoSpin(1)}
-          onMouseLeave={() => triggerLogoSpin(-1)}
           className="-ml-1 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[13.5px] font-semibold text-[var(--text)] transition hover:bg-white/5"
         >
           <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--text)] text-[var(--bg-base)]">
-            <motion.span animate={logoControls} className="inline-flex">
-              <NibLogoBase size={13} />
-            </motion.span>
+            <NibLogoBase size={13} />
           </span>
           Nib
         </button>
         <div className="mx-1 h-4 w-px bg-white/15" />
-        <div className="max-w-[360px] text-[13px] text-[var(--text-dim)]">
-          {isEditing ? (
-            /*
-             * Auto-sizing input: a hidden <span> mirroring the value lives in the same
-             * CSS grid cell — the grid sizes to the span, the input fills that cell.
-             * No JS measurement needed.
-             */
-            <div className="grid max-w-[360px]">
-              <span
-                aria-hidden="true"
-                className="invisible col-start-1 row-start-1 whitespace-pre rounded border border-transparent px-1.5 py-0.5 text-[13px] font-semibold"
-              >
-                {editValue || ' '}
-              </span>
-              <input
-                ref={titleInputRef}
-                value={editValue}
-                maxLength={80}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={commitEdit}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.currentTarget.blur(); }
-                  if (e.key === 'Escape') { setIsEditing(false); }
-                }}
-                className="col-start-1 row-start-1 min-w-[8ch] rounded border border-white/20 bg-white/5 px-1.5 py-0.5 text-[13px] font-semibold text-[var(--text)] outline-none focus:border-white/40"
-                autoFocus
-              />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={startEdit}
-              title={documentId ? 'Click to rename' : undefined}
-              className={`overflow-hidden text-ellipsis whitespace-nowrap font-semibold ${documentId ? 'hover:text-[var(--text)] cursor-text' : 'cursor-default opacity-50 italic'}`}
-            >
-              {documentName ?? (file ? file.name.replace(/\.pdf$/i, '') : 'No document')}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-2">
-        <button className={iconButtonClass} type="button" title="Thumbnails (T)" onClick={() => window.dispatchEvent(new CustomEvent('nib:toggle-thumbs'))}>
+        <button
+          className={iconButtonClass}
+          type="button"
+          title="Back to home"
+          onClick={() => {
+            setDocument(null, null, null, null);
+            router.push('/home');
+          }}
+        >
+          <Icon name="chevron-left" />
+        </button>
+        <button
+          className={iconButtonClass}
+          type="button"
+          title="Toggle thumbnails"
+          onClick={() => window.dispatchEvent(new CustomEvent('nib:toggle-thumbs'))}
+        >
           <Icon name="thumbs" />
         </button>
-        <div className="inline-flex h-7 items-center gap-1 rounded-md border border-white/10 bg-[var(--bg-surface)] px-1 pl-2.5 text-xs text-[var(--text-dim)]">
+        <div className="mx-1 h-4 w-px bg-white/15" />
+        {isEditing ? (
+          <input
+            type="text"
+            className="h-7 rounded border border-white/20 bg-white/5 px-2 text-sm text-[var(--text)] outline-none focus:border-white/40"
+            value={titleInput}
+            onChange={(e) => setTitleInput(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRename();
+              if (e.key === 'Escape') {
+                setIsEditing(false);
+                setTitleInput(documentName || '');
+              }
+            }}
+            autoFocus
+          />
+        ) : (
+          <button
+            className="max-w-[200px] truncate rounded px-2 py-1 text-left text-sm font-semibold text-[var(--text)] hover:bg-white/5"
+            onClick={() => {
+              if (documentId) {
+                setTitleInput(documentName || '');
+                setIsEditing(true);
+              }
+            }}
+          >
+            {documentName || 'Untitled Document'}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-1.5 flex-1">
+        <div className="inline-flex h-7 items-center rounded-md border border-white/10 bg-[var(--bg-surface)] px-1 text-xs text-[var(--text-dim)]">
           <div className="flex">
             <button className="inline-flex h-[22px] w-[22px] items-center justify-center rounded text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]" type="button" title="Previous page" onClick={() => onJumpPage(Math.max(0, currentPage - 1))}>
               <Icon name="chevron-left" />
             </button>
           </div>
           <input
-            key={currentPage}
-            defaultValue={currentPage + 1}
-            onBlur={(event) => {
-              const page = Number.parseInt(event.currentTarget.value, 10);
-              if (Number.isNaN(page)) {
-                return;
+            type="text"
+            value={currentPage + 1}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                onJumpPage(val - 1);
               }
-              onJumpPage(Math.max(0, Math.min(totalPages - 1, page - 1)));
             }}
+            onFocus={(e) => e.target.select()}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.currentTarget.blur();
@@ -341,14 +335,110 @@ export function ViewerToolbar({
         <button className={iconButtonClass} type="button" title="Fit to width" onClick={() => setZoom(1)}>
           <Icon name="fit" />
         </button>
-        <button className={iconButtonClass} type="button" title="Search">
-          <Icon name="search" />
-        </button>
+        
+        {showSearch && (
+          <div className="flex items-center gap-1.5 ml-2 h-7 rounded-md border border-white/20 bg-white/5 px-2 text-xs">
+            <input 
+              type="text" 
+              placeholder="Find..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-24 bg-transparent outline-none text-[var(--text)] placeholder:text-[var(--text-faint)]"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSearchNext();
+                if (e.key === 'Escape') {
+                  setShowSearch(false);
+                  setSearchQuery('');
+                }
+              }}
+            />
+            {isSearching ? (
+              <span className="text-[10px] text-[var(--text-faint)] flex items-center w-8 justify-center">
+                <span className="h-2 w-2 animate-spin rounded-full border-2 border-[var(--text-faint)] border-t-transparent" />
+              </span>
+            ) : (
+              <span className="text-[10px] text-[var(--text-faint)] tabular-nums w-8 text-center">
+                {matchCount > 0 ? `${currentMatchIndex + 1}/${matchCount}` : '0/0'}
+              </span>
+            )}
+            <button className="text-[var(--text-dim)] hover:text-[var(--text)] disabled:opacity-50" disabled={matchCount === 0} onClick={onSearchPrev}>
+              <Icon name="chevron-left" />
+            </button>
+            <button className="text-[var(--text-dim)] hover:text-[var(--text)] disabled:opacity-50" disabled={matchCount === 0} onClick={onSearchNext}>
+              <Icon name="chevron-right" />
+            </button>
+            <div className="h-3 w-px bg-white/20 mx-0.5" />
+            <button className="text-[var(--text-dim)] hover:text-[var(--text)]" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>
+              <Icon name="close" />
+            </button>
+          </div>
+        )}
+        
+        {!showSearch && (
+          <button className={iconButtonClass} type="button" title="Search" onClick={() => setShowSearch(true)}>
+            <Icon name="search" />
+          </button>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-1.5">
-        <button className={iconButtonClass} type="button" title="Print"><Icon name="print" /></button>
-        <button className={iconButtonClass} type="button" title="Download"><Icon name="download" /></button>
+        <button 
+          className={iconButtonClass} 
+          type="button" 
+          title="Print"
+          onClick={async () => {
+            const printUrl = async () => {
+              if (file) return URL.createObjectURL(file);
+              if (documentId) {
+                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                if (!res.ok) throw new Error('Fetch failed');
+                return URL.createObjectURL(await res.blob());
+              }
+              return null;
+            };
+            try {
+              const url = await printUrl();
+              if (!url) return;
+              const iframe = document.createElement('iframe');
+              iframe.style.display = 'none';
+              iframe.src = url;
+              document.body.appendChild(iframe);
+              iframe.onload = () => {
+                iframe.contentWindow?.print();
+              };
+            } catch (err) {
+              if (documentUrl) window.open(documentUrl, '_blank');
+            }
+          }}
+        >
+          <Icon name="print" />
+        </button>
+        <button 
+          className={iconButtonClass} 
+          type="button" 
+          title="Download"
+          onClick={async () => {
+            try {
+              let url = '';
+              if (file) url = URL.createObjectURL(file);
+              else if (documentId) {
+                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                if (!res.ok) throw new Error('Fetch failed');
+                url = URL.createObjectURL(await res.blob());
+              }
+              if (!url) return;
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = documentName || (file?.name) || 'document.pdf';
+              a.click();
+            } catch (err) {
+              if (documentUrl) window.open(documentUrl, '_blank');
+            }
+          }}
+        >
+          <Icon name="download" />
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className={iconButtonClass} type="button" title="Share">
@@ -374,13 +464,29 @@ export function ViewerToolbar({
               Share via email
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2.5">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h10M8 2v8M5 7l3 3 3-3" /></svg>
-              Export as PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2.5">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="14" height="10" rx="1" /><path d="M5 8h2M9 8h2M5 11h6" /></svg>
-              Copy embed code
+            <DropdownMenuItem 
+              className="gap-2.5"
+              onClick={async () => {
+                try {
+                  let url = '';
+                  if (file) url = URL.createObjectURL(file);
+                  else if (documentId) {
+                    const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                    if (!res.ok) throw new Error('Fetch failed');
+                    url = URL.createObjectURL(await res.blob());
+                  }
+                  if (!url) return;
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = documentName || (file?.name) || 'document.pdf';
+                  a.click();
+                } catch (err) {
+                  if (documentUrl) window.open(documentUrl, '_blank');
+                }
+              }}
+            >
+              <Icon name="download" />
+              Download
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -399,7 +505,7 @@ export function ViewerToolbar({
           Chat
         </button>
         <div className="mx-1 h-4 w-px bg-white/15" />
-        <div className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-fuchsia-500 text-[11px] font-semibold text-white">RV</div>
+        {user && <UserMenu user={user} onSignOut={signOut} variant="toolbar" />}
       </div>
     </div>
   );
@@ -413,6 +519,9 @@ export function Viewer({
   zoom,
   setZoom,
   scrollContainerRef,
+  searchQuery,
+  setPdf,
+  scrollToPageRef,
   highlight,
 }: {
   currentPage: number;
@@ -422,56 +531,60 @@ export function Viewer({
   zoom: number;
   setZoom: (value: number) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  searchQuery: string;
+  setPdf: (pdf: pdfjs.PDFDocumentProxy | null) => void;
+  scrollToPageRef: React.MutableRefObject<((index: number) => void) | null>;
   highlight?: TextHighlight | null;
 }) {
+  const { settings } = useSettings();
   const [showThumbs, setShowThumbs] = useState(true);
-  const { file, documentId, documentName } = useUpload();
+  const { file, documentId, documentUrl } = useUpload();
   const mergeMutation = useMergePdf();
+  const outerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const startPosRef = useRef({ x: 0, y: 0 });
 
-  const thumbScrollRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: totalPages,
-    getScrollElement: () => thumbScrollRef.current,
-    estimateSize: () => 100, // thumbnail height + gap
-    overscan: 3,
-  });
+  const [debouncedZoom, setDebouncedZoom] = useState(zoom);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedZoom(zoom), 200);
+    return () => clearTimeout(timer);
+  }, [zoom]);
 
-  // Pre-fetch the PDF as a blob URL so the Authorization header is sent through
-  // a standard fetch() call rather than relying on PDF.js worker header passing
-  // (which drops headers intermittently).
+  // ── Search text renderer ─────────────────────────────────────────────────
+  // searchQuery is a dep so the text layer re-renders on every keystroke.
+  // The canvas is unaffected — react-pdf only re-draws it when page/width/scale change.
+  const textRenderer = useCallback(({ str }: { str: string }) => {
+    if (!searchQuery) return str;
+    try {
+      const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      return str.replace(
+        regex,
+        (value) => `<mark class="bg-yellow-400/60 text-inherit rounded-sm px-0">${value}</mark>`,
+      );
+    } catch {
+      return str;
+    }
+  }, [searchQuery]);
+
+  // ── PDF blob loading ─────────────────────────────────────────────────────
   const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined);
   const [isFetchingPdf, setIsFetchingPdf] = useState(false);
   const activeBlobRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    // Local File takes full priority — no network needed
     if (file) {
-      if (activeBlobRef.current) {
-        URL.revokeObjectURL(activeBlobRef.current);
-        activeBlobRef.current = undefined;
-      }
-      setBlobUrl(undefined);
-      setIsFetchingPdf(false);
-      return;
+      if (activeBlobRef.current) { URL.revokeObjectURL(activeBlobRef.current); activeBlobRef.current = undefined; }
+      setBlobUrl(undefined); setIsFetchingPdf(false); return;
     }
-
-    if (!documentId) {
-      setBlobUrl(undefined);
-      setIsFetchingPdf(false);
-      return;
-    }
+    if (!documentId) { setBlobUrl(undefined); setIsFetchingPdf(false); return; }
 
     let cancelled = false;
     setIsFetchingPdf(true);
     setBlobUrl(undefined);
 
-    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, {
-      headers: getAuthHeaders(),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.blob();
-      })
+    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() })
+      .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
       .then((blob) => {
         if (cancelled) return;
         if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
@@ -480,106 +593,93 @@ export function Viewer({
         setBlobUrl(url);
         setIsFetchingPdf(false);
       })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error('[PDF] fetch error:', err);
-          setIsFetchingPdf(false);
-        }
-      });
+      .catch((err) => { if (!cancelled) { console.error('[PDF] fetch error:', err); setIsFetchingPdf(false); } });
 
     return () => { cancelled = true; };
-  }, [file, documentId]);
+  }, [file, documentId, documentUrl]);
 
-  // Revoke blob URL on unmount
-  useEffect(() => () => {
-    if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
-  }, []);
+  useEffect(() => () => { if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current); }, []);
 
   const pdfSource: File | string | undefined = file ?? blobUrl;
-  const isDraggingRef = useRef(false);
-  const startPosRef = useRef({ x: 0, y: 0 });
-  const outerRef = useRef<HTMLDivElement>(null);
 
+  // ── Reset on doc change ──────────────────────────────────────────────────
   useEffect(() => {
-    const handleToggle = () => setShowThumbs((value) => !value);
+    onPageCountChange(0);
+    setCurrentPage(0);
+  }, [file, documentId, onPageCountChange, setCurrentPage]);
+
+  // ── Thumbnail toggle ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleToggle = () => setShowThumbs((v) => !v);
     window.addEventListener('nib:toggle-thumbs', handleToggle);
     return () => window.removeEventListener('nib:toggle-thumbs', handleToggle);
   }, []);
 
-  useEffect(() => {
-    const outer = outerRef.current;
-    if (!outer) {
-      return;
+  // ── Jump to page ─────────────────────────────────────────────────────────
+  // All pages are always in the DOM — simple scrollIntoView works perfectly.
+  const jumpToPage = useCallback((index: number) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const target = container.querySelector<HTMLElement>(`[data-page-index="${index}"]`);
+    if (target) {
+      const top = target.offsetTop - 24;
+      container.scrollTo({ top, behavior: settings.smoothScrolling ? 'smooth' : 'auto' });
     }
+  }, [scrollContainerRef, settings.smoothScrolling]);
 
-    const onScroll = (e: Event) => {
-      const container = scrollContainerRef.current;
-      if (!container || e.target !== container) return;
+  // Expose to parent (used by nib-state scrollToPage, search navigation, citations)
+  useEffect(() => {
+    scrollToPageRef.current = jumpToPage;
+  }, [jumpToPage, scrollToPageRef]);
 
-      const pages = Array.from(container.querySelectorAll<HTMLElement>('.pdf-page-wrap'));
-      const containerRect = container.getBoundingClientRect();
-      const center = containerRect.top + containerRect.height / 2;
-      let bestIndex = 0;
-      let bestDistance = Number.POSITIVE_INFINITY;
+  // ── Scroll → current page tracking ──────────────────────────────────────
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-      pages.forEach((page, index) => {
-        const rect = page.getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-        const distance = Math.abs(midpoint - center);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = index;
-        }
+    const onScroll = () => {
+      const pages = container.querySelectorAll<HTMLElement>('[data-page-index]');
+      if (!pages.length) return;
+      const mid = container.scrollTop + container.clientHeight / 2;
+      let closest = 0;
+      let minDist = Infinity;
+      pages.forEach((page) => {
+        const center = page.offsetTop + page.offsetHeight / 2;
+        const dist = Math.abs(center - mid);
+        if (dist < minDist) { minDist = dist; closest = parseInt(page.dataset.pageIndex ?? '0', 10); }
       });
-
-      setCurrentPage(bestIndex);
+      setCurrentPage(closest);
     };
 
-    outer.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    return () => outer.removeEventListener('scroll', onScroll, { capture: true });
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
   }, [scrollContainerRef, setCurrentPage]);
 
+  // ── Ctrl+scroll to zoom ───────────────────────────────────────────────────
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
-
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const delta = e.deltaY * -0.001;
-        const newZoom = Math.max(0.5, Math.min(2.5, Number((zoom + delta).toFixed(2))));
-        setZoom(newZoom);
+        setZoom(Math.max(0.5, Math.min(2.5, Number((zoom + delta).toFixed(2)))));
       }
     };
-
     outer.addEventListener('wheel', handleWheel, { passive: false });
     return () => outer.removeEventListener('wheel', handleWheel);
   }, [setZoom, zoom]);
 
-  const jumpToPage = (index: number) => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return;
-    }
-    const target = container.querySelector<HTMLElement>(`.pdf-page-wrap[data-page-index="${index}"]`);
-    if (target) {
-      const targetRect = target.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      container.scrollBy({ top: targetRect.top - containerRect.top - 24, behavior: 'smooth' });
-    }
-  };
-
+  // ── Middle-mouse drag to pan ─────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button === 1) {
       e.currentTarget.setPointerCapture(e.pointerId);
       isDraggingRef.current = true;
       startPosRef.current = { x: e.clientX, y: e.clientY };
       document.body.style.cursor = 'grabbing';
-      // Prevent the default middle-click auto-scroll icon
       e.preventDefault();
     }
   };
-
   const handlePointerMove = (e: React.PointerEvent) => {
     if (isDraggingRef.current && scrollContainerRef.current) {
       const dx = e.clientX - startPosRef.current.x;
@@ -589,7 +689,6 @@ export function Viewer({
       startPosRef.current = { x: e.clientX, y: e.clientY };
     }
   };
-
   const handlePointerUp = (e: React.PointerEvent) => {
     if (e.button === 1 && isDraggingRef.current) {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -597,6 +696,10 @@ export function Viewer({
       document.body.style.cursor = '';
     }
   };
+
+  const pageW = Math.round(PAGE_W * zoom);
+  const renderW = Math.round(PAGE_W * debouncedZoom);
+  const scale = zoom / debouncedZoom;
 
   return (
     <div
@@ -611,164 +714,209 @@ export function Viewer({
           <NibLogoSpinner size={26} label="Loading PDF" />
         </div>
       )}
-      <Document
-          file={pdfSource}
-          loading={null}
-          onLoadSuccess={({ numPages }) => onPageCountChange(numPages)}
-          onLoadError={(err) => console.error('[PDF] load error:', err)}
-          className="h-full w-full"
-      >
-        {/*
-         * Thumbnail panel — rendered inside <Document> so <Page> thumbnails receive
-         * react-pdf's DocumentContext. position:fixed keeps it viewport-anchored without
-         * a portal, which means zero scroll-lock involvement (no Radix Dialog, no vaul).
-         */}
-        <AnimatePresence>
-          {showThumbs && totalPages > 0 && (
-            <motion.div
-              key="thumb-panel"
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
-              className="fixed bottom-0 left-0 z-20 flex w-[80px] flex-col overflow-hidden border-r border-white/8 bg-[var(--bg-base)]"
-              style={{ top: '48px' /* matches NibApp grid-rows-[48px_1fr] toolbar */ }}
-            >
-              {/* Scrollable thumbnail list */}
-              <div ref={thumbScrollRef} className="flex flex-1 flex-col overflow-y-auto py-3 px-[10px]">
-                <div
-                  style={{
-                    height: `${rowVirtualizer.getTotalSize()}px`,
-                    width: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                    const index = virtualRow.index;
-                    return (
-                      <button
-                        key={virtualRow.key}
-                        type="button"
-                        className={`thumb${index === currentPage ? ' active' : ''}`}
-                        onClick={() => jumpToPage(index)}
-                        title={`Page ${index + 1}`}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          transform: `translateY(${virtualRow.start}px)`,
-                        }}
-                      >
-                        <div className="thumb-img flex items-center justify-center overflow-hidden">
-                          <Page
-                            pageNumber={index + 1}
-                            width={50}
-                            devicePixelRatio={1}
-                            renderAnnotationLayer={false}
-                            renderTextLayer={false}
-                          />
-                        </div>
-                        <span className="thumb-num">{index + 1}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Separator + combine button */}
-              <div className="shrink-0 border-t border-white/10 pt-2 pb-3 flex flex-col items-center gap-1">
-                {mergeMutation.isError && (
-                  <p className="text-[10px] text-red-400 px-2 text-center leading-tight">
-                    {(mergeMutation.error as Error).message}
-                  </p>
+      {/* Thumbnail sidebar */}
+      <AnimatePresence>
+        {showThumbs && totalPages > 0 && (
+          <motion.div
+            key="thumb-panel"
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
+            className="fixed bottom-0 left-0 z-20 flex w-[80px] flex-col overflow-hidden border-r border-white/8 bg-[var(--bg-base)]"
+            style={{ top: '48px' }}
+          >
+            <Document file={pdfSource} loading={null} className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex flex-1 flex-col overflow-y-auto py-3 px-[10px] gap-2">
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`thumb${i === currentPage ? ' active' : ''}`}
+                    onClick={() => jumpToPage(i)}
+                    title={`Page ${i + 1}`}
+                  >
+                    <div className="thumb-img flex items-center justify-center overflow-hidden">
+                      <Page
+                        pageNumber={i + 1}
+                        width={50}
+                        devicePixelRatio={1}
+                        renderAnnotationLayer={false}
+                        renderTextLayer={false}
+                      />
+                    </div>
+                    <span className="thumb-num">{i + 1}</span>
+                  </button>
+                ))}
+              </div>
+            </Document>
+
+            <div className="shrink-0 border-t border-white/10 pt-2 pb-3 flex flex-col items-center gap-1">
+              {mergeMutation.isError && (
+                <p className="text-[10px] text-red-400 px-2 text-center leading-tight">
+                  {(mergeMutation.error as Error).message}
+                </p>
+              )}
+              <button
+                type="button"
+                title={mergeMutation.isPending ? 'Merging…' : 'Combine PDF'}
+                disabled={mergeMutation.isPending}
+                onClick={() => !mergeMutation.isPending && document.getElementById('thumb-combine-input')?.click()}
+                className="flex w-full items-center justify-center rounded-md py-1.5 text-[var(--text-faint)] transition hover:bg-white/5 hover:text-[var(--text-dim)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {mergeMutation.isPending ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <path d="M8 2v12M2 8h12" />
+                  </svg>
                 )}
-                <button
-                  type="button"
-                  title={mergeMutation.isPending ? 'Merging…' : 'Combine PDF'}
-                  disabled={mergeMutation.isPending}
-                  onClick={() => !mergeMutation.isPending && document.getElementById('thumb-combine-input')?.click()}
-                  className="flex w-full items-center justify-center rounded-md py-1.5 text-[var(--text-faint)] transition hover:bg-white/5 hover:text-[var(--text-dim)] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {mergeMutation.isPending ? (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                      <path d="M8 2v12M2 8h12" />
-                    </svg>
-                  )}
-                </button>
-                <input
-                  id="thumb-combine-input"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const picked = e.target.files?.[0];
-                    if (picked) mergeMutation.mutate(picked);
-                    e.target.value = '';
-                  }}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </button>
+              <input
+                id="thumb-combine-input"
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) mergeMutation.mutate(picked);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* paddingLeft shifts content right when the panel is open, in sync with the spring */}
+      {/* Main PDF document */}
+      <Document
+        file={pdfSource}
+        loading={null}
+        onLoadSuccess={(pdf) => { onPageCountChange(pdf.numPages); setPdf(pdf); }}
+        onLoadError={(err) => console.error('[PDF] load error:', err)}
+        className="h-full w-full"
+      >
         <div
-          className="h-full overflow-auto px-0 pb-20 pt-7"
+          className="h-full overflow-auto"
           ref={scrollContainerRef}
           style={{
             paddingLeft: showThumbs && totalPages > 0 ? 80 : 0,
             transition: 'padding-left 0.5s cubic-bezier(0.32, 0.72, 0, 1)',
           }}
         >
-          <div className="flex flex-col items-center gap-6 min-w-full w-max px-12 py-24">
-            {Array.from({ length: totalPages }, (_, index) => (
-              <div
-                key={`pdf-page-${index + 1}`}
-                className="pdf-page-wrap"
-                data-page-index={index}
-                style={{ zoom }}
-              >
-                <div className="page-num-tag">p.{index + 1}</div>
-                <div className="pdf-page relative">
-                  <Page
-                    pageNumber={index + 1}
-                    width={PAGE_W}
-                    devicePixelRatio={Math.max(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-                    renderAnnotationLayer={false}
-                    customTextRenderer={
-                      highlight &&
-                      highlight.kind === 'text' &&
-                      highlight.pageIndex === index
-                        ? makeTextRenderer(highlight.query)
-                        : undefined
-                    }
-                  />
-                  {highlight &&
-                    highlight.kind === 'bbox' &&
-                    highlight.pageIndex === index && (
-                      <BboxOverlay highlight={highlight} />
-                    )}
-                </div>
+          {totalPages === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="pdf-page flex min-h-[500px] w-[620px] flex-col items-center justify-center gap-3 rounded-lg border border-white/10 bg-[var(--bg-base)] text-sm text-[var(--text-dim)]">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-white/20">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                {pdfSource ? 'Failed to load PDF' : 'No document selected'}
               </div>
-            ))}
-            {totalPages === 0 ? (
-              <div className="pdf-page-wrap">
-                <div className="pdf-page flex min-h-[500px] w-[620px] flex-col items-center justify-center gap-3 rounded-lg border border-white/10 bg-[var(--bg-base)] text-sm text-[var(--text-dim)]">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-white/20">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                  {pdfSource ? 'Failed to load PDF' : 'No document selected'}
-                </div>
-              </div>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6 py-12 px-6">
+              {Array.from({ length: totalPages }, (_, i) => (
+                <PdfPageWrapper
+                  key={`pdf-page-wrapper-${i}`}
+                  index={i}
+                  pageW={pageW}
+                  renderW={renderW}
+                  scale={scale}
+                  textRenderer={textRenderer}
+                  highlight={settings.citationHighlight ? highlight : null}
+                  showPageNumbers={settings.showPageNumbers}
+                  readingMode={settings.readingMode}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Document>
-      {/* Floating add-document FAB removed — now lives in thumbnail bar */}
+    </div>
+  );
+}
+
+function PdfPageWrapper({
+  index,
+  pageW,
+  renderW,
+  scale,
+  textRenderer,
+  highlight,
+  showPageNumbers,
+  readingMode,
+}: {
+  index: number;
+  pageW: number;
+  renderW: number;
+  scale: number;
+  textRenderer: (props: any) => string;
+  highlight?: TextHighlight | null;
+  showPageNumbers: boolean;
+  readingMode: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      {
+        rootMargin: '150% 0px', // Keep text layer active slightly off-screen
+      }
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="pdf-page-wrap mx-auto w-fit"
+      data-page-index={index}
+    >
+      {showPageNumbers && <div className="page-num-tag">p.{index + 1}</div>}
+      <div 
+        className="pdf-page"
+        style={{
+          width: pageW,
+          height: Math.round(pageW * 1.3),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }}
+      >
+        <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+          <Page
+            className={readingMode === 'minimal' ? '!bg-transparent !shadow-none' : ''}
+            pageNumber={index + 1}
+            width={renderW}
+            devicePixelRatio={Math.max(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
+            renderAnnotationLayer={false}
+            renderTextLayer={isVisible}
+            customTextRenderer={
+              highlight && highlight.kind === 'text' && highlight.pageIndex === index
+                ? makeTextRenderer(highlight.query)
+                : textRenderer
+            }
+            loading={
+              <div
+                style={{ width: renderW, height: Math.round(renderW * 1.3) }}
+                className="animate-pulse rounded bg-[var(--bg-elevated)]"
+              />
+            }
+          />
+          {highlight && highlight.kind === 'bbox' && highlight.pageIndex === index && (
+            <BboxOverlay highlight={highlight} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

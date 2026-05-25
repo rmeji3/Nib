@@ -11,6 +11,12 @@
       "Bash(findstr vaul *)",
       "Bash(npm install *)",
       "Bash(npm list *)",
+      "Bash(Get-Item \"A:\\\\Coding\\\\ai-pdf-viewer\\\\frontend\\\\app\\\\home\\\\page.tsx\")",
+      "Bash(Select-Object Length, LastWriteTime)",
+      "Bash(findstr -i \"radix\\\\|popover\\\\|combobox\\\\|cmdk\")",
+      "Bash(node -e \"const r = require\\('radix-ui'\\); console.log\\(Object.keys\\(r\\).filter\\(k => k.toLowerCase\\(\\).includes\\('popover'\\) || k.toLowerCase\\(\\).includes\\('select'\\)\\)\\)\")",
+      "Bash(npx next *)",
+      "Bash(node -e \"const p = require\\('A:/Coding/ai-pdf-viewer/frontend/package.json'\\); console.log\\(Object.keys\\(p.dependencies\\).join\\('\\\\n'\\)\\)\")",
       "Skill(pdf)",
       "Skill(pdf:*)"
     ]

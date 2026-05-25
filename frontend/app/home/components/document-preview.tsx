@@ -1,74 +1,57 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { API_URL, getAuthHeaders } from '../../../lib/api/documents';
+import { fetchBlobUrl, getCachedBlobUrl, hasCachedBlobUrl } from './pdf-blob-cache';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export default function DocumentPreview({ 
+export default function DocumentPreview({
   documentId,
-  className = "mb-4 aspect-[4/3] rounded-md bg-gradient-to-b from-[#1d2129] to-[#15181f] flex items-start justify-center overflow-hidden relative",
+  className = 'mb-4 h-72 w-full rounded-md bg-gradient-to-b from-[#1d2129] to-[#15181f] flex items-start justify-center overflow-hidden relative',
   pageWidth = 200,
-  pageClassName = "shadow-md overflow-hidden rounded-sm border border-white/10 mt-4"
-}: { 
+  pageClassName = 'shadow-md overflow-hidden rounded-sm border border-white/10 mt-4',
+}: {
   documentId: string;
   className?: string;
   pageWidth?: number;
   pageClassName?: string;
 }) {
-  const [loaded, setLoaded] = useState(false);
-  const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined);
-  const activeBlobRef = useRef<string | undefined>(undefined);
+  // Initialise directly from cache — zero flicker on revisit.
+  const [blobUrl, setBlobUrl] = useState<string | undefined>(() => getCachedBlobUrl(documentId));
+  const [loaded, setLoaded] = useState(() => hasCachedBlobUrl(documentId));
 
   useEffect(() => {
+    if (hasCachedBlobUrl(documentId)) return;
+
     let cancelled = false;
+    fetchBlobUrl(documentId)
+      .then(url => { if (!cancelled) setBlobUrl(url); })
+      .catch(err => console.error('[DocumentPreview] fetch error:', err));
 
-    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, {
-      headers: getAuthHeaders(),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
-        const url = URL.createObjectURL(blob);
-        activeBlobRef.current = url;
-        setBlobUrl(url);
-      })
-      .catch((err) => {
-        if (!cancelled) console.error('[PDF Preview] fetch error:', err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [documentId]);
-
-  useEffect(() => {
-    return () => {
-      if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current);
-    };
-  }, []);
 
   return (
     <div className={className}>
       {!loaded && (
         <div className="absolute inset-0 flex items-start justify-center overflow-hidden animate-pulse">
-          <div className="mt-4 w-[70%] max-w-[200px] h-[85%] bg-white/5 rounded-sm shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/10" />
+          <div className="mt-4 w-[200px] max-w-full h-[calc(100%-1.5rem)] bg-white/5 rounded-sm border border-white/10" />
         </div>
       )}
-      <div className={`w-full h-full flex items-start justify-center transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}>
+      <div
+        className={`w-full h-full flex items-start justify-center transition-opacity duration-500 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
         {blobUrl && (
           <Document file={blobUrl} loading={null} className="flex items-start justify-center w-full">
-            <Page 
-              pageNumber={1} 
+            <Page
+              pageNumber={1}
               width={pageWidth}
-              devicePixelRatio={1} 
-              renderAnnotationLayer={false} 
-              renderTextLayer={false} 
+              devicePixelRatio={1}
+              renderAnnotationLayer={false}
+              renderTextLayer={false}
               onLoadSuccess={() => setLoaded(true)}
               className={pageClassName}
             />

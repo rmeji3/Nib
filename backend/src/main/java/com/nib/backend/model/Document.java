@@ -47,6 +47,9 @@ public class Document {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "last_opened_at")
+    private LocalDateTime lastOpenedAt;
+
     @Column(name = "is_starred", nullable = false, columnDefinition = "boolean default false")
     private boolean isStarred = false;
 

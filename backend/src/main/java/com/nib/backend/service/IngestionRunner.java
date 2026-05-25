@@ -13,11 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDResources;
-import org.apache.pdfbox.pdmodel.graphics.PDXObject;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
-import org.apache.pdfbox.cos.COSName;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -26,12 +21,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * Separate component so @Async runs through Spring's proxy.
@@ -64,13 +58,8 @@ public class IngestionRunner {
     private static final String BLOCK_VISUAL = "visual_summary";
     private static final String BLOCK_DOC_SUMMARY = "document_summary";
 
-    /**
-     * Max chunks per Mistral embeddings API call.
-     * The API limit is 512, but at very high batch sizes the per-request latency
-     * starts to compete with the savings from fewer round-trips. 256 is the
-     * sweet spot in practice for our typical 1.5–4 KB chunks.
-     */
-    private static final int EMBED_BATCH_SIZE = 256;
+    /** Max chunks per Mistral embeddings API call (API limit is 512). */
+    private static final int EMBED_BATCH_SIZE = 128;
 
     /**
      * Minimum trimmed length for a page's extracted text to be worth indexing.
@@ -80,25 +69,16 @@ public class IngestionRunner {
      */
     private static final int MIN_TEXT_LENGTH = 30;
 
-    /**
-     * If a page has at least this much clean, non-character-spaced text AND no
-     * embedded images, we skip Gemini Vision on it entirely — the text extract
-     * alone is enough, and we save 5-10 s per page. The threshold is
-     * deliberately high (300 chars ≈ a substantial paragraph) so we never skip
-     * a sparse page that might actually have a chart with little surrounding text.
-     */
-    private static final int TEXT_ONLY_SKIP_VISION_THRESHOLD = 300;
-
     @Value("${ingestion.vision.enabled:true}")
     private boolean visionEnabled;
 
     /**
      * How many Gemini Vision API calls can be in-flight at once. Each call takes
      * 5–10 seconds, so concurrency directly multiplies indexing throughput.
-     * Default raised from 8 → 12 to push further into Gemini's paid-tier rate
-     * envelope (~2000 RPM). If you see 429s in the logs, drop this to 8.
+     * 8 is a safe default for paid Gemini quotas (~2000 RPM); lower if you see
+     * rate limit errors.
      */
-    @Value("${ingestion.vision.concurrency:12}")
+    @Value("${ingestion.vision.concurrency:8}")
     private int visionConcurrency;
 
     @Async("ingestionExecutor")
@@ -142,14 +122,9 @@ public class IngestionRunner {
             List<PendingBlock> pending = new ArrayList<>();
 
             // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
-            // Progress accounting: pagesProcessed ticks up each time a vision task
-            // completes, so the frontend's polling sees real-time progress instead
-            // of a single jump at the end. We coalesce DB writes (every page or
-            // every ~500 ms) so the IngestionJob table doesn't get hammered.
             List<CompletableFuture<String>> visionFutures = new ArrayList<>(totalPages);
             ExecutorService visionExecutor = null;
             long visionStart = System.currentTimeMillis();
-            AtomicInteger completedCounter = new AtomicInteger(0);
             if (visionEnabled) {
                 int concurrency = Math.max(1, Math.min(visionConcurrency, totalPages));
                 visionExecutor = Executors.newFixedThreadPool(concurrency, r -> {
@@ -157,51 +132,25 @@ public class IngestionRunner {
                     t.setDaemon(true);
                     return t;
                 });
-                log.info("Dispatching vision tasks with concurrency {} for document {}",
-                        concurrency, documentId);
+                log.info("Dispatching {} vision tasks with concurrency {} for document {}",
+                        totalPages, concurrency, documentId);
                 try (PDDocument pdfDoc = Loader.loadPDF(pdfBytes)) {
                     final ExecutorService exec = visionExecutor;
-                    final UUID finalJobId = jobId;
-                    final int finalTotalPages = totalPages;
-                    int dispatched = 0;
-                    int skipped = 0;
                     for (int i = 0; i < totalPages; i++) {
-                        // Fast path: if PDFBox got clean abundant text from this page AND
-                        // the page has no embedded images, vision adds almost nothing
-                        // and we can save ~5-10 s by skipping it.
-                        if (canSkipVisionForPage(pages.get(i), pdfDoc.getPage(i))) {
-                            skipped++;
-                            int done = completedCounter.incrementAndGet();
-                            updateProgress(finalJobId, done, finalTotalPages);
-                            visionFutures.add(CompletableFuture.completedFuture(null));
-                            continue;
-                        }
-
                         byte[] pngBytes;
                         try {
                             pngBytes = visionService.renderPageFromDocument(pdfDoc, i);
                         } catch (Exception ex) {
                             log.warn("Failed to render page {} — skipping its visual block: {}",
                                     i + 1, ex.getMessage());
-                            // Still tick progress so the user sees movement even on skipped pages.
-                            int done = completedCounter.incrementAndGet();
-                            updateProgress(finalJobId, done, finalTotalPages);
                             visionFutures.add(CompletableFuture.completedFuture(null));
                             continue;
                         }
                         final int pageNumber = i + 1;
                         final byte[] image = pngBytes;
-                        CompletableFuture<String> future = CompletableFuture
-                                .supplyAsync(() -> visionService.analyzeRenderedImage(image, pageNumber), exec)
-                                .whenComplete((result, err) -> {
-                                    int done = completedCounter.incrementAndGet();
-                                    updateProgress(finalJobId, done, finalTotalPages);
-                                });
-                        visionFutures.add(future);
-                        dispatched++;
+                        visionFutures.add(CompletableFuture.supplyAsync(
+                                () -> visionService.analyzeRenderedImage(image, pageNumber), exec));
                     }
-                    log.info("Vision dispatch summary: {} pages dispatched, {} pages skipped (text-only, no images)",
-                            dispatched, skipped);
                 }
             }
 
@@ -370,87 +319,6 @@ public class IngestionRunner {
             job.setCompletedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);
         }
-    }
-
-    /**
-     * Persist incremental ingestion progress so the frontend's status polling sees
-     * real-time updates. We accept the small overhead of one UPDATE per page
-     * completion — at 8-way concurrency on a 10-page PDF that's ~10 writes
-     * spread over ~30 s, which is fine. Errors are swallowed: a failed progress
-     * write must never crash ingestion itself.
-     */
-    private void updateProgress(UUID jobId, int pagesProcessed, int pagesTotal) {
-        try {
-            IngestionJob job = ingestionJobRepository.findById(jobId).orElse(null);
-            if (job == null) return;
-            // Cap at total — a race where the counter briefly exceeds total would
-            // make the UI show >100% otherwise.
-            int capped = Math.min(pagesProcessed, pagesTotal);
-            if (job.getPagesProcessed() != null && job.getPagesProcessed() >= capped) return;
-            job.setPagesProcessed(capped);
-            ingestionJobRepository.save(job);
-        } catch (Exception ex) {
-            log.debug("Failed to write progress update for job {} ({}): {}",
-                    jobId, pagesProcessed, ex.getMessage());
-        }
-    }
-
-    /**
-     * Heuristic: skip Gemini Vision on a page when:
-     *  • PDFBox extracted abundant clean text from it (≥ TEXT_ONLY_SKIP_VISION_THRESHOLD
-     *    characters, not character-spaced), AND
-     *  • The PDF page has no embedded image XObjects, AND
-     *  • The page is not one of the first two — titles, logos, brand names and
-     *    cover content live there, and our image-detection heuristic misses
-     *    vector logos (e.g. a stylized "Subah Cafe" rendered as path operators
-     *    rather than an embedded PNG). Always running vision on the first two
-     *    pages costs at most 2 extra Gemini calls but guarantees we never lose
-     *    the document's identity to a heuristic miss.
-     *
-     * On a text-heavy 200-page report this still avoids ~90% of vision calls
-     * — each ~5-10 s — and is the single biggest indexing-speed win.
-     *
-     * Conservative: when in doubt we run vision. The failure mode of running
-     * vision unnecessarily is "wasted time"; the failure mode of skipping it
-     * when needed is "lost content from a chart/figure/logo", which is much worse.
-     */
-    private boolean canSkipVisionForPage(PositionedPage page, PDPage pdfPage) {
-        if (page.pageNumber() <= 2) return false;            // always vision on cover pages
-        String text = page.text();
-        if (text == null) return false;
-        String trimmed = text.trim();
-        if (trimmed.length() < TEXT_ONLY_SKIP_VISION_THRESHOLD) return false;
-        if (isCharacterSpaced(text)) return false;
-        try {
-            if (hasEmbeddedImages(pdfPage)) return false;
-        } catch (Exception ex) {
-            // If we can't tell, err on the side of running vision.
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * Returns true if the page contains at least one PDImageXObject. This
-     * catches photos, embedded figures, and chart bitmaps. Vector-only diagrams
-     * (drawn with PDF path operators rather than embedded as an image) won't
-     * trip this check, but they're rare in practice and almost always
-     * accompany dense text where vision adds little.
-     */
-    private boolean hasEmbeddedImages(PDPage page) {
-        PDResources resources = page.getResources();
-        if (resources == null) return false;
-        for (COSName name : resources.getXObjectNames()) {
-            try {
-                PDXObject xobj = resources.getXObject(name);
-                if (xobj instanceof PDImageXObject) return true;
-            } catch (Exception ignored) {
-                // Some malformed XObjects throw; treat them as "unknown" and
-                // bias toward running vision.
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BBox, Citation } from '../nib-types';
+import type { pdfjs } from 'react-pdf';
+import { useSettings } from '../../../settings/hooks/use-settings';
 
 const PANEL_POSITION: 'left' | 'right' = 'right';
 
@@ -24,12 +26,22 @@ export type TextHighlight =
     };
 
 export function useNibState() {
+  const { settings, loaded } = useSettings();
   const [splitRatio, setSplitRatio] = useState(60);
-  const [zoom, setZoom] = useState(0.9);
+  const [zoom, setZoom] = useState(settings.defaultZoom / 100);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(6);
   const [chatMinimized, setChatMinimized] = useState(false);
+  const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null);
   const [highlight, setHighlight] = useState<TextHighlight | null>(null);
+
+  const prevLoaded = useRef(false);
+  useEffect(() => {
+    if (loaded && !prevLoaded.current) {
+      setZoom(settings.defaultZoom / 100);
+      prevLoaded.current = true;
+    }
+  }, [loaded, settings.defaultZoom]);
 
   // Evidence drawer state — which assistant message's citations are open, and
   // which citation (by blockId) should be scrolled into view on open.
@@ -39,19 +51,11 @@ export function useNibState() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
+  /** Populated by the Viewer component once its virtualizer is ready. */
+  const scrollToPageRef = useRef<((index: number) => void) | null>(null);
 
   const scrollToPage = useCallback((page: number) => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return;
-    }
-    const pages = container.querySelectorAll<HTMLElement>(`.pdf-page-wrap`);
-    const target = pages[page];
-    if (target) {
-      const targetRect = target.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      container.scrollBy({ top: targetRect.top - containerRect.top - 24, behavior: 'smooth' });
-    }
+    scrollToPageRef.current?.(page);
   }, []);
 
   const onCiteClick = useCallback((citation: Citation) => {
@@ -144,6 +148,8 @@ export function useNibState() {
     currentPage,
     totalPages,
     chatMinimized,
+    pdf,
+    setPdf,
     highlight,
     evidenceOpen,
     evidenceCitations,
@@ -153,6 +159,7 @@ export function useNibState() {
     setTotalPages,
     setChatMinimized,
     scrollContainerRef,
+    scrollToPageRef,
     scrollToPage,
     onCiteClick,
     openEvidence,

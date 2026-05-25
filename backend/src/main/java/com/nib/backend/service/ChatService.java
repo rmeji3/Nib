@@ -29,7 +29,6 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -65,66 +64,7 @@ public class ChatService {
 
     @Value("${ingestion.top-k:5}")
     private int topK;
-
-    /**
-     * Phase 3 — refusal threshold (post-calibration). If confidence falls below
-     * this, we skip the Gemini call and return a canned "not enough info"
-     * answer. Calibrated against the new sigmoid: distances ≥ 0.75 (genuinely
-     * unrelated) produce confidence ≤ 0.22. Tune against the eval set.
-     */
-    @Value("${chat.refusal.threshold:0.22}")
-    private double refusalThreshold;
-
-    /**
-     * Sigmoid steepness for the distance → confidence map. Higher = sharper
-     * cutoff between "very relevant" and "not relevant" — 8 produces a curve
-     * that rewards distances ≤ 0.4 strongly and punishes distances ≥ 0.7.
-     */
-    @Value("${chat.confidence.sigmoid-k:8.0}")
-    private double confidenceSigmoidK;
-
-    /**
-     * The cosine distance at which the sigmoid returns 0.5. Distances below
-     * this map to high confidence, above this to low. 0.6 matches the
-     * empirical "good match" cutoff cited by RAG calibration research
-     * (results above ~0.4 distance are typically borderline; above ~0.6 are
-     * usually noise).
-     */
-    @Value("${chat.confidence.midpoint:0.6}")
-    private double confidenceMidpoint;
-
-    /** Phase 3 — re-ranker weights. */
-    @Value("${chat.rerank.visual-boost:0.10}")
-    private double rerankVisualBoost;
-
-    @Value("${chat.rerank.diversity-penalty:0.05}")
-    private double rerankDiversityPenalty;
-
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
-
-    /**
-     * Detects explicit page references in user questions ("page 5", "pages 3").
-     * When found, we augment the retrieved chunks with all blocks from those pages
-     * so Gemini has the right context even when the embedding didn't rank them in
-     * top-k (embeddings don't understand page numbers as structured metadata).
-     */
-    private static final Pattern PAGE_REF_PATTERN = Pattern.compile(
-            "\\bpages?\\s+(\\d+)\\b", Pattern.CASE_INSENSITIVE);
-
-    /**
-     * Maximum text blocks to pull in per referenced page. Visual and document
-     * summary blocks are always included (typically 1–2 per page). 20 text
-     * blocks ≈ 10k chars — plenty for page-level questions without blowing
-     * up the Gemini prompt.
-     */
-    private static final int MAX_TEXT_BLOCKS_PER_PAGE_REF = 20;
-
-    /** Split answer into sentence-ish units for groundedness scoring. */
-    private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+(?=[A-Z\\[])");
-
-    private static final String REFUSAL_TEXT =
-            "I don't have enough information in the indexed pages to answer this confidently. " +
-                    "Try rephrasing your question or asking about a topic that appears in this document.";
 
     /**
      * Phrases that signal the user wants to aggregate or compare across the whole
@@ -143,47 +83,12 @@ public class ChatService {
             "compare", "comparison"
     );
 
-    /**
-     * Meta / summary questions where the user wants an overview, not a fact lookup.
-     * For these queries page-level citations on every sentence feel noisy and
-     * robotic — so the prompt asks for minimal citations (just at the end or when
-     * quoting a specific number/name).
-     */
-    private static final List<String> META_PHRASES = List.of(
-            "what is this", "what's this", "what is the document",
-            "what is this pdf", "what's this pdf", "what is this document",
-            "summarize", "summary", "summarise", "overview",
-            "what are the main", "main topics", "key points",
-            "tell me about", "describe this", "what does this cover",
-            "what is it about", "what's it about", "about this document",
-            "brief me", "tldr", "tl;dr", "in a nutshell"
-    );
-
-    private static boolean isMetaQuery(String question) {
-        String lower = question.toLowerCase().trim();
-        for (String phrase : META_PHRASES) {
-            if (lower.contains(phrase)) return true;
-        }
-        return false;
-    }
-
     private static boolean isAggregationQuery(String question) {
         String lower = question.toLowerCase();
         for (String phrase : AGGREGATION_PHRASES) {
             if (lower.contains(phrase)) return true;
         }
         return false;
-    }
-
-    /** Extract page numbers explicitly mentioned in the question ("page 5", "pages 3"). */
-    private static List<Integer> extractPageReferences(String question) {
-        List<Integer> pages = new ArrayList<>();
-        Matcher m = PAGE_REF_PATTERN.matcher(question);
-        while (m.find()) {
-            int page = Integer.parseInt(m.group(1));
-            if (!pages.contains(page)) pages.add(page);
-        }
-        return pages;
     }
 
     // ── Sessions ──────────────────────────────────────────────────────────────
@@ -354,13 +259,6 @@ public class ChatService {
         // Extract citations referenced in the answer
         List<CitationDto> citations = extractCitations(answer, chunks);
 
-        // Phase 3 — citation enforcement / groundedness scoring
-        double groundedness = computeGroundedness(answer);
-        if (groundedness < 0.5) {
-            log.warn("Low groundedness ({}) — answer has citations on fewer than half its sentences",
-                    String.format("%.2f", groundedness));
-        }
-
         // Persist the assistant turn
         ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(sessionId)
@@ -376,10 +274,7 @@ public class ChatService {
                 answer,
                 citations,
                 geminiModel,
-                assistantMsg.getCreatedAt().toString(),
-                confidence,
-                groundedness,
-                false
+                assistantMsg.getCreatedAt().toString()
         );
     }
 
@@ -714,19 +609,15 @@ public class ChatService {
         sb.append("and may include readings of charts, tables, prices, and other graphical content.\n\n");
 
         for (VectorSearchService.ChunkMatch chunk : chunks) {
-            String label = switch (chunk.blockType()) {
-                case "visual_summary" -> "visual description";
-                case "document_summary" -> "document overview";
-                default -> "text extract";
-            };
-            sb.append("--- Page ").append(chunk.pageNumber())
-              .append(" (").append(label).append(") ---\n");
-            sb.append(chunk.extractedText()).append("\n\n");
+            boolean isVisual = "visual_summary".equals(chunk.blockType());
+            sb.append("\n--- Page ").append(chunk.pageNumber())
+              .append(isVisual ? " (visual description)" : " (text extract)")
+              .append(" ---\n");
+            sb.append(chunk.extractedText()).append("\n");
         }
 
-        sb.append("# Question\n");
-        sb.append(question).append("\n\n");
-        sb.append("# Answer\n");
+        sb.append("\n=== END OF DOCUMENT CONTENT ===\n");
+        sb.append("\nQuestion: ").append(question).append("\n\nAnswer:");
         return sb.toString();
     }
 
@@ -791,9 +682,7 @@ public class ChatService {
 
             Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
                     .filter(c -> c.pageNumber() == pageNumber)
-                    // Exclude both visual_summary AND document_summary so the citation
-                    // excerpt is always real page text, not synthesised content.
-                    .filter(c -> "text".equals(c.blockType()))
+                    .filter(c -> !"visual_summary".equals(c.blockType()))
                     .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
                     .findFirst();
 
