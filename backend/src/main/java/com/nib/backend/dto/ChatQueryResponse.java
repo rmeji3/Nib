@@ -9,5 +9,8 @@ public record ChatQueryResponse(
         String answer,
         List<CitationDto> citations,
         String modelVersion,
-        String createdAt
+        String createdAt,
+        double confidence,
+        double groundedness,
+        boolean refused
 ) {}

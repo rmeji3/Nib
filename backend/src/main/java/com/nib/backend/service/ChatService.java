@@ -29,6 +29,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,29 @@ public class ChatService {
 
     @Value("${ingestion.top-k:5}")
     private int topK;
+
+    @Value("${chat.refusal.threshold:0.22}")
+    private double refusalThreshold;
+
+    @Value("${chat.rerank.visual-boost:0.10}")
+    private double rerankVisualBoost;
+
+    @Value("${chat.rerank.diversity-penalty:0.05}")
+    private double rerankDiversityPenalty;
+
+    @Value("${chat.confidence.sigmoid-k:8.0}")
+    private double confidenceSigmoidK;
+
+    @Value("${chat.confidence.midpoint:0.6}")
+    private double confidenceMidpoint;
+
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
+    private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
+    private static final String REFUSAL_TEXT =
+            "I cannot find enough relevant information in the indexed pages of this document to "
+            + "answer this question confidently. Try rephrasing your question, or ask about a "
+            + "topic that is covered in the document.";
+    private static final int MAX_TEXT_BLOCKS_PER_PAGE_REF = 3;
 
     /**
      * Phrases that signal the user wants to aggregate or compare across the whole
@@ -268,13 +291,18 @@ public class ChatService {
                 .modelVersion(geminiModel)
                 .build());
 
+        double groundedness = computeGroundedness(answer);
+
         return new ChatQueryResponse(
                 assistantMsg.getId(),
                 sessionId,
                 answer,
                 citations,
                 geminiModel,
-                assistantMsg.getCreatedAt().toString()
+                assistantMsg.getCreatedAt().toString(),
+                confidence,
+                groundedness,
+                false
         );
     }
 
@@ -744,5 +772,38 @@ public class ChatService {
     private ChatMessageResponse toMessageResponse(ChatMessage m) {
         return new ChatMessageResponse(m.getId(), m.getRole(), m.getContent(),
                 deserializeCitations(m.getCitations()), m.getCreatedAt().toString());
+    }
+
+    /**
+     * Extract explicit page references from the user's query, e.g. "page 5",
+     * "pages 3 and 7", "p. 12". Returns a list of 1-indexed page numbers.
+     */
+    private static List<Integer> extractPageReferences(String query) {
+        List<Integer> pages = new ArrayList<>();
+        if (query == null) return pages;
+        // Matches "page 5", "Page 12", "p. 3", "p 7"
+        Pattern p = Pattern.compile("(?i)\\bp(?:age)?\\.?\\s*(\\d+)");
+        Matcher m = p.matcher(query);
+        while (m.find()) {
+            int num = Integer.parseInt(m.group(1));
+            if (num > 0 && !pages.contains(num)) pages.add(num);
+        }
+        return pages;
+    }
+
+    /**
+     * Returns true for meta / overview questions like "summarize this", "what is
+     * this document about", "give me an overview". These queries should use relaxed
+     * citation rules (cite only specific claims) rather than the default every-
+     * sentence citation requirement.
+     */
+    private static boolean isMetaQuery(String question) {
+        if (question == null) return false;
+        String lower = question.toLowerCase();
+        return lower.contains("summarize") || lower.contains("summary")
+                || lower.contains("what is this") || lower.contains("what's this")
+                || lower.contains("overview") || lower.contains("about this document")
+                || lower.contains("about this pdf") || lower.contains("what does this document")
+                || lower.contains("describe this") || lower.contains("tell me about this");
     }
 }

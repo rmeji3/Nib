@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Separate component so @Async runs through Spring's proxy.
@@ -55,6 +56,7 @@ public class IngestionRunner {
     private static final String EMBED_MODEL = "mistral-embed";
     private static final String BLOCK_TEXT = "text";
     private static final String BLOCK_VISUAL = "visual_summary";
+    private static final String BLOCK_DOC_SUMMARY = "document_summary";
 
     /** Max chunks per Mistral embeddings API call (API limit is 512). */
     private static final int EMBED_BATCH_SIZE = 128;
@@ -252,7 +254,7 @@ public class IngestionRunner {
                             BLOCK_DOC_SUMMARY,
                             null, null, null    // no bbox — this is a synthetic block
                     ));
-                    log.info("Added document_summary block for document {}", documentId);
+                    log.info("Added document_summary block for document {} — summary:\n{}", documentId, summary);
 
                     // Phase 4 — extract document type from the summary's TYPE: line
                     // and persist it on the document for type-aware prompting.
