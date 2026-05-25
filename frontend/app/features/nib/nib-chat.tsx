@@ -8,28 +8,128 @@ import type {
   AssistantMessage,
   Citation,
   MessageSegment,
-  PromptAnswer,
   PromptLibraryEntry,
   UserMessage,
 } from './nib-types';
 
-/** Placeholder — suggestion picker only consumes `q`, but the type requires `a`. */
-const EMPTY_ANSWER: PromptAnswer = { reasoning: [], segments: [], citations: [], confidence: 0 };
-
-/**
- * Document-agnostic starter prompts shown when the chat is empty.
- *
- * These are pure question strings (no pre-baked reasoning/citations/segments) —
- * clicking one runs the prompt through the real RAG pipeline. We removed the
- * previous hardcoded "demo answers" because they masked when the backend was
- * actually broken (the UI would show fabricated citations regardless of what
- * the model returned) and only made sense for one specific cooling-research PDF.
- */
 export const PROMPT_LIBRARY: PromptLibraryEntry[] = [
-  { q: 'Summarize this document in 3 bullet points.', icon: 'sparkles', a: EMPTY_ANSWER },
-  { q: 'What are the main topics covered?', icon: 'search', a: EMPTY_ANSWER },
-  { q: 'List the key facts, numbers, or findings.', icon: 'search', a: EMPTY_ANSWER },
-  { q: 'Explain the most important figure or table.', icon: 'sparkles', a: EMPTY_ANSWER },
+  {
+    q: 'What\'s the highest peak thermal load reported?',
+    icon: 'search',
+    a: {
+      reasoning: [
+        'Searching across 6 pages, 24 text blocks, 1 table.',
+        'Top hits: Table 1 (p.4), Conclusion (p.6), §3 discussion (p.4).',
+        'Cross-checking values against §3 prose.',
+      ],
+      segments: [
+        'Across the six characterized racks, ',
+        'Rack R6 (8 × B200) reaches the highest peak load at ',
+        { strong: '62.4 kW' },
+        ' under sustained training',
+        { cite: 1 },
+        '. This exceeds the original 32 kW per-rack design budget by 95%. The H200-class racks top out at ',
+        { strong: '38.2 kW' },
+        ' on R4',
+        { cite: 1 },
+        ', which is still 4 °C inside the silicon throttle threshold',
+        { cite: 2 },
+        '.',
+      ],
+      citations: [
+        { page: 3, blockId: 'p4-table1', label: 'Table 1', snippet: 'R6 · 8 × B200 · Peak 62.4 kW (commissioned Feb 28, 9-day window).' },
+        { page: 3, blockId: 'p4-discussion', label: '§3, p.4', snippet: 'R6 exceeds the original 32 kW per-rack design budget by 95%...' },
+      ],
+      confidence: 0.92,
+    },
+  },
+  {
+    q: 'Explain Figure 3.',
+    icon: 'sparkles',
+    a: {
+      reasoning: [
+        'Locating Figure 3 on page 5.',
+        'Parsing axes: x = flow rate (L/min), y = tokens/s/GPU.',
+        'Extracting the knee inflection point and caption.',
+      ],
+      segments: [
+        'Figure 3 plots sustained training throughput against secondary coolant flow rate, swept from 1.0 to 3.6 L/min at a 27 °C inlet',
+        { cite: 1 },
+        '. The throughput curve shows a sharp ',
+        { strong: 'knee at 2.4 L/min' },
+        ': below it, throughput is flow-limited; above it, additional flow yields diminishing returns while pump power continues to rise super-linearly',
+        { cite: 1 },
+        '. Based on this, the paper adopts 2.4 L/min as the steady-state setpoint with transient surges allowed up to 3.0 L/min',
+        { cite: 2 },
+        '.',
+      ],
+      citations: [
+        { page: 4, blockId: 'p5-figure3', label: 'Figure 3, p.5', snippet: 'Sustained training throughput as a function of secondary coolant flow rate. Knee at 2.4 L/min...' },
+        { page: 4, blockId: 'p5-recommendation', label: '§4, p.5', snippet: 'We adopt 2.4 L/min as the nominal setpoint for steady-state operation...' },
+      ],
+      confidence: 0.95,
+    },
+  },
+  {
+    q: 'How is the cooling system architected?',
+    icon: 'search',
+    a: {
+      reasoning: [
+        'Reading §2 System Architecture (p.3).',
+        'Cross-referencing Figure 1 diagram blocks.',
+        'Validating temperature ranges against caption.',
+      ],
+      segments: [
+        'The system is a ',
+        { strong: 'two-stage loop' },
+        '. A primary facility loop carries water at 18–22 °C from rooftop dry coolers to a row-end CDU',
+        { cite: 1 },
+        '. The CDU isolates the facility side from a treated propylene-glycol secondary loop that feeds the racks at 25–28 °C and returns at 38–42 °C under load',
+        { cite: 1 },
+        '. At the rack, RDHx panels handle ambient-air heat shed and direct-to-chip cold plates handle GPU and NVSwitch die-level extraction',
+        { cite: 2 },
+        '. The split is intentionally undersized for D2C (68-74% goes through cold plates, the rest through RDHx) to preserve redundancy if a hose disconnects during service',
+        { cite: 3 },
+        '.',
+      ],
+      citations: [
+        { page: 2, blockId: 'p3-arch', label: '§2, p.3', snippet: 'Primary facility loop carries water at 18–22 °C from rooftop dry coolers...' },
+        { page: 2, blockId: 'p3-figure1', label: 'Figure 1, p.3', snippet: 'Two-stage cooling loop. Facility water is isolated from the treated technology coolant at the CDU...' },
+        { page: 2, blockId: 'p3-splits', label: '§2.1, p.3', snippet: 'Under typical training workloads, 68–74% of total rack heat is removed via D2C...' },
+      ],
+      confidence: 0.91,
+    },
+  },
+  {
+    q: 'What flow rate do they recommend?',
+    icon: 'sparkles',
+    a: {
+      reasoning: [
+        'Locating recommendation in §4 (p.5).',
+        'Confirming with Figure 3 caption.',
+      ],
+      segments: [
+        'The recommended steady-state setpoint is ',
+        { strong: '2.4 L/min per chassis' },
+        ', chosen at the throughput–flow knee shown in Figure 3',
+        { cite: 1 },
+        '. The adaptive controller is permitted to surge to ',
+        { strong: '3.0 L/min for up to 90 s' },
+        ' during transient thermal events; above 3.0 L/min the additional pump-power cost crosses the savings threshold versus the air-cooled baseline',
+        { cite: 1 },
+        '.',
+      ],
+      citations: [
+        {
+          page: 4,
+          blockId: 'p5-recommendation',
+          label: '§4, p.5',
+          snippet: 'We adopt 2.4 L/min as the nominal setpoint for steady-state operation...',
+        },
+      ],
+      confidence: 0.97,
+    },
+  },
 ];
 
 function MessageSegments({
@@ -113,52 +213,12 @@ function ReasoningPanel({ steps, done }: { steps: string[]; done: boolean }) {
   );
 }
 
-/**
- * Real confidence indicator driven by the backend signals from Phase 3.
- * - `value` is the backend's retrieval confidence in [0,1].
- * - `groundedness` is the fraction of sentences carrying a [Page N] citation.
- *
- * Bands: ≥0.7 ok, 0.4–0.7 medium (faded), <0.4 low (red-tinted) — these match
- * the refusal threshold (0.25) and serve as a UX warning before refusal.
- */
-function ConfidenceBar({ value, groundedness }: { value: number; groundedness?: number }) {
+function ConfidenceBar({ value }: { value: number }) {
   const percent = Math.round(value * 100);
-  const groundedPercent =
-    groundedness !== undefined ? Math.round(groundedness * 100) : null;
-  const band = value < 0.4 ? ' low' : value < 0.7 ? ' medium' : '';
-  const label = value < 0.4 ? 'low confidence' : value < 0.7 ? 'medium confidence' : 'high confidence';
   return (
-    <div className={`confidence${band}`}>
+    <div className={`confidence${value < 0.7 ? ' low' : ''}`}>
       <div className="confidence-bar"><i style={{ width: `${percent}%` }} /></div>
-      <span>
-        {percent}% · {label}
-        {groundedPercent !== null ? ` · ${groundedPercent}% grounded` : ''}
-      </span>
-    </div>
-  );
-}
-
-function LowConfidenceBanner({ refused }: { refused: boolean }) {
-  return (
-    <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-200">
-      <div className="flex items-start gap-2">
-        <span aria-hidden className="mt-0.5 text-amber-300">⚠</span>
-        <div>
-          {refused ? (
-            <>
-              <span className="font-medium">No grounded answer.</span> Retrieval similarity
-              was below the refusal threshold, so the model was not asked. Try a more
-              specific question about content that appears in this document.
-            </>
-          ) : (
-            <>
-              <span className="font-medium">Treat this answer with caution.</span> Retrieval
-              confidence was low — the indexed pages may not strongly match your question,
-              so some claims could be wrong or incomplete.
-            </>
-          )}
-        </div>
-      </div>
+      <span>{percent}% confidence · grounded</span>
     </div>
   );
 }
@@ -236,31 +296,6 @@ function UserMessageView({ msg }: { msg: UserMessage }) {
   );
 }
 
-function DocumentUpdatedBanner({
-  onStartFresh,
-}: {
-  onStartFresh: () => void;
-}) {
-  return (
-    <div className="mx-1 mb-2 rounded-lg border border-sky-500/25 bg-sky-500/10 px-3.5 py-3 text-[12.5px] leading-snug text-sky-200">
-      <div className="flex items-start gap-2.5">
-        <span aria-hidden className="mt-0.5 text-sky-300">&#x21bb;</span>
-        <div className="flex-1">
-          <span className="font-medium text-sky-100">Document re-indexed.</span>{' '}
-          Previous answers may reference outdated content.
-          <button
-            type="button"
-            onClick={onStartFresh}
-            className="ml-2 inline-flex items-center gap-1 rounded-md bg-sky-500/20 px-2 py-0.5 text-[11.5px] font-medium text-sky-100 transition hover:bg-sky-500/30"
-          >
-            Start fresh
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Suggestions({ onPick }: { onPick: (prompt: PromptLibraryEntry) => void }) {
   return (
     <div className="suggestions flex flex-col gap-2">
@@ -329,14 +364,6 @@ function Composer({ onSend, disabled }: { onSend: (value: string) => void; disab
   );
 }
 
-/**
- * Live indexing banner. The backend updates pagesProcessed after each vision
- * task completes (see IngestionRunner#updateProgress), so the bar reflects real
- * work. The stage label is inferred from progress:
- *  - 0%: Reading PDF (no pages reported yet)
- *  - 1–99%: Analyzing page X of Y (vision)
- *  - 100% but still PROCESSING: Embedding + storing (final batch step)
- */
 function IndexingBanner({
   progress,
   pagesProcessed,
@@ -346,16 +373,6 @@ function IndexingBanner({
   pagesProcessed: number;
   pagesTotal: number | null;
 }) {
-  const stage =
-    pagesTotal === null || pagesTotal === 0
-      ? { title: 'Reading PDF', detail: 'Parsing pages and extracting text…' }
-      : pagesProcessed >= pagesTotal
-        ? { title: 'Embedding & indexing', detail: 'Storing embeddings in pgvector. Almost done.' }
-        : {
-            title: `Analyzing page ${pagesProcessed + 1} of ${pagesTotal}`,
-            detail: 'Running Gemini Vision on each page in parallel — extracting tables, charts, and figures.',
-          };
-
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
       <div className="flex items-center gap-2.5">
@@ -363,26 +380,26 @@ function IndexingBanner({
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--accent)]" />
         </span>
-        <span className="text-[13.5px] font-semibold text-[var(--text)]">{stage.title}</span>
+        <span className="text-[13.5px] font-semibold text-[var(--text)]">Indexing document…</span>
       </div>
 
       {pagesTotal !== null && pagesTotal > 0 && (
-        <div className="w-56">
+        <div className="w-52">
           <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
             <span>{pagesProcessed} of {pagesTotal} pages</span>
             <span>{progress}%</span>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
       )}
 
-      <p className="max-w-[240px] text-[12px] leading-relaxed text-[var(--text-faint)]">
-        {stage.detail}
+      <p className="max-w-[220px] text-[12px] leading-relaxed text-[var(--text-faint)]">
+        Embedding text into pgvector so you can ask questions. This usually takes under a minute.
       </p>
     </div>
   );
@@ -400,8 +417,6 @@ export function ChatPanel({
   progress,
   pagesProcessed,
   pagesTotal,
-  isSessionStale = false,
-  onDismissStale,
 }: {
   messages: Array<UserMessage | AssistantMessage>;
   onSendPrompt: (value: string) => void;
@@ -414,8 +429,6 @@ export function ChatPanel({
   progress: number;
   pagesProcessed: number;
   pagesTotal: number | null;
-  isSessionStale?: boolean;
-  onDismissStale?: () => void;
 }) {
   const { settings } = useSettings();
   const [hover, setHover] = useState<{ citation: Citation; anchor: HTMLElement } | null>(null);
@@ -467,15 +480,6 @@ export function ChatPanel({
           />
         ) : (
           <>
-            {isSessionStale && !isEmpty && (
-              <DocumentUpdatedBanner
-                onStartFresh={() => {
-                  onPickSuggestion({ reset: true });
-                  onDismissStale?.();
-                }}
-              />
-            )}
-
             {isEmpty ? (
               <div className="chat-empty flex flex-col gap-4">
                 <div className="chat-welcome pb-3">

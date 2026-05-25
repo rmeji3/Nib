@@ -133,14 +133,7 @@ function mapApiMessages(
       reasoningShown: [],
       segments,
       citations,
-      // Historical messages don't have stored confidence/groundedness — fall back
-      // to "decent if cited, weak otherwise". With the new sigmoid calibration,
-      // a typical fresh, well-cited answer lands at ~0.85+, so 0.75 reads as
-      // "reasonable, not perfectly verified" — appropriate for replayed history.
-      // Live messages still get the real values straight from the backend below.
-      confidence: citations.length > 0 ? 0.75 : 0.3,
-      groundedness: undefined,
-      refused: false,
+      confidence: citations.length > 0 ? 0.85 : 0.5,
       streaming: false,
       streamDone: true,
       streamedText: msg.content,
@@ -156,7 +149,6 @@ const REASONING_STEPS = [
 
 export function useNibChat(documentId: string | null) {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionCreatedAt, setSessionCreatedAt] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -172,7 +164,6 @@ export function useNibChat(documentId: string | null) {
     getOrCreateSession(documentId)
       .then(async (session) => {
         setSessionId(session.id);
-        setSessionCreatedAt(session.createdAt);
         const apiMessages = await fetchSessionMessages(session.id);
         if (apiMessages.length > 0) setMessages(mapApiMessages(apiMessages));
       })
@@ -223,18 +214,11 @@ export function useNibChat(documentId: string | null) {
         window.clearInterval(stepTimer);
 
         const { segments, citations } = buildMessageContent(response.answer, response.citations);
-        // Reasoning text reflects what actually happened on the backend — if
-        // confidence was below the refusal threshold we skipped Gemini entirely.
-        const finalReasoning = response.refused
-          ? [
-              'Embedded query with Mistral.',
-              'Retrieval similarity too weak — refusing to answer to avoid hallucination.',
-            ]
-          : [
-              'Embedded query with Mistral.',
-              `Retrieved ${response.citations.length} source passage${response.citations.length !== 1 ? 's' : ''}.`,
-              `Generated grounded response with Gemini (confidence ${(response.confidence * 100).toFixed(0)}%, groundedness ${(response.groundedness * 100).toFixed(0)}%).`,
-            ];
+        const finalReasoning = [
+          'Embedded query with Mistral.',
+          `Retrieved ${response.citations.length} source passage${response.citations.length !== 1 ? 's' : ''}.`,
+          'Generated grounded response with Gemini.',
+        ];
 
         setMessages((prev) =>
           prev.map((m) => {
@@ -245,10 +229,7 @@ export function useNibChat(documentId: string | null) {
               reasoningShown: finalReasoning,
               segments,
               citations,
-              // Use the real backend signals — no more hardcoded 0.85.
-              confidence: response.confidence,
-              groundedness: response.groundedness,
-              refused: response.refused,
+              confidence: citations.length > 0 ? 0.85 : 0.5,
               streaming: false,
               streamDone: true,
               streamedText: response.answer,
@@ -295,5 +276,5 @@ export function useNibChat(documentId: string | null) {
     [sendPrompt],
   );
 
-  return { messages, busy, chatError, sendPrompt, onPickSuggestion, sessionCreatedAt };
+  return { messages, busy, chatError, sendPrompt, onPickSuggestion };
 }

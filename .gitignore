@@ -61,6 +61,3 @@ yarn-error.log*
 *.tsbuildinfo
 /frontend/next-env.d.ts
 
-
-# eval — credentials for the automated eval runner
-eval/.env.eval

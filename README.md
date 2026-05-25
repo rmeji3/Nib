@@ -276,49 +276,7 @@ Essential UX requirements:
 - Re-ranking, confidence thresholds, refusal tuning.
 - Hallucination benchmark and quality gates.
 
-### Phase 4: Prompt Engineering and Indexing Tuning (2-3 weeks)
-
-Goal: maximize answer quality across diverse document types using the eval set as the feedback loop. Every change is measured against a baseline score.
-
-#### 4a. Eval Set Buildout
-
-- Populate the eval suite with 50-100 real PDFs across categories: research papers, financial filings, menus/catalogues, contracts, technical specs, mixed-content reports.
-- Write 3-5 questions per PDF (factual, visual, aggregation, page-reference, meta/summary).
-- Automate the eval runner: upload, ingest, query, score against expected answers and citations.
-- Establish a pass-rate baseline before any tuning begins.
-
-#### 4b. Prompt Engineering
-
-- Document-type-aware prompts: detect the document category (academic, financial, menu, technical) and tailor the system prompt accordingly (e.g. academic papers get "cite figure/table by name", menus get "list prices exactly").
-- Few-shot examples per category: add 1-2 worked examples in the prompt showing the expected citation style and answer format for that document type.
-- Table-aware formatting: when the context contains structured data (tables, price lists), instruct Gemini to preserve the tabular structure in the answer.
-- Multi-turn conversation context: feed the last 2-3 user/assistant turns into the prompt so follow-up questions ("what about the next page?", "compare that with page 3") work naturally.
-- Refusal tuning: calibrate the refusal threshold and refusal wording against the eval set — too aggressive kills valid questions, too lenient allows hallucination.
-
-#### 4c. Indexing and Retrieval Tuning
-
-- Chunk size optimization: experiment with 256, 512, 1024 token chunks and measure retrieval precision on the eval set.
-- Chunk overlap: test 0%, 10%, 20% overlap between adjacent chunks to reduce boundary-split information loss.
-- Table-aware chunking: detect table regions in the PDF and chunk them as atomic units instead of splitting rows across chunks.
-- Embedding model comparison: benchmark Mistral embeddings against alternatives (e.g. Voyage, Cohere, OpenAI) on retrieval precision for the eval set.
-- TopK calibration: scale topK with document size (5 for short docs, 15+ for 50-page reports) and measure the impact on answer quality.
-- Page-diversity in retrieval: ensure the top-k results span multiple pages rather than clustering on one high-content page.
-- Hybrid search: combine dense vector search with sparse keyword search (BM25) for better recall on exact terms (product names, codes, identifiers).
-
-#### 4d. Vision Pipeline Tuning
-
-- Vision prompt per document type: tailor the Gemini Vision prompt to extract the right details (prices for menus, data points for charts, section headers for reports).
-- Image quality thresholds: skip vision on pages where the rendered image is too blurry or low-contrast to produce useful descriptions.
-- Chart-specific extraction: detect chart types (bar, line, pie, scatter) and add specialized extraction instructions to the vision prompt.
-
-#### 4e. Quality Gates
-
-- No prompt or indexing change ships without a before/after eval run.
-- Target: >=90% pass rate on the full eval set (up from the Phase 3 baseline of >=80%).
-- Track latency regression: P95 chat response must stay <=4s.
-- Commit eval results with every tuning change for auditability.
-
-### Phase 5: Production Readiness (1-2 weeks)
+### Phase 4: Production Readiness (1-2 weeks)
 
 - Observability, cost controls, autoscaling, incident playbooks.
 - Security review and accessibility pass.
@@ -333,10 +291,7 @@ Goal: maximize answer quality across diverse document types using the eval set a
 
 ## 13) Immediate Next Steps
 
-1. ~~Finalize the ingestion schema and citation contract.~~ Done (Phase 1).
-2. ~~Implement Phase 0 foundation features.~~ Done.
-3. ~~Ship Phase 1 quickly, then iterate on multimodal quality in Phase 2.~~ Done.
-4. ~~Re-ranking, confidence, refusal tuning (Phase 3).~~ Done.
-5. Build the full eval set (50-100 PDFs) and establish the Phase 4 baseline.
-6. Iterate on prompt engineering and indexing tuning until >=90% eval pass rate.
-7. Production readiness pass (Phase 5).
+1. Finalize the ingestion schema and citation contract.
+2. Implement Phase 0 foundation features.
+3. Build a small gold evaluation set of 50 to 100 PDFs with graphs/tables.
+4. Ship Phase 1 quickly, then iterate on multimodal quality in Phase 2.

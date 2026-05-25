@@ -49,6 +49,63 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
+<<<<<<< HEAD
+#### Controller: [`CollectionController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/CollectionController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/collections/{id}/documents` |
+| `GET` | `/api/v1/collections` |
+| `POST` | `/api/v1/collections/{id}/documents` |
+| `POST` | `/api/v1/collections` |
+| `DELETE` | `/api/v1/collections/{id}` |
+| `DELETE` | `/api/v1/collections/{id}/documents/{documentId}` |
+| `PATCH` | `/api/v1/collections/{id}` |
+
+#### Controller: [`DocumentController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/documents/trash` |
+| `GET` | `/api/v1/documents/recent` |
+| `GET` | `/api/v1/documents/starred` |
+| `GET` | `/api/v1/documents/{id}` |
+| `GET` | `/api/v1/documents/{id}/content` |
+| `GET` | `/api/v1/documents` |
+| `POST` | `/api/v1/documents/upload` |
+| `POST` | `/api/v1/documents/{id}/open` |
+| `POST` | `/api/v1/documents/{id}/restore` |
+| `POST` | `/api/v1/documents/merge` |
+| `DELETE` | `/api/v1/documents/{id}` |
+| `DELETE` | `/api/v1/documents/{id}/permanent` |
+| `PATCH` | `/api/v1/documents/{id}` |
+| `PATCH` | `/api/v1/documents/{id}/star` |
+
+#### Controller: [`IngestionController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/documents/{id}/status` |
+| `POST` | `/api/v1/documents/{id}/ingest` |
+
+#### Controller: [`TestController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/test/hello` |
+| `POST` | `/api/v1/test/email` |
+
+### Database Entities (`backend/src/.../model`)
+- [`Collection`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Collection.java)
+- [`CollectionDocument`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/CollectionDocument.java)
+- [`Document`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Document.java)
+- [`User`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/User.java)
+
+### Data Access Repositories (`backend/src/.../repository`)
+
+- [`CollectionDocumentRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/CollectionDocumentRepository.java)
+- [`CollectionRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/CollectionRepository.java)
+- [`DocumentRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
+- [`UserRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
+
+### Business Services (`backend/src/.../service`)
+
 - [`AuthService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/AuthService.java)
 - [`CollectionService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/CollectionService.java)
 - [`DocumentService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/DocumentService.java)
@@ -82,7 +139,6 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
-- **2026-05-22**: Phase 3 accuracy hardening. `ChatService` extended with: `rerank()` (visual boost +0.10 / per-page diversity penalty -0.05), `computeConfidence()` (1 - mean cosine distance of top-3 chunks, clamped to [0,1]), `computeGroundedness()` (fraction of answer sentences containing `[Page N]`), and a refusal guard that returns a canned "not enough info" answer when confidence falls below `chat.refusal.threshold` (default 0.25) and the query isn't an aggregation query. Prompt rule #3 added: every factual sentence MUST end with a `[Page X]` citation. `ChatQueryResponse` extended with `confidence`, `groundedness`, `refused`. `IngestionRunner.updateProgress()` writes `pages_processed` to `ingestion_jobs` after each Gemini Vision task completes (via `CompletableFuture#whenComplete`), giving the frontend real-time progress instead of a single end-of-run jump. New tunables in `application.properties`: `chat.refusal.threshold`, `chat.rerank.visual-boost`, `chat.rerank.diversity-penalty`.
 - **2026-05-20**: Renamed package structure from `com.aipdfviewer.backend` to `com.nib.backend`. Removed deprecated `spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS` config due to Jackson 3/Spring Boot 4.0.6 upgrade compatibility. Moved JWT Secret Key to environment variable `JWT_SECRET_KEY` in `.env` and loaded it dynamically in `application.properties` with a newly generated cryptographically secure 256-bit key.
 - **2026-05-20**: Added collections service. New: `Collection` + `CollectionDocument` entities, `CollectionRepository`, `CollectionDocumentRepository`, `CollectionSummary`/`CreateCollectionRequest`/`AddToCollectionRequest` DTOs, `CollectionService`, `CollectionController`. `CollectionDocument` uses `@OnDelete(CASCADE)` on both FKs for DB-level cascade cleanup. `CollectionNotFoundException` + handler in `GlobalExceptionHandler`. Endpoints: CRUD on collections + add/remove/list documents per collection.
 - **2026-05-20**: Added recent documents feature. New: `lastOpenedAt` field on `Document` entity, `GET /api/v1/documents/recent` endpoint returning docs ordered by `lastOpenedAt DESC`, `POST /api/v1/documents/{id}/open` endpoint that stamps `lastOpenedAt` via a direct JPQL `@Modifying` query (avoids triggering `@PreUpdate` on `updatedAt`). Updated `DocumentResponse` DTO to include `lastOpenedAt`. Updated `DocumentRepository` with `findByUserAndLastOpenedAtIsNotNullAndDeletedAtIsNullOrderByLastOpenedAtDesc` and `updateLastOpenedAt` methods.
