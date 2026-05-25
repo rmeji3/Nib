@@ -10,10 +10,6 @@
     "build": "npm run build --workspace=frontend",
     "start": "npm run start --workspace=frontend",
     "lint": "npm run lint --workspace=frontend",
-    "update-guides": "node scripts/update-guides.js",
-    "eval": "node eval/run-eval.mjs"
-  },
-  "devDependencies": {
-    "js-yaml": "^4.1.0"
+    "update-guides": "node scripts/update-guides.js"
   }
 }

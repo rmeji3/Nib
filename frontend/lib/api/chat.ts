@@ -47,12 +47,6 @@ export interface ChatQueryResponse {
   citations: ApiCitation[];
   modelVersion: string;
   createdAt: string;
-  /** Phase 3 — confidence in [0,1] derived from top-k retrieval similarity. */
-  confidence: number;
-  /** Phase 3 — fraction of answer sentences that carry a [Page N] citation, in [0,1]. */
-  groundedness: number;
-  /** Phase 3 — true when retrieval was too weak and Gemini was skipped (canned refusal). */
-  refused: boolean;
 }
 
 export interface ApiChatMessage {
