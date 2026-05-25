@@ -6,6 +6,7 @@ import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.exception.StorageException;
 import com.nib.backend.model.Document;
 import com.nib.backend.model.User;
+import com.nib.backend.repository.ContentBlockRepository;
 import com.nib.backend.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +34,8 @@ import java.util.stream.Collectors;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final ContentBlockRepository contentBlockRepository;
+    private final JdbcTemplate jdbcTemplate;
     private final SupabaseStorageService storageService;
     private final IngestionService ingestionService;
 
@@ -207,7 +211,22 @@ public class DocumentService {
         log.info("Permanently deleted document {} for user {}", id, user.getId());
     }
 
-    public DocumentResponse mergeDocuments(UUID baseDocumentId, MultipartFile baseFile, MultipartFile mergeFile, User user) {
+    /**
+     * Merges one or more additional PDFs into an existing document (or a freshly uploaded base
+     * file), saves the result to storage, wipes the old index, and re-triggers ingestion so the
+     * chatbot immediately reflects all merged content.
+     *
+     * @param baseDocumentId existing document ID to merge into (mutually exclusive with baseFile)
+     * @param baseFile        raw PDF bytes for a brand-new base (mutually exclusive with baseDocumentId)
+     * @param mergeFiles      one or more PDFs to append (supports 3+ in a single request)
+     */
+    public DocumentResponse mergeDocuments(
+            UUID baseDocumentId,
+            MultipartFile baseFile,
+            List<MultipartFile> mergeFiles,
+            User user
+    ) {
+        // ── Resolve base document ────────────────────────────────────────────
         byte[] baseBytes;
         String baseFilename;
         Document baseDoc = null;
@@ -225,13 +244,22 @@ public class DocumentService {
             throw new IllegalArgumentException("Either baseDocumentId or baseFile is required");
         }
 
-        if (mergeFile == null || mergeFile.isEmpty()) throw new IllegalArgumentException("Merge file cannot be empty");
-        if (!isPdf(mergeFile)) throw new IllegalArgumentException("Merge file must be a PDF");
+        if (mergeFiles == null || mergeFiles.isEmpty())
+            throw new IllegalArgumentException("At least one merge file is required");
 
-        byte[] mergedBytes = mergePdfs(baseBytes, readBytes(mergeFile));
+        // ── Merge all files sequentially ─────────────────────────────────────
+        byte[] mergedBytes = baseBytes;
+        for (MultipartFile mf : mergeFiles) {
+            if (mf == null || mf.isEmpty()) continue;
+            if (!isPdf(mf)) throw new IllegalArgumentException("All merge files must be PDFs");
+            mergedBytes = mergePdfs(mergedBytes, readBytes(mf));
+        }
+
+        // ── Persist merged PDF to storage ────────────────────────────────────
         String storagePath = user.getId() + "/" + UUID.randomUUID() + ".pdf";
         storageService.uploadFile(storagePath, mergedBytes, "application/pdf");
 
+        // ── Update or create document record ─────────────────────────────────
         Document document;
         if (baseDoc != null) {
             String oldPath = baseDoc.getStoragePath();
@@ -246,7 +274,10 @@ public class DocumentService {
                 log.warn("Could not delete old storage object {}", oldPath, ex);
             }
         } else {
-            String originalFilename = stripPdf(baseFilename) + " (merged).pdf";
+            String mergeLabel = mergeFiles.size() > 1
+                    ? " (+" + mergeFiles.size() + " more merged).pdf"
+                    : " (merged).pdf";
+            String originalFilename = stripPdf(baseFilename) + mergeLabel;
             document = documentRepository.save(Document.builder()
                     .user(user)
                     .filename("merged_" + System.currentTimeMillis() + ".pdf")
@@ -257,7 +288,26 @@ public class DocumentService {
                     .build());
         }
 
-        log.info("Merged document {} for user {}", document.getId(), user.getId());
+        // ── Wipe old index so stale chunks don't pollute the new answers ─────
+        // Delete embeddings first (FK: embeddings.block_id → content_blocks.id),
+        // then the blocks themselves. Uses raw SQL to avoid loading all rows into JPA.
+        UUID docId = document.getId();
+        int embeddingsDeleted = jdbcTemplate.update(
+                "DELETE FROM embeddings WHERE block_id IN (SELECT id FROM content_blocks WHERE document_id = ?)",
+                docId);
+        long blocksDeleted = contentBlockRepository.deleteByDocumentId(docId);
+        if (embeddingsDeleted > 0 || blocksDeleted > 0) {
+            log.info("Cleared {} embedding(s) and {} block(s) for re-ingestion of document {}",
+                    embeddingsDeleted, blocksDeleted, docId);
+        }
+
+        // ── Trigger re-ingestion ─────────────────────────────────────────────
+        // Must happen inside this @Transactional method so IngestionService's
+        // afterCommit() fires when our transaction commits (not before).
+        log.info("Merged document {} ({} extra file(s)) for user {} — triggering ingestion",
+                docId, mergeFiles.size(), user.getId());
+        ingestionService.createAndTrigger(docId);
+
         return toResponse(document, storageService.generateSignedUrl(storagePath, 3600));
     }
 
