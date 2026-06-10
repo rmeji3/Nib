@@ -1,7 +1,12 @@
 package com.nib.backend.service;
 
+import com.nib.backend.config.CostControlProperties;
+import com.nib.backend.exception.RateLimitException;
+import com.nib.backend.model.Document;
 import com.nib.backend.model.IngestionJob;
 import com.nib.backend.model.IngestionStatus;
+import com.nib.backend.model.User;
+import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -11,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -19,11 +25,21 @@ import static org.mockito.Mockito.when;
 
 class IngestionServiceTest {
 
+    private final IngestionJobRepository repository = mock(IngestionJobRepository.class);
+    private final DocumentRepository documentRepository = mock(DocumentRepository.class);
+    private final IngestionRunner runner = mock(IngestionRunner.class);
+    private final CostControlProperties costControls = new CostControlProperties();
+    private final SlidingWindowRateLimiter rateLimiter = mock(SlidingWindowRateLimiter.class);
+    private final IngestionService service = new IngestionService(
+            repository,
+            documentRepository,
+            runner,
+            costControls,
+            rateLimiter
+    );
+
     @Test
     void getStatusIncludesPartialIngestionWarnings() {
-        IngestionJobRepository repository = mock(IngestionJobRepository.class);
-        IngestionRunner runner = mock(IngestionRunner.class);
-        IngestionService service = new IngestionService(repository, runner);
         UUID documentId = UUID.randomUUID();
         UUID jobId = UUID.randomUUID();
         LocalDateTime completedAt = LocalDateTime.of(2026, 6, 10, 12, 0);
@@ -56,10 +72,44 @@ class IngestionServiceTest {
     }
 
     @Test
+    void createAndTriggerRejectsDocumentsOverPageLimit() {
+        UUID documentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        costControls.getIngestion().setMaxPagesPerDocument(10);
+        Document document = Document.builder()
+                .id(documentId)
+                .user(User.builder().id(userId).email("ada@example.com").name("Ada").password("pw").build())
+                .pageCount(11)
+                .build();
+        when(repository.existsByDocumentIdAndStatus(documentId, IngestionStatus.PROCESSING)).thenReturn(false);
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+
+        assertThatThrownBy(() -> service.createAndTrigger(documentId))
+                .isInstanceOf(RateLimitException.class)
+                .hasMessageContaining("exceeds the ingestion limit");
+    }
+
+    @Test
+    void createAndTriggerRejectsTooManyConcurrentJobsForUser() {
+        UUID documentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        costControls.getIngestion().setMaxConcurrentJobsPerUser(1);
+        Document document = Document.builder()
+                .id(documentId)
+                .user(User.builder().id(userId).email("ada@example.com").name("Ada").password("pw").build())
+                .pageCount(5)
+                .build();
+        when(repository.existsByDocumentIdAndStatus(documentId, IngestionStatus.PROCESSING)).thenReturn(false);
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+        when(repository.countActiveJobsForUser(userId)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.createAndTrigger(documentId))
+                .isInstanceOf(RateLimitException.class)
+                .hasMessageContaining("already running");
+    }
+
+    @Test
     void createAndTriggerReturnsActiveProcessingJobWhenItIsNotStale() {
-        IngestionJobRepository repository = mock(IngestionJobRepository.class);
-        IngestionRunner runner = mock(IngestionRunner.class);
-        IngestionService service = new IngestionService(repository, runner);
         UUID documentId = UUID.randomUUID();
         IngestionJob activeJob = IngestionJob.builder()
                 .id(UUID.randomUUID())
@@ -78,18 +128,26 @@ class IngestionServiceTest {
 
     @Test
     void createAndTriggerFailsStaleProcessingJobAndCreatesRetry() {
-        IngestionJobRepository repository = mock(IngestionJobRepository.class);
-        IngestionRunner runner = mock(IngestionRunner.class);
-        IngestionService service = new IngestionService(repository, runner);
         UUID documentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
         IngestionJob staleJob = IngestionJob.builder()
                 .id(UUID.randomUUID())
                 .documentId(documentId)
                 .status(IngestionStatus.PROCESSING)
                 .startedAt(LocalDateTime.now().minusHours(2))
                 .build();
+        Document document = Document.builder()
+                .id(documentId)
+                .user(User.builder().id(userId).email("ada@example.com").name("Ada").password("pw").build())
+                .pageCount(5)
+                .build();
+
         when(repository.findFirstByDocumentIdAndStatusOrderByCreatedAtDesc(documentId, IngestionStatus.PROCESSING))
                 .thenReturn(Optional.of(staleJob));
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+        when(rateLimiter.tryAcquire("ingestion", userId.toString(),
+                costControls.getIngestion().getMaxTriggersPerWindow(),
+                costControls.getIngestion().getWindowSeconds())).thenReturn(true);
         when(repository.save(any(IngestionJob.class))).thenAnswer(invocation -> {
             IngestionJob job = invocation.getArgument(0);
             if (job.getId() == null) {

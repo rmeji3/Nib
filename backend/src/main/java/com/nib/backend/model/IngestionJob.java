@@ -34,7 +34,7 @@ public class IngestionJob {
     @Builder.Default
     private Integer pagesProcessed = 0;
 
-    @Column(name = "pages_failed", nullable = false)
+    @Column(name = "pages_failed")
     @Builder.Default
     private Integer pagesFailed = 0;
 
