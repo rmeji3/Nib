@@ -30,6 +30,9 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
         migrateTsvectorColumn();
         migrateIngestionWarningColumns();
         migrateStructuredVisualEvidenceColumns();
+        migrateAnswerAuditTable();
+        migrateSemanticCacheTables();
+        migrateCostUsageEventsTable();
         log.info("Database migrations complete.");
     }
 
@@ -146,5 +149,134 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
                 """);
 
         log.info("Structured visual evidence columns verified on content_blocks");
+    }
+
+    /**
+     * Answer audit records preserve enough retrieval/model telemetry to debug
+     * quality regressions and evaluate refusal/citation behavior over time.
+     */
+    private void migrateAnswerAuditTable() {
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS answer_audits (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  session_id uuid NOT NULL,
+                  document_id uuid NOT NULL,
+                  user_id uuid NOT NULL,
+                  user_message_id uuid NOT NULL,
+                  assistant_message_id uuid NOT NULL,
+                  prompt_version text NOT NULL,
+                  model_version text NOT NULL,
+                  retrieved_block_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+                  confidence double precision NOT NULL,
+                  groundedness double precision NOT NULL,
+                  latency_ms bigint NOT NULL,
+                  prompt_token_count integer,
+                  candidates_token_count integer,
+                  total_token_count integer,
+                  refused boolean NOT NULL,
+                  created_at timestamp NOT NULL DEFAULT now()
+                )
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_answer_audits_session_created
+                  ON answer_audits (session_id, created_at DESC)
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_answer_audits_document_created
+                  ON answer_audits (document_id, created_at DESC)
+                """);
+
+        log.info("Answer audit table verified");
+    }
+
+    /**
+     * Semantic caches lower repeated-query cost:
+     *  - embedding_cache stores exact normalized-query embeddings by text hash.
+     *  - answer_cache stores high-confidence, grounded answers per document
+     *    ingestion version and prompt/model version.
+     */
+    private void migrateSemanticCacheTables() {
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS embedding_cache (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  input_hash text NOT NULL,
+                  input_text text NOT NULL,
+                  model_version text NOT NULL,
+                  embedding vector(1024) NOT NULL,
+                  created_at timestamp NOT NULL DEFAULT now(),
+                  last_accessed_at timestamp NOT NULL DEFAULT now(),
+                  access_count integer NOT NULL DEFAULT 1,
+                  CONSTRAINT uq_embedding_cache_input_model UNIQUE (input_hash, model_version)
+                )
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_embedding_cache_input_model
+                  ON embedding_cache (input_hash, model_version)
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS answer_cache (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  document_id uuid NOT NULL,
+                  document_version_id uuid NOT NULL,
+                  query_text text NOT NULL,
+                  query_embedding vector(1024) NOT NULL,
+                  prompt_version text NOT NULL,
+                  model_version text NOT NULL,
+                  answer text NOT NULL,
+                  citations jsonb NOT NULL DEFAULT '[]'::jsonb,
+                  retrieved_block_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+                  confidence double precision NOT NULL,
+                  groundedness double precision NOT NULL,
+                  created_at timestamp NOT NULL DEFAULT now(),
+                  last_accessed_at timestamp NOT NULL DEFAULT now(),
+                  access_count integer NOT NULL DEFAULT 1
+                )
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_answer_cache_document_version
+                  ON answer_cache (document_id, document_version_id, prompt_version, model_version)
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_answer_cache_query_embedding
+                  ON answer_cache USING hnsw (query_embedding vector_cosine_ops)
+                """);
+
+        log.info("Semantic cache tables verified");
+    }
+
+    /**
+     * Cost telemetry gives users visibility into the budget controls already
+     * enforced by the backend.
+     */
+    private void migrateCostUsageEventsTable() {
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS cost_usage_events (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  user_id uuid NOT NULL,
+                  event_type text NOT NULL,
+                  quantity integer NOT NULL,
+                  estimated_cost_usd numeric(12, 6) NOT NULL DEFAULT 0,
+                  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                  occurred_at timestamp NOT NULL DEFAULT now()
+                )
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cost_usage_events_user_time
+                  ON cost_usage_events (user_id, occurred_at DESC)
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cost_usage_events_user_type
+                  ON cost_usage_events (user_id, event_type)
+                """);
+
+        log.info("Cost usage telemetry table verified");
     }
 }

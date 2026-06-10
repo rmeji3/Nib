@@ -2,6 +2,8 @@ package com.nib.backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -38,18 +40,22 @@ public class ContentBlock {
     private String visualSummary;
 
     @Column(name = "table_structure", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String tableStructure;
 
     @Column(name = "chart_summary", columnDefinition = "TEXT")
     private String chartSummary;
 
     @Column(name = "axis_labels", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String axisLabels;
 
     @Column(name = "units", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String units;
 
     @Column(name = "data_points", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String dataPoints;
 
     @Column(name = "figure_crop_path")
@@ -59,6 +65,7 @@ public class ContentBlock {
     private String figureCaption;
 
     @Column(name = "extraction_metadata", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String extractionMetadata;
 
     @Column(name = "token_count")

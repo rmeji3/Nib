@@ -8,6 +8,7 @@ import com.nib.backend.exception.RateLimitException;
 import com.nib.backend.model.User;
 import com.nib.backend.service.ChatRateLimiter;
 import com.nib.backend.service.ChatService;
+import com.nib.backend.service.CostTelemetryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +30,7 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatRateLimiter rateLimiter;
+    private final CostTelemetryService costTelemetryService;
 
     /** Get or create the chat session for a document. */
     @GetMapping("/sessions/document/{documentId}")
@@ -50,10 +53,22 @@ public class ChatController {
     ) {
         if (!rateLimiter.tryAcquire(user.getId())) {
             long retryAfter = rateLimiter.secondsUntilReset(user.getId());
+            costTelemetryService.record(
+                    user.getId(),
+                    CostTelemetryService.RATE_LIMIT_HIT,
+                    1,
+                    Map.of("scope", "chat", "retryAfterSeconds", retryAfter)
+            );
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter))
                     .build();
         }
+        costTelemetryService.record(
+                user.getId(),
+                CostTelemetryService.CHAT_CALL,
+                1,
+                Map.of("sessionId", sessionId.toString())
+        );
         return ResponseEntity.ok(chatService.query(sessionId, request.question(), user));
     }
 

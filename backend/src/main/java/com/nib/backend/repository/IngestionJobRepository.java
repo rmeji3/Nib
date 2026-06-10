@@ -15,6 +15,8 @@ public interface IngestionJobRepository extends JpaRepository<IngestionJob, UUID
 
     Optional<IngestionJob> findFirstByDocumentIdAndStatusOrderByCreatedAtDesc(UUID documentId, IngestionStatus status);
 
+    Optional<IngestionJob> findFirstByDocumentIdAndStatusOrderByCompletedAtDesc(UUID documentId, IngestionStatus status);
+
     boolean existsByDocumentIdAndStatus(UUID documentId, IngestionStatus status);
 
     @Query("""

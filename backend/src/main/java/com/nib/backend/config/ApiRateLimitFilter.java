@@ -3,6 +3,7 @@ package com.nib.backend.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.exception.ErrorResponse;
 import com.nib.backend.model.User;
+import com.nib.backend.service.CostTelemetryService;
 import com.nib.backend.service.SlidingWindowRateLimiter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     private final CostControlProperties costControls;
     private final SlidingWindowRateLimiter rateLimiter;
     private final ObjectMapper objectMapper;
+    private final CostTelemetryService costTelemetryService;
 
     @Override
     protected void doFilterInternal(
@@ -49,6 +52,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
 
         long retryAfter = rateLimiter.secondsUntilReset(SCOPE, subject, api.getWindowSeconds());
+        recordRateLimitHit(subject, retryAfter, request);
         response.setStatus(TOO_MANY_REQUESTS);
         response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -79,5 +83,22 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
             return forwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private void recordRateLimitHit(String subject, long retryAfter, HttpServletRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof User user) {
+            costTelemetryService.record(
+                    user.getId(),
+                    CostTelemetryService.RATE_LIMIT_HIT,
+                    1,
+                    Map.of(
+                            "scope", SCOPE,
+                            "subject", subject,
+                            "path", request.getRequestURI(),
+                            "retryAfterSeconds", retryAfter
+                    )
+            );
+        }
     }
 }

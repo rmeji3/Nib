@@ -30,12 +30,14 @@ class IngestionServiceTest {
     private final IngestionRunner runner = mock(IngestionRunner.class);
     private final CostControlProperties costControls = new CostControlProperties();
     private final SlidingWindowRateLimiter rateLimiter = mock(SlidingWindowRateLimiter.class);
+    private final CostTelemetryService costTelemetryService = mock(CostTelemetryService.class);
     private final IngestionService service = new IngestionService(
             repository,
             documentRepository,
             runner,
             costControls,
-            rateLimiter
+            rateLimiter,
+            costTelemetryService
     );
 
     @Test

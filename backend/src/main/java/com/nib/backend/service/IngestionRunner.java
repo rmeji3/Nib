@@ -67,6 +67,8 @@ public class IngestionRunner {
     private final VectorSearchService vectorSearchService;
     private final VisionService visionService;
     private final ObjectMapper objectMapper;
+    private final SemanticCacheService semanticCacheService;
+    private final CostTelemetryService costTelemetryService;
 
     private static final String EMBED_MODEL = "mistral-embed";
     private static final String BLOCK_TEXT = "text";
@@ -124,6 +126,7 @@ public class IngestionRunner {
         try {
             var doc = documentRepository.findById(documentId)
                     .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+            UUID userId = doc.getUser().getId();
 
             job.setStatus(IngestionStatus.PROCESSING);
             job.setStartedAt(LocalDateTime.now());
@@ -153,6 +156,7 @@ public class IngestionRunner {
             List<PendingBlock> pending = new ArrayList<>();
             List<String> warnings = new ArrayList<>();
             Set<Integer> failedVisualPages = new HashSet<>();
+            int visionCallsDispatched = 0;
 
             // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
             List<CompletableFuture<VisionPageResult>> visionFutures = new ArrayList<>(totalPages);
@@ -184,6 +188,7 @@ public class IngestionRunner {
                         }
                         final int pageNumber = i + 1;
                         final byte[] image = pngBytes;
+                        visionCallsDispatched++;
                         visionFutures.add(CompletableFuture.supplyAsync(
                                 () -> new VisionPageResult(
                                         image,
@@ -352,6 +357,12 @@ public class IngestionRunner {
                             (int) Math.ceil((double) allTexts.size() / EMBED_BATCH_SIZE),
                             batch.size(), documentId);
                     allEmbeddings.addAll(embeddingService.embedBatch(batch));
+                    costTelemetryService.record(
+                            userId,
+                            CostTelemetryService.EMBEDDING_BATCH,
+                            1,
+                            Map.of("documentId", documentId.toString(), "items", batch.size())
+                    );
                 }
 
                 // ── 5. Save all content blocks (one saveAll round-trip) ───────────
@@ -394,6 +405,19 @@ public class IngestionRunner {
             job.setStatus(IngestionStatus.COMPLETE);
             job.setCompletedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);
+            costTelemetryService.record(
+                    userId,
+                    CostTelemetryService.PAGES_INGESTED,
+                    totalPages,
+                    Map.of("documentId", documentId.toString(), "jobId", jobId.toString())
+            );
+            costTelemetryService.record(
+                    userId,
+                    CostTelemetryService.VISION_CALL,
+                    visionCallsDispatched,
+                    Map.of("documentId", documentId.toString(), "jobId", jobId.toString())
+            );
+            semanticCacheService.evictAnswersForDocument(documentId);
             log.info("Ingestion complete for document {} — job {}", documentId, jobId);
 
         } catch (Exception ex) {

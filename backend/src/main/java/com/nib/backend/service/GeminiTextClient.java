@@ -28,12 +28,27 @@ public class GeminiTextClient {
     @Value("${gemini.model:gemini-2.5-flash}")
     private String geminiModel;
 
+    public record TokenUsage(
+            Integer promptTokenCount,
+            Integer candidatesTokenCount,
+            Integer totalTokenCount
+    ) {}
+
+    public record GenerationResult(
+            String text,
+            TokenUsage tokenUsage
+    ) {}
+
     public String generate(String prompt) {
         return generate(prompt, 2048, 0.1);
     }
 
-    @SuppressWarnings("unchecked")
     public String generate(String prompt, int maxOutputTokens, double temperature) {
+        return generateWithMetadata(prompt, maxOutputTokens, temperature).text();
+    }
+
+    @SuppressWarnings("unchecked")
+    public GenerationResult generateWithMetadata(String prompt, int maxOutputTokens, double temperature) {
         Map<String, Object> body = Map.of(
                 "contents", List.of(Map.of(
                         "parts", List.of(Map.of("text", prompt))
@@ -72,6 +87,27 @@ public class GeminiTextClient {
         Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
         List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
         if (parts == null || parts.isEmpty()) throw new RuntimeException("No parts in Gemini response");
-        return (String) parts.get(0).get("text");
+        return new GenerationResult(
+                (String) parts.get(0).get("text"),
+                parseTokenUsage((Map<String, Object>) response.get("usageMetadata"))
+        );
+    }
+
+    private static TokenUsage parseTokenUsage(Map<String, Object> usageMetadata) {
+        if (usageMetadata == null) {
+            return new TokenUsage(null, null, null);
+        }
+        return new TokenUsage(
+                intOrNull(usageMetadata.get("promptTokenCount")),
+                intOrNull(usageMetadata.get("candidatesTokenCount")),
+                intOrNull(usageMetadata.get("totalTokenCount"))
+        );
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return null;
     }
 }

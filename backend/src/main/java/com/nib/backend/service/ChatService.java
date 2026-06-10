@@ -10,9 +10,11 @@ import com.nib.backend.dto.ChatSessionResponse;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.dto.GroundingVerificationDto;
 import com.nib.backend.exception.DocumentNotFoundException;
+import com.nib.backend.model.AnswerAudit;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
 import com.nib.backend.model.User;
+import com.nib.backend.repository.AnswerAuditRepository;
 import com.nib.backend.repository.ChatMessageRepository;
 import com.nib.backend.repository.ChatSessionRepository;
 import com.nib.backend.repository.DocumentRepository;
@@ -52,6 +54,8 @@ public class ChatService {
     private final GeminiTextClient geminiTextClient;
     private final CitationVerifier citationVerifier;
     private final ObjectMapper objectMapper;
+    private final AnswerAuditRepository answerAuditRepository;
+    private final SemanticCacheService semanticCacheService;
 
     @Value("${gemini.model:gemini-2.5-flash}")
     private String geminiModel;
@@ -75,6 +79,18 @@ public class ChatService {
     @Value("${chat.confidence.midpoint:0.45}")
     private double confidenceMidpoint;
 
+    @Value("${semantic-cache.embeddings.enabled:true}")
+    private boolean embeddingCacheEnabled;
+
+    @Value("${semantic-cache.answers.enabled:true}")
+    private boolean answerCacheEnabled;
+
+    @Value("${semantic-cache.answers.max-distance:0.06}")
+    private double answerCacheMaxDistance;
+
+    @Value("${semantic-cache.answers.min-confidence:0.75}")
+    private double answerCacheMinConfidence;
+
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
     private static final Pattern SOURCE_CITATION_PATTERN = Pattern.compile("\\[B(\\d+)]");
 
@@ -85,6 +101,8 @@ public class ChatService {
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern NUMBER_OR_MEASURE_PATTERN = Pattern.compile("[$€£¥%]|\\b\\d+(?:\\.\\d+)?\\b");
+    private static final String PROMPT_VERSION = "rag-v5-block-grounded-structured-visuals";
+    private static final String QUERY_EMBED_MODEL = "mistral-embed";
 
     /** Canned answer when confidence is below refusal threshold. */
     private static final String REFUSAL_TEXT =
@@ -153,11 +171,12 @@ public class ChatService {
 
     @Transactional
     public ChatQueryResponse query(UUID sessionId, String question, User user) {
+        long startedNanos = System.nanoTime();
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, user.getId())
                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
         // Save the user turn
-        chatMessageRepository.save(ChatMessage.builder()
+        ChatMessage userMessage = chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(sessionId)
                 .role("user")
                 .content(question)
@@ -177,7 +196,7 @@ public class ChatService {
 
         // Embed the rewritten query and retrieve top-k chunks via hybrid search
         // (dense vector similarity + BM25 full-text, merged with RRF).
-        float[] queryEmbedding = embeddingService.embed(searchQuery);
+        float[] queryEmbedding = embedSearchQuery(searchQuery);
         VectorSearchService.HybridSearchResult hybridResult =
                 vectorSearchService.hybridSearch(session.getDocumentId(), queryEmbedding, searchQuery, dynamicTopK);
         List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(hybridResult.chunks());
@@ -265,12 +284,77 @@ public class ChatService {
                     .content(REFUSAL_TEXT)
                     .modelVersion(geminiModel)
                     .build());
+            saveAnswerAudit(
+                    session,
+                    user,
+                    userMessage,
+                    refusalMsg,
+                    chunks,
+                    confidence,
+                    0.0,
+                    elapsedMillis(startedNanos),
+                    new GeminiTextClient.TokenUsage(null, null, null),
+                    true
+            );
 
             return new ChatQueryResponse(
                     refusalMsg.getId(), sessionId, REFUSAL_TEXT, List.of(),
                     geminiModel, refusalMsg.getCreatedAt().toString(),
                     confidence, 0.0, refusedVerification(), true
             );
+        }
+
+        Optional<UUID> documentVersionId = latestCompletedIngestionVersion(session.getDocumentId());
+        if (answerCacheEnabled && documentVersionId.isPresent()) {
+            Optional<SemanticCacheService.AnswerCacheHit> cachedAnswer = semanticCacheService.findAnswer(
+                    session.getDocumentId(),
+                    documentVersionId.get(),
+                    queryEmbedding,
+                    PROMPT_VERSION,
+                    geminiModel,
+                    answerCacheMaxDistance
+            );
+            if (cachedAnswer.isPresent()) {
+                SemanticCacheService.AnswerCacheHit hit = cachedAnswer.get();
+                GroundingVerificationDto groundingVerification =
+                        verifyGrounding(hit.answer(), chunks, hit.citations());
+                if (groundingVerification.verified()) {
+                    ChatMessage cachedMsg = chatMessageRepository.save(ChatMessage.builder()
+                            .sessionId(sessionId)
+                            .role("assistant")
+                            .content(hit.answer())
+                            .citations(serializeCitations(hit.citations()))
+                            .modelVersion(geminiModel)
+                            .build());
+                    saveAnswerAudit(
+                            session,
+                            user,
+                            userMessage,
+                            cachedMsg,
+                            chunks,
+                            hit.confidence(),
+                            hit.groundedness(),
+                            elapsedMillis(startedNanos),
+                            new GeminiTextClient.TokenUsage(null, null, null),
+                            false
+                    );
+                    log.info("Semantic answer cache hit for document {} version {} (distance={})",
+                            session.getDocumentId(), documentVersionId.get(), String.format("%.4f", hit.distance()));
+                    return new ChatQueryResponse(
+                            cachedMsg.getId(),
+                            sessionId,
+                            hit.answer(),
+                            hit.citations(),
+                            geminiModel,
+                            cachedMsg.getCreatedAt().toString(),
+                            hit.confidence(),
+                            hit.groundedness(),
+                            groundingVerification,
+                            false
+                    );
+                }
+                log.info("Semantic answer cache candidate skipped because cached citations no longer verify");
+            }
         }
 
         // Look up document type for type-aware prompting (Phase 4)
@@ -283,7 +367,8 @@ public class ChatService {
         String prompt = buildPrompt(searchQuery, chunks, docType);
 
         // Call Gemini
-        String answer = callGemini(prompt);
+        GeminiTextClient.GenerationResult generation = callGeminiWithMetadata(prompt);
+        String answer = generation.text();
 
         CitationVerifier.VerificationResult verification =
                 citationVerifier.verify(searchQuery, answer, chunks);
@@ -310,6 +395,37 @@ public class ChatService {
                 .build());
 
         double groundedness = computeGroundedness(answer);
+        saveAnswerAudit(
+                session,
+                user,
+                userMessage,
+                assistantMsg,
+                chunks,
+                confidence,
+                groundedness,
+                elapsedMillis(startedNanos),
+                generation.tokenUsage(),
+                verification.refused()
+        );
+        if (answerCacheEnabled
+                && documentVersionId.isPresent()
+                && !verification.refused()
+                && groundingVerification.verified()
+                && confidence >= answerCacheMinConfidence) {
+            semanticCacheService.saveAnswer(
+                    session.getDocumentId(),
+                    documentVersionId.get(),
+                    searchQuery,
+                    queryEmbedding,
+                    PROMPT_VERSION,
+                    geminiModel,
+                    answer,
+                    citations,
+                    retrievedBlockIds(chunks),
+                    confidence,
+                    groundedness
+            );
+        }
 
         return new ChatQueryResponse(
                 assistantMsg.getId(),
@@ -844,6 +960,84 @@ public class ChatService {
 
     private String callGemini(String prompt) {
         return geminiTextClient.generate(prompt);
+    }
+
+    private float[] embedSearchQuery(String searchQuery) {
+        if (embeddingCacheEnabled) {
+            Optional<float[]> cached = semanticCacheService.findEmbedding(searchQuery, QUERY_EMBED_MODEL);
+            if (cached.isPresent()) {
+                return cached.get();
+            }
+        }
+        float[] embedding = embeddingService.embed(searchQuery);
+        if (embeddingCacheEnabled) {
+            semanticCacheService.saveEmbedding(searchQuery, QUERY_EMBED_MODEL, embedding);
+        }
+        return embedding;
+    }
+
+    private GeminiTextClient.GenerationResult callGeminiWithMetadata(String prompt) {
+        return geminiTextClient.generateWithMetadata(prompt, 2048, 0.1);
+    }
+
+    private void saveAnswerAudit(
+            ChatSession session,
+            User user,
+            ChatMessage userMessage,
+            ChatMessage assistantMessage,
+            List<VectorSearchService.ChunkMatch> chunks,
+            double confidence,
+            double groundedness,
+            long latencyMs,
+            GeminiTextClient.TokenUsage tokenUsage,
+            boolean refused
+    ) {
+        answerAuditRepository.save(AnswerAudit.builder()
+                .sessionId(session.getId())
+                .documentId(session.getDocumentId())
+                .userId(user.getId())
+                .userMessageId(userMessage.getId())
+                .assistantMessageId(assistantMessage.getId())
+                .promptVersion(PROMPT_VERSION)
+                .modelVersion(geminiModel)
+                .retrievedBlockIds(serializeRetrievedBlockIds(chunks))
+                .confidence(confidence)
+                .groundedness(groundedness)
+                .latencyMs(latencyMs)
+                .promptTokenCount(tokenUsage.promptTokenCount())
+                .candidatesTokenCount(tokenUsage.candidatesTokenCount())
+                .totalTokenCount(tokenUsage.totalTokenCount())
+                .refused(refused)
+                .build());
+    }
+
+    private String serializeRetrievedBlockIds(List<VectorSearchService.ChunkMatch> chunks) {
+        List<UUID> blockIds = retrievedBlockIds(chunks);
+        try {
+            return objectMapper.writeValueAsString(blockIds);
+        } catch (JsonProcessingException ex) {
+            throw new RuntimeException("Failed to serialize answer audit block IDs", ex);
+        }
+    }
+
+    private List<UUID> retrievedBlockIds(List<VectorSearchService.ChunkMatch> chunks) {
+        return chunks.stream()
+                .map(VectorSearchService.ChunkMatch::blockId)
+                .distinct()
+                .toList();
+    }
+
+    private Optional<UUID> latestCompletedIngestionVersion(UUID documentId) {
+        return ingestionJobRepository
+                .findFirstByDocumentIdAndStatusOrderByCompletedAtDesc(
+                        documentId,
+                        com.nib.backend.model.IngestionStatus.COMPLETE
+                )
+                .map(com.nib.backend.model.IngestionJob::getId);
+    }
+
+    private static long elapsedMillis(long startedNanos) {
+        return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
     }
 
     private List<CitationDto> extractCitations(String answer, List<VectorSearchService.ChunkMatch> chunks) {
