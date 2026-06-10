@@ -74,7 +74,7 @@ public class VectorSearchService {
     }
 
     /**
-     * Returns every visual_summary block for a document, ordered by page number.
+     * Returns every visual evidence block for a document, ordered by page number.
      * Bypasses similarity search — used by aggregation queries ("most expensive",
      * "list all", "compare") that need full coverage rather than top-k relevance.
      * Similarity is set to 0.0 since it's unused in this context.
@@ -97,7 +97,7 @@ public class VectorSearchService {
                        0.0            AS similarity
                 FROM   content_blocks cb
                 WHERE  cb.document_id = ?
-                  AND  cb.block_type = 'visual_summary'
+                  AND  cb.block_type IN ('visual_summary', 'table', 'chart', 'figure')
                 ORDER  BY cb.page_number, cb.chunk_index
                 """,
                 (rs, rowNum) -> mapRow(rs),

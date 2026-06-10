@@ -29,6 +29,7 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
         log.info("Running idempotent database migrations...");
         migrateTsvectorColumn();
         migrateIngestionWarningColumns();
+        migrateStructuredVisualEvidenceColumns();
         log.info("Database migrations complete.");
     }
 
@@ -119,5 +120,31 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
                 """);
 
         log.info("Partial-ingestion warning columns verified on ingestion_jobs");
+    }
+
+    /**
+     * Multimodal QA hardening: preserve table/chart/figure extraction results
+     * as structured evidence instead of only embedding prose summaries.
+     */
+    private void migrateStructuredVisualEvidenceColumns() {
+        jdbcTemplate.execute("""
+                ALTER TABLE content_blocks
+                  ADD COLUMN IF NOT EXISTS visual_summary text,
+                  ADD COLUMN IF NOT EXISTS table_structure jsonb,
+                  ADD COLUMN IF NOT EXISTS chart_summary text,
+                  ADD COLUMN IF NOT EXISTS axis_labels jsonb,
+                  ADD COLUMN IF NOT EXISTS units jsonb,
+                  ADD COLUMN IF NOT EXISTS data_points jsonb,
+                  ADD COLUMN IF NOT EXISTS figure_crop_path text,
+                  ADD COLUMN IF NOT EXISTS figure_caption text,
+                  ADD COLUMN IF NOT EXISTS extraction_metadata jsonb
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_content_blocks_block_type_page
+                  ON content_blocks (document_id, block_type, page_number)
+                """);
+
+        log.info("Structured visual evidence columns verified on content_blocks");
     }
 }

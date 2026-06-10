@@ -1,5 +1,8 @@
 package com.nib.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -32,6 +35,7 @@ import java.util.Map;
 public class VisionService {
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${gemini.api.key}")
     private String geminiApiKey;
@@ -84,6 +88,67 @@ public class VisionService {
             Do NOT use markdown formatting — respond in plain paragraphs or simple lines only.
             """;
 
+    private static final String STRUCTURED_VISION_PROMPT = """
+            Analyze this PDF page for multimodal question answering. Return ONLY valid JSON with this exact shape:
+            {
+              "pageSummary": "one concise page-level visual summary",
+              "elements": [
+                {
+                  "type": "table|chart|figure",
+                  "title": "visible title or null",
+                  "summary": "what this element shows",
+                  "bbox": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+                  "tableStructure": {
+                    "columns": ["column names"],
+                    "rows": [{"Column": "Value"}],
+                    "notes": "structure notes or null"
+                  },
+                  "chartSummary": "chart-specific takeaway or null",
+                  "axisLabels": {"x": "label or null", "y": "label or null", "series": "label or null"},
+                  "units": {"x": "unit or null", "y": "unit or null", "values": "unit or null"},
+                  "dataPoints": [{"label": "series/category/date", "x": "value", "y": "value", "unit": "unit or null"}],
+                  "caption": "caption or visible label text or null",
+                  "confidence": 0.0
+                }
+              ]
+            }
+
+            Rules:
+            - Include a separate element for every table, chart/graph, and meaningful figure/diagram/image.
+            - For tables, preserve headers and every visible row. Use null for chart-only fields.
+            - For charts, extract axis labels, units, legend/series names, and visible data points when readable.
+            - For figures, include labels, annotations, caption text, and a practical summary. Use null for table/chart-only fields.
+            - bbox must be normalized page coordinates from 0 to 1, with origin at top-left. If unsure, use the full page bbox.
+            - Do not include markdown, code fences, comments, or prose outside the JSON.
+            """;
+
+    public record VisualExtractionResult(
+            String pageSummary,
+            List<VisualElement> elements,
+            String rawJson
+    ) {}
+
+    public record VisualElement(
+            String type,
+            String title,
+            String summary,
+            NormalizedBBox bbox,
+            JsonNode tableStructure,
+            String chartSummary,
+            JsonNode axisLabels,
+            JsonNode units,
+            JsonNode dataPoints,
+            String caption,
+            Double confidence
+    ) {}
+
+    public record NormalizedBBox(
+            double x,
+            double y,
+            double width,
+            double height
+    ) {}
+
     /**
      * Renders the given page (0-indexed) of the provided PDF bytes to a PNG,
      * then calls Gemini Vision to produce a structured description.
@@ -133,6 +198,20 @@ public class VisionService {
             return description;
         } catch (Exception ex) {
             log.warn("Vision analysis failed for page {}: {}", pageNumberForLog, ex.getMessage());
+            return null;
+        }
+    }
+
+    public VisualExtractionResult analyzeRenderedImageStructured(byte[] pngBytes, int pageNumberForLog) {
+        try {
+            String base64 = Base64.getEncoder().encodeToString(pngBytes);
+            String rawJson = callGeminiVision(base64, STRUCTURED_VISION_PROMPT, 4096);
+            VisualExtractionResult result = parseStructuredVision(rawJson);
+            log.debug("Structured vision analysis complete for page {} ({} elements)",
+                    pageNumberForLog, result.elements().size());
+            return result;
+        } catch (Exception ex) {
+            log.warn("Structured vision analysis failed for page {}: {}", pageNumberForLog, ex.getMessage());
             return null;
         }
     }
@@ -224,6 +303,11 @@ public class VisionService {
 
     @SuppressWarnings("unchecked")
     private String callGeminiVision(String base64Image) {
+        return callGeminiVision(base64Image, VISION_PROMPT, 4096);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callGeminiVision(String base64Image, String prompt, int maxOutputTokens) {
         Map<String, Object> body = Map.of(
                 "contents", List.of(Map.of(
                         "parts", List.of(
@@ -231,14 +315,12 @@ public class VisionService {
                                         "mime_type", "image/png",
                                         "data", base64Image
                                 )),
-                                Map.of("text", VISION_PROMPT)
+                                Map.of("text", prompt)
                         )
                 )),
                 "generationConfig", Map.of(
                         "temperature", 0.1,
-                        // 4096 prevents truncation on dense menu/catalog pages.
-                        // Earlier 1024 cap was cutting words mid-token (e.g. "DR" instead of "DRINKS").
-                        "maxOutputTokens", 4096
+                        "maxOutputTokens", maxOutputTokens
                 )
         );
 
@@ -265,5 +347,101 @@ public class VisionService {
             log.warn("Gemini Vision API error {}: {}", ex.getStatusCode(), ex.getMessage());
             return null;
         }
+    }
+
+    private VisualExtractionResult parseStructuredVision(String rawJson) throws JsonProcessingException {
+        if (rawJson == null || rawJson.isBlank()) {
+            return new VisualExtractionResult(null, List.of(), "{}");
+        }
+
+        String json = stripJsonFences(rawJson);
+        JsonNode root = objectMapper.readTree(json);
+        String pageSummary = textOrNull(root.get("pageSummary"));
+        JsonNode elementsNode = root.get("elements");
+        List<VisualElement> elements = new java.util.ArrayList<>();
+        if (elementsNode != null && elementsNode.isArray()) {
+            for (JsonNode element : elementsNode) {
+                String type = normalizedType(textOrNull(element.get("type")));
+                if (type == null) {
+                    continue;
+                }
+                elements.add(new VisualElement(
+                        type,
+                        textOrNull(element.get("title")),
+                        textOrNull(element.get("summary")),
+                        bboxOrFullPage(element.get("bbox")),
+                        nullableJson(element.get("tableStructure")),
+                        textOrNull(element.get("chartSummary")),
+                        nullableJson(element.get("axisLabels")),
+                        nullableJson(element.get("units")),
+                        nullableJson(element.get("dataPoints")),
+                        textOrNull(element.get("caption")),
+                        doubleOrNull(element.get("confidence"))
+                ));
+            }
+        }
+        return new VisualExtractionResult(pageSummary, elements, json);
+    }
+
+    private static String stripJsonFences(String text) {
+        String trimmed = text.trim();
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            int lastFence = trimmed.lastIndexOf("```");
+            if (firstNewline >= 0 && lastFence > firstNewline) {
+                return trimmed.substring(firstNewline + 1, lastFence).trim();
+            }
+        }
+        return trimmed;
+    }
+
+    private static String normalizedType(String raw) {
+        if (raw == null) return null;
+        String lower = raw.toLowerCase();
+        if (lower.contains("table")) return "table";
+        if (lower.contains("chart") || lower.contains("graph") || lower.contains("plot")) return "chart";
+        if (lower.contains("figure") || lower.contains("image") || lower.contains("diagram")) return "figure";
+        return null;
+    }
+
+    private static NormalizedBBox bboxOrFullPage(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return new NormalizedBBox(0, 0, 1, 1);
+        }
+        double x = clamp01(numberOrDefault(node.get("x"), 0));
+        double y = clamp01(numberOrDefault(node.get("y"), 0));
+        double width = clamp01(numberOrDefault(node.get("width"), 1));
+        double height = clamp01(numberOrDefault(node.get("height"), 1));
+        if (width <= 0 || height <= 0) {
+            return new NormalizedBBox(0, 0, 1, 1);
+        }
+        if (x + width > 1) width = 1 - x;
+        if (y + height > 1) height = 1 - y;
+        return new NormalizedBBox(x, y, width, height);
+    }
+
+    private static double numberOrDefault(JsonNode node, double fallback) {
+        return node != null && node.isNumber() ? node.asDouble() : fallback;
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0, Math.min(1, value));
+    }
+
+    private static String textOrNull(JsonNode node) {
+        if (node == null || node.isNull()) return null;
+        String value = node.asText(null);
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    private static JsonNode nullableJson(JsonNode node) {
+        if (node == null || node.isNull() || (node.isContainerNode() && node.isEmpty())) {
+            return null;
+        }
+        return node;
+    }
+
+    private static Double doubleOrNull(JsonNode node) {
+        return node != null && node.isNumber() ? node.asDouble() : null;
     }
 }

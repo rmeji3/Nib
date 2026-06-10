@@ -34,6 +34,33 @@ public class ContentBlock {
     @Column(name = "extracted_text", nullable = false, columnDefinition = "TEXT")
     private String extractedText;
 
+    @Column(name = "visual_summary", columnDefinition = "TEXT")
+    private String visualSummary;
+
+    @Column(name = "table_structure", columnDefinition = "jsonb")
+    private String tableStructure;
+
+    @Column(name = "chart_summary", columnDefinition = "TEXT")
+    private String chartSummary;
+
+    @Column(name = "axis_labels", columnDefinition = "jsonb")
+    private String axisLabels;
+
+    @Column(name = "units", columnDefinition = "jsonb")
+    private String units;
+
+    @Column(name = "data_points", columnDefinition = "jsonb")
+    private String dataPoints;
+
+    @Column(name = "figure_crop_path")
+    private String figureCropPath;
+
+    @Column(name = "figure_caption", columnDefinition = "TEXT")
+    private String figureCaption;
+
+    @Column(name = "extraction_metadata", columnDefinition = "jsonb")
+    private String extractionMetadata;
+
     @Column(name = "token_count")
     private Integer tokenCount;
 
