@@ -2,6 +2,7 @@ package com.nib.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.dto.CitationDto;
+import com.nib.backend.dto.GroundingVerificationDto;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
 import com.nib.backend.model.IngestionJob;
@@ -94,6 +95,7 @@ class ChatServiceTest {
 
         assertThat(response.refused()).isTrue();
         assertThat(response.citations()).isEmpty();
+        assertThat(response.groundingVerification().verdict()).isEqualTo("REFUSED");
         assertThat(response.answer()).contains("cannot find enough relevant information");
         verifyNoInteractions(restClient);
     }
@@ -150,5 +152,84 @@ class ChatServiceTest {
         assertThat(citation.visualBlockId()).isEqualTo(visualBlockId);
         assertThat(citation.textExcerpt()).contains("grounded citation evidence");
         assertThat(citation.visualSummary()).contains("Visual summary");
+    }
+
+    @Test
+    void verifyGroundingAcceptsMappedBlockCitations() {
+        UUID documentId = UUID.randomUUID();
+        UUID blockId = UUID.randomUUID();
+        VectorSearchService.ChunkMatch block = new VectorSearchService.ChunkMatch(
+                blockId,
+                documentId,
+                1,
+                0,
+                "Revenue was $42.3M in Q1.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+        CitationDto citation = new CitationDto(
+                1,
+                "B1",
+                blockId,
+                documentId,
+                "text",
+                0,
+                "text",
+                "Revenue was $42.3M in Q1.",
+                blockId,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        GroundingVerificationDto verification = ReflectionTestUtils.invokeMethod(
+                service,
+                "verifyGrounding",
+                "Revenue was $42.3M in Q1 [B1].",
+                List.of(block),
+                List.of(citation)
+        );
+
+        assertThat(verification.verified()).isTrue();
+        assertThat(verification.verdict()).isEqualTo("VERIFIED");
+        assertThat(verification.checkedSentences()).isEqualTo(1);
+        assertThat(verification.citedSentences()).isEqualTo(1);
+        assertThat(verification.citedBlockIds()).containsExactly(blockId);
+    }
+
+    @Test
+    void verifyGroundingFlagsUncitedClaimsAndUnmappedSources() {
+        UUID documentId = UUID.randomUUID();
+        VectorSearchService.ChunkMatch block = new VectorSearchService.ChunkMatch(
+                UUID.randomUUID(),
+                documentId,
+                1,
+                0,
+                "Revenue was $42.3M in Q1.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+
+        GroundingVerificationDto verification = ReflectionTestUtils.invokeMethod(
+                service,
+                "verifyGrounding",
+                "Revenue was $42.3M in Q1 [B99]. Profit was higher.",
+                List.of(block),
+                List.of()
+        );
+
+        assertThat(verification.verified()).isFalse();
+        assertThat(verification.verdict()).isEqualTo("UNVERIFIED");
+        assertThat(verification.unmappedCitations()).containsExactly("[B99]");
+        assertThat(verification.uncitedClaims()).anySatisfy(sentence ->
+                assertThat(sentence).contains("Profit was higher"));
     }
 }
