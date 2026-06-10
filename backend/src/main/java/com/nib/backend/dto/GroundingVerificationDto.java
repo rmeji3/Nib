@@ -4,8 +4,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Post-answer grounding telemetry. This deterministic check validates citation
- * coverage and source-id mapping for the final answer returned to the client.
+ * Post-answer grounding check. This is a deterministic verification pass over
+ * the model output and retrieved source metadata; it validates citation coverage
+ * and source-id mapping, but does not claim full semantic entailment.
  */
 public record GroundingVerificationDto(
         boolean verified,
