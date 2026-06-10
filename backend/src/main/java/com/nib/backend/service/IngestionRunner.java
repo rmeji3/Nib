@@ -93,6 +93,10 @@ public class IngestionRunner {
 
             job.setStatus(IngestionStatus.PROCESSING);
             job.setStartedAt(LocalDateTime.now());
+            job.setCompletedAt(null);
+            job.setPagesFailed(0);
+            job.setWarningMessage(null);
+            job.setErrorMessage(null);
             ingestionJobRepository.save(job);
 
             // ── 1. Download PDF ───────────────────────────────────────────────────
@@ -159,6 +163,8 @@ public class IngestionRunner {
                                 () -> visionService.analyzeRenderedImage(image, pageNumber), exec));
                     }
                 }
+            } else {
+                warnings.add("Visual analysis disabled; charts, figures, and image-only evidence were not indexed");
             }
 
             // ── 3b. Build text blocks while vision runs in the background ───────
