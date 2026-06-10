@@ -1,12 +1,15 @@
 package com.nib.backend.controller;
 
+import com.nib.backend.dto.CostDashboardResponse;
 import com.nib.backend.dto.UserSettingsRequest;
 import com.nib.backend.model.User;
+import com.nib.backend.service.CostTelemetryService;
 import com.nib.backend.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +21,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final CostTelemetryService costTelemetryService;
+
+    @GetMapping("/me/cost-dashboard")
+    public ResponseEntity<CostDashboardResponse> getCostDashboard(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(costTelemetryService.getDashboard(user.getId()));
+    }
 
     @PutMapping("/me/settings")
     public ResponseEntity<Void> updateSettings(

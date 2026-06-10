@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -39,6 +40,7 @@ public class IngestionService {
     private final IngestionRunner ingestionRunner;
     private final CostControlProperties costControls;
     private final SlidingWindowRateLimiter rateLimiter;
+    private final CostTelemetryService costTelemetryService;
 
     @Value("${ingestion.job.stale-after-minutes:60}")
     private long staleAfterMinutes = 60;
@@ -97,6 +99,12 @@ public class IngestionService {
         if (pageCount != null
                 && ingestion.getMaxPagesPerDocument() > 0
                 && pageCount > ingestion.getMaxPagesPerDocument()) {
+            costTelemetryService.record(
+                    document.getUser().getId(),
+                    CostTelemetryService.RATE_LIMIT_HIT,
+                    1,
+                    Map.of("scope", "ingestion", "reason", "max_pages_per_document", "pageCount", pageCount)
+            );
             throw new RateLimitException("Document has " + pageCount
                     + " pages, which exceeds the ingestion limit of "
                     + ingestion.getMaxPagesPerDocument() + " pages.");
@@ -107,6 +115,12 @@ public class IngestionService {
         long activeJobs = ingestionJobRepository.countActiveJobsForUser(userId);
         if (ingestion.getMaxConcurrentJobsPerUser() > 0
                 && activeJobs >= ingestion.getMaxConcurrentJobsPerUser()) {
+            costTelemetryService.record(
+                    userId,
+                    CostTelemetryService.RATE_LIMIT_HIT,
+                    1,
+                    Map.of("scope", "ingestion", "reason", "max_concurrent_jobs")
+            );
             throw new RateLimitException("Too many ingestion jobs are already running. Please wait for one to finish.");
         }
 
@@ -118,6 +132,12 @@ public class IngestionService {
         );
         if (!allowed) {
             long retryAfter = rateLimiter.secondsUntilReset(SCOPE, userId.toString(), ingestion.getWindowSeconds());
+            costTelemetryService.record(
+                    userId,
+                    CostTelemetryService.RATE_LIMIT_HIT,
+                    1,
+                    Map.of("scope", "ingestion", "reason", "trigger_window", "retryAfterSeconds", retryAfter)
+            );
             throw new RateLimitException(
                     "Ingestion budget exceeded. Please try again in " + retryAfter + " seconds.",
                     retryAfter

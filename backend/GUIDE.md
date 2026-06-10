@@ -100,10 +100,12 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 #### Controller: [`UserController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/UserController.java)
 | Verb | Endpoint Route |
 | --- | --- |
+| `GET` | `/api/v1/users/me/cost-dashboard` |
 | `PUT` | `/api/v1/users/me/settings` |
 
 ### Database Entities (`backend/src/.../model`)
 
+- [`AnswerAudit`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/AnswerAudit.java)
 - [`ChatMessage`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ChatMessage.java)
 - [`ChatSession`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ChatSession.java)
 - [`Collection`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/Collection.java)
@@ -116,6 +118,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 
 ### Data Access Repositories (`backend/src/.../repository`)
 
+- [`AnswerAuditRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/AnswerAuditRepository.java)
 - [`ChatMessageRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ChatMessageRepository.java)
 - [`ChatSessionRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ChatSessionRepository.java)
 - [`CollectionDocumentRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/CollectionDocumentRepository.java)
@@ -133,6 +136,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`ChunkingService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChunkingService.java)
 - [`CitationVerifier`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/CitationVerifier.java)
 - [`CollectionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/CollectionService.java)
+- [`CostTelemetryService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/CostTelemetryService.java)
 - [`DocumentService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/DocumentService.java)
 - [`EmbeddingService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/EmbeddingService.java)
 - [`GeminiTextClient`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/GeminiTextClient.java)
@@ -141,6 +145,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`JwtService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
 - [`PositionedTextExtractor`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/PositionedTextExtractor.java)
 - [`PromptInjectionGuard`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/PromptInjectionGuard.java)
+- [`SemanticCacheService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SemanticCacheService.java)
 - [`SlidingWindowRateLimiter`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SlidingWindowRateLimiter.java)
 - [`SupabaseStorageService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
 - [`TestIService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
@@ -162,6 +167,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`ChatSessionResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ChatSessionResponse.java)
 - [`CitationDto`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CitationDto.java)
 - [`CollectionSummary`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CollectionSummary.java)
+- [`CostDashboardResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CostDashboardResponse.java)
 - [`CreateCollectionRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CreateCollectionRequest.java)
 - [`DocumentResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
 - [`GroundingVerificationDto`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/GroundingVerificationDto.java)
@@ -184,6 +190,10 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
+- **2026-06-10**: Fixed structured visual JSONB persistence. `ContentBlock` now marks `table_structure`, `axis_labels`, `units`, `data_points`, and `extraction_metadata` with Hibernate JSON typing so Postgres receives jsonb parameters, including nulls, instead of varchar-bound values during ingestion.
+- **2026-06-10**: Added per-user cost telemetry and dashboard data. `DatabaseMigrationRunner` now creates `cost_usage_events`; `CostTelemetryService` records pages ingested, vision calls, embedding batches, chat calls, and rate-limit hits with configurable unit-cost estimates, then combines those events with answer-audit token totals for `GET /api/v1/users/me/cost-dashboard`. Chat, ingestion, and API/ingestion rate-limit paths now emit cost events without blocking the primary workflow.
+- **2026-06-10**: Added a conservative semantic cache for chat. `DatabaseMigrationRunner` now creates `embedding_cache` for exact normalized query embedding reuse and `answer_cache` for high-confidence grounded answers keyed by document ID, latest completed ingestion job ID, prompt version, and model version. New `SemanticCacheService` handles hash-based embedding lookup, pgvector answer similarity lookup, cache writes, and document answer-cache eviction. `ChatService` reuses cached query embeddings before calling Mistral, serves verified same-version answer cache hits before Gemini, writes cache entries only for grounded non-refused high-confidence answers, and `IngestionRunner` evicts answer cache entries after successful re-ingestion.
+- **2026-06-10**: Added answer audit records for chat QA. New `AnswerAudit` and `AnswerAuditRepository` persist one row per assistant answer with prompt version, Gemini model, retrieved block IDs, confidence, groundedness, latency, Gemini token usage when available, refusal state, and linked user/assistant message IDs. `GeminiTextClient` now exposes `generateWithMetadata()` while preserving the existing text-only API, and `ChatService` writes audits for both generated answers and low-confidence refusals.
 - **2026-06-10**: Added structured table/chart/figure extraction storage for multimodal PDF QA. `ContentBlock` now stores visual summaries, table structure JSON, chart summaries, axis labels, units, extracted data points, figure crop paths/captions, and extraction metadata separately from plain text. `VisionService` can request strict JSON visual extraction from Gemini, `IngestionRunner` creates element-level `table`, `chart`, and `figure` blocks with uploaded crop assets, and chat/search treat those block types as visual evidence alongside legacy `visual_summary` blocks.
 - **2026-06-10**: Resolved the ingestion rate-limit / ingestion-improvement merge path. `IngestionService` now combines Redis-backed cost controls with stale `PROCESSING` job recovery, structured warning issue parsing, retryability flags, and launch-failure marking. `IngestionStatusResponse` includes `hasPartialFailures`, `retryable`, and structured `IngestionIssueDto` entries while preserving page-failure and warning fields. Added unit coverage for issue parsing, active job reuse, stale job retry, and budget rejection behavior.
 - **2026-06-10**: Resolved the citation verifier / grounding telemetry merge path. `ChatQueryResponse` again includes `GroundingVerificationDto` for deterministic citation coverage/source mapping telemetry, while `ChatService` still runs the stricter `CitationVerifier` first. The final flow is answer generation, semantic citation verification/rewrite/refusal, citation extraction from the final answer, deterministic grounding telemetry, then persistence/response. Added unit coverage for mapped block citations and unmapped/uncited claim detection.

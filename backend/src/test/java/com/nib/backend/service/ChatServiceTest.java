@@ -3,15 +3,18 @@ package com.nib.backend.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.dto.GroundingVerificationDto;
+import com.nib.backend.model.AnswerAudit;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
 import com.nib.backend.model.IngestionJob;
 import com.nib.backend.model.User;
+import com.nib.backend.repository.AnswerAuditRepository;
 import com.nib.backend.repository.ChatMessageRepository;
 import com.nib.backend.repository.ChatSessionRepository;
 import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -23,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +41,8 @@ class ChatServiceTest {
     private final IngestionJobRepository ingestionJobRepository = mock(IngestionJobRepository.class);
     private final GeminiTextClient geminiTextClient = mock(GeminiTextClient.class);
     private final CitationVerifier citationVerifier = mock(CitationVerifier.class);
+    private final AnswerAuditRepository answerAuditRepository = mock(AnswerAuditRepository.class);
+    private final SemanticCacheService semanticCacheService = mock(SemanticCacheService.class);
 
     private final ChatService service = new ChatService(
             chatSessionRepository,
@@ -47,7 +54,9 @@ class ChatServiceTest {
             new PromptInjectionGuard(),
             geminiTextClient,
             citationVerifier,
-            new ObjectMapper()
+            new ObjectMapper(),
+            answerAuditRepository,
+            semanticCacheService
     );
 
     @Test
@@ -57,6 +66,7 @@ class ChatServiceTest {
         ReflectionTestUtils.setField(service, "confidenceMidpoint", 0.45);
         ReflectionTestUtils.setField(service, "topK", 8);
         ReflectionTestUtils.setField(service, "geminiModel", "gemini-2.5-flash");
+        ReflectionTestUtils.setField(service, "embeddingCacheEnabled", true);
 
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -74,8 +84,10 @@ class ChatServiceTest {
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtDesc(any(), any())).thenReturn(List.of());
         when(ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId))
                 .thenReturn(Optional.of(IngestionJob.builder().documentId(documentId).pagesTotal(3).build()));
-        when(embeddingService.embed("Who is the CEO of a company not in this document?"))
-                .thenReturn(new float[]{0.1f, 0.2f});
+        when(semanticCacheService.findEmbedding(
+                "Who is the CEO of a company not in this document?",
+                "mistral-embed"
+        )).thenReturn(Optional.of(new float[]{0.1f, 0.2f}));
 
         VectorSearchService.ChunkMatch weakMatch = new VectorSearchService.ChunkMatch(
                 UUID.randomUUID(),
@@ -99,6 +111,114 @@ class ChatServiceTest {
         assertThat(response.citations()).isEmpty();
         assertThat(response.groundingVerification().verdict()).isEqualTo("REFUSED");
         assertThat(response.answer()).contains("cannot find enough relevant information");
+        ArgumentCaptor<AnswerAudit> auditCaptor = ArgumentCaptor.forClass(AnswerAudit.class);
+        verify(answerAuditRepository).save(auditCaptor.capture());
+        AnswerAudit audit = auditCaptor.getValue();
+        assertThat(audit.getSessionId()).isEqualTo(sessionId);
+        assertThat(audit.getDocumentId()).isEqualTo(documentId);
+        assertThat(audit.getUserId()).isEqualTo(userId);
+        assertThat(audit.getAssistantMessageId()).isEqualTo(response.messageId());
+        assertThat(audit.getRetrievedBlockIds()).contains(weakMatch.blockId().toString());
+        assertThat(audit.getConfidence()).isEqualTo(response.confidence());
+        assertThat(audit.getGroundedness()).isZero();
+        assertThat(audit.getLatencyMs()).isNotNegative();
+        assertThat(audit.getPromptTokenCount()).isNull();
+        assertThat(audit.getRefused()).isTrue();
+        verify(embeddingService, never()).embed(any());
+        verifyNoInteractions(geminiTextClient, citationVerifier);
+    }
+
+    @Test
+    void queryUsesSemanticAnswerCacheWhenGroundedHitExists() {
+        ReflectionTestUtils.setField(service, "refusalThreshold", 0.25);
+        ReflectionTestUtils.setField(service, "confidenceSigmoidK", 8.0);
+        ReflectionTestUtils.setField(service, "confidenceMidpoint", 0.45);
+        ReflectionTestUtils.setField(service, "topK", 8);
+        ReflectionTestUtils.setField(service, "geminiModel", "gemini-2.5-flash");
+        ReflectionTestUtils.setField(service, "embeddingCacheEnabled", true);
+        ReflectionTestUtils.setField(service, "answerCacheEnabled", true);
+        ReflectionTestUtils.setField(service, "answerCacheMaxDistance", 0.06);
+
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID documentId = UUID.randomUUID();
+        UUID versionId = UUID.randomUUID();
+        UUID blockId = UUID.randomUUID();
+        User user = User.builder().id(userId).email("a@example.com").name("Ada").password("pw").build();
+        ChatSession session = ChatSession.builder().id(sessionId).documentId(documentId).userId(userId).build();
+
+        when(chatSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage message = invocation.getArgument(0);
+            message.setId(UUID.randomUUID());
+            message.setCreatedAt(LocalDateTime.now());
+            return message;
+        });
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtDesc(any(), any())).thenReturn(List.of());
+        when(ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId))
+                .thenReturn(Optional.of(IngestionJob.builder().documentId(documentId).pagesTotal(3).build()));
+        when(ingestionJobRepository.findFirstByDocumentIdAndStatusOrderByCompletedAtDesc(
+                eq(documentId),
+                eq(com.nib.backend.model.IngestionStatus.COMPLETE)
+        )).thenReturn(Optional.of(IngestionJob.builder().id(versionId).documentId(documentId).build()));
+        when(semanticCacheService.findEmbedding("What was revenue?", "mistral-embed"))
+                .thenReturn(Optional.of(new float[]{0.1f, 0.2f}));
+
+        VectorSearchService.ChunkMatch match = new VectorSearchService.ChunkMatch(
+                blockId,
+                documentId,
+                1,
+                0,
+                "Revenue was $42.3M in Q1.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+        when(vectorSearchService.hybridSearch(eq(documentId), any(float[].class), eq("What was revenue?"), eq(5)))
+                .thenReturn(new VectorSearchService.HybridSearchResult(List.of(match), List.of(match)));
+
+        CitationDto citation = new CitationDto(
+                1,
+                "B1",
+                blockId,
+                documentId,
+                "text",
+                0,
+                "text",
+                "Revenue was $42.3M in Q1.",
+                blockId,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(semanticCacheService.findAnswer(
+                eq(documentId),
+                eq(versionId),
+                any(float[].class),
+                eq("rag-v5-block-grounded-structured-visuals"),
+                eq("gemini-2.5-flash"),
+                eq(0.06)
+        )).thenReturn(Optional.of(new SemanticCacheService.AnswerCacheHit(
+                UUID.randomUUID(),
+                "Revenue was $42.3M in Q1 [B1].",
+                List.of(citation),
+                List.of(blockId),
+                0.91,
+                1.0,
+                0.02
+        )));
+
+        var response = service.query(sessionId, "What was revenue?", user);
+
+        assertThat(response.answer()).isEqualTo("Revenue was $42.3M in Q1 [B1].");
+        assertThat(response.citations()).containsExactly(citation);
+        assertThat(response.confidence()).isEqualTo(0.91);
+        assertThat(response.groundedness()).isEqualTo(1.0);
+        assertThat(response.groundingVerification().verified()).isTrue();
         verifyNoInteractions(geminiTextClient, citationVerifier);
     }
 

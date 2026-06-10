@@ -62,8 +62,16 @@ declare module 'lucide-react' {
   export const CheckIcon: LucideIcon;
   export const RotateCcwIcon: LucideIcon;
   export const AlertTriangleIcon: LucideIcon;
+  export const ActivityIcon: LucideIcon;
+  export const BotIcon: LucideIcon;
+  export const CoinsIcon: LucideIcon;
+  export const FileTextIcon: LucideIcon;
+  export const GaugeIcon: LucideIcon;
   export const ChevronRightIcon: LucideIcon;
   export const ChevronUpIcon: LucideIcon;
+  export const RefreshCwIcon: LucideIcon;
+  export const ShieldAlertIcon: LucideIcon;
+  export const SparklesIcon: LucideIcon;
 
   // Catch-all for any other icon
   const _default: { [key: string]: LucideIcon };

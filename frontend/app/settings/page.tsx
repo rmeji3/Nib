@@ -6,6 +6,7 @@ import { useAuth } from '../features/auth/hooks/use-auth';
 import { ProtectedRoute } from '../features/auth/components/protected-route';
 import { NibLogo } from '../components/nib-logo';
 import { useSettings, ACCENT_PRESETS, type AccentColor } from './hooks/use-settings';
+import { CostDashboard } from './components/cost-dashboard';
 import {
   UserIcon, PaletteIcon, BookOpenIcon, MessageSquareIcon,
   ShieldIcon, KeyboardIcon, InfoIcon, ArrowLeftIcon, CheckIcon,
@@ -427,6 +428,7 @@ function AiTab() {
           </div>
         </SettingRow>
       </SettingCard>
+      <CostDashboard />
     </div>
   );
 }
