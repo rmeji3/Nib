@@ -431,7 +431,7 @@ public class ChatService {
      * Phase 3 — re-rank top-k chunks to balance similarity, visual coverage, and
      * page diversity. pgvector's cosine-distance ordering over-favors text
      * similarity; this pass:
-     *   • boosts {@code visual_summary} blocks slightly so charts/tables aren't
+     *   • boosts visual blocks slightly so charts/tables aren't
      *     hidden behind nearby prose;
      *   • penalises duplicate pages so a long page can't dominate the context.
      *
@@ -449,7 +449,7 @@ public class ChatService {
 
         for (VectorSearchService.ChunkMatch c : chunks) {
             double base = 1.0 - c.similarity();                  // similarity in [~-1, 1], clamped below
-            double visualBoost = "visual_summary".equals(c.blockType()) ? rerankVisualBoost : 0.0;
+            double visualBoost = isVisualBlock(c.blockType()) ? rerankVisualBoost : 0.0;
             // Document summary blocks get a small static boost so meta-questions
             // ("what is this about", "summarize") that retrieve them at all get
             // them ranked first in the prompt context.
@@ -803,7 +803,7 @@ public class ChatService {
             VectorSearchService.ChunkMatch chunk = chunks.get(i);
             String sourceId = sourceIdForIndex(i);
             String sourceText = chunk.extractedText() == null ? "" : chunk.extractedText();
-            boolean isVisual = "visual_summary".equals(chunk.blockType());
+            boolean isVisual = isVisualBlock(chunk.blockType());
             PromptInjectionGuard.Assessment injectionAssessment =
                     promptInjectionGuard.assess(sourceText);
             if (injectionAssessment.suspicious()) {
@@ -883,19 +883,19 @@ public class ChatService {
             // Surface both kinds of evidence for the page so the evidence drawer
             // can show them side by side:
             //   textExcerpt   — from a meaningful (≥30 chars) text block
-            //   visualSummary — from the Gemini Vision visual_summary block
+            //   visualSummary — from a Gemini Vision visual evidence block
             // bbox is taken from whichever block we chose to anchor the highlight on,
             // preferring the text block (more precise) over the page-level visual block.
 
             Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
                     .filter(c -> c.pageNumber() == pageNumber)
-                    .filter(c -> !"visual_summary".equals(c.blockType()))
+                    .filter(c -> !isVisualBlock(c.blockType()))
                     .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
                     .findFirst();
 
             Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
                     .filter(c -> c.pageNumber() == pageNumber)
-                    .filter(c -> "visual_summary".equals(c.blockType()))
+                    .filter(c -> isVisualBlock(c.blockType()))
                     .findFirst();
 
             // Fallback: if neither qualified, take literally anything for this page
@@ -919,13 +919,13 @@ public class ChatService {
     ) {
         Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
                 .filter(c -> c.pageNumber() == pageNumber)
-                .filter(c -> !"visual_summary".equals(c.blockType()))
+                .filter(c -> !isVisualBlock(c.blockType()))
                 .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
                 .findFirst();
 
         Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
                 .filter(c -> c.pageNumber() == pageNumber)
-                .filter(c -> "visual_summary".equals(c.blockType()))
+                .filter(c -> isVisualBlock(c.blockType()))
                 .findFirst();
 
         String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
@@ -959,9 +959,16 @@ public class ChatService {
     }
 
     private static String evidenceTypeForBlock(String blockType) {
-        if ("visual_summary".equals(blockType)) return "visual";
+        if (isVisualBlock(blockType)) return "visual";
         if ("document_summary".equals(blockType)) return "document_summary";
         return "text";
+    }
+
+    private static boolean isVisualBlock(String blockType) {
+        return "visual_summary".equals(blockType)
+                || "table".equals(blockType)
+                || "chart".equals(blockType)
+                || "figure".equals(blockType);
     }
 
     private static String combinedEvidenceType(

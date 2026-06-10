@@ -1,5 +1,8 @@
 package com.nib.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.dto.BBox;
 import com.nib.backend.model.ContentBlock;
 import com.nib.backend.model.IngestionJob;
@@ -9,6 +12,9 @@ import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import com.nib.backend.service.ChunkingService.PositionedChunk;
 import com.nib.backend.service.PositionedTextExtractor.PositionedPage;
+import com.nib.backend.service.VisionService.NormalizedBBox;
+import com.nib.backend.service.VisionService.VisualElement;
+import com.nib.backend.service.VisionService.VisualExtractionResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -17,10 +23,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -54,6 +66,7 @@ public class IngestionRunner {
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
     private final VisionService visionService;
+    private final ObjectMapper objectMapper;
 
     private static final String EMBED_MODEL = "mistral-embed";
     private static final String BLOCK_TEXT = "text";
@@ -70,6 +83,27 @@ public class IngestionRunner {
      * useless "citation excerpts" in the UI. Vision still covers the page.
      */
     private static final int MIN_TEXT_LENGTH = 30;
+
+    private record PendingBlock(
+            int pageNumber,
+            int chunkIndex,
+            String text,
+            String blockType,
+            BBox bbox,
+            Double pageWidth,
+            Double pageHeight,
+            String visualSummary,
+            String tableStructure,
+            String chartSummary,
+            String axisLabels,
+            String units,
+            String dataPoints,
+            String figureCropPath,
+            String figureCaption,
+            String extractionMetadata
+    ) {}
+
+    private record VisionPageResult(byte[] pngBytes, VisualExtractionResult extraction) {}
 
     @Value("${ingestion.vision.enabled:true}")
     private boolean visionEnabled;
@@ -116,21 +150,12 @@ public class IngestionRunner {
             //    is not thread-safe), but dispatch each Gemini Vision call to a
             //    thread pool as soon as its render finishes. While the renderer
             //    moves to page N+1, page N's API call is already running.
-            record PendingBlock(
-                    int pageNumber,
-                    int chunkIndex,
-                    String text,
-                    String blockType,
-                    BBox bbox,
-                    Double pageWidth,
-                    Double pageHeight
-            ) {}
             List<PendingBlock> pending = new ArrayList<>();
             List<String> warnings = new ArrayList<>();
             Set<Integer> failedVisualPages = new HashSet<>();
 
             // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
-            List<CompletableFuture<String>> visionFutures = new ArrayList<>(totalPages);
+            List<CompletableFuture<VisionPageResult>> visionFutures = new ArrayList<>(totalPages);
             ExecutorService visionExecutor = null;
             long visionStart = System.currentTimeMillis();
             if (visionEnabled) {
@@ -160,7 +185,11 @@ public class IngestionRunner {
                         final int pageNumber = i + 1;
                         final byte[] image = pngBytes;
                         visionFutures.add(CompletableFuture.supplyAsync(
-                                () -> visionService.analyzeRenderedImage(image, pageNumber), exec));
+                                () -> new VisionPageResult(
+                                        image,
+                                        visionService.analyzeRenderedImageStructured(image, pageNumber)
+                                ),
+                                exec));
                     }
                 }
             } else {
@@ -191,7 +220,8 @@ public class IngestionRunner {
                                     BLOCK_TEXT,
                                     pc.bbox(),
                                     page.pageWidth(),
-                                    page.pageHeight()
+                                    page.pageHeight(),
+                                    null, null, null, null, null, null, null, null, null
                             ));
                         }
                     }
@@ -202,15 +232,29 @@ public class IngestionRunner {
             if (visionEnabled) {
                 for (int i = 0; i < visionFutures.size(); i++) {
                     try {
-                        String visualSummary = visionFutures.get(i).get();
-                        if (visualSummary != null && !visualSummary.isBlank()) {
+                        VisionPageResult result = visionFutures.get(i).get();
+                        VisualExtractionResult extraction = result != null ? result.extraction() : null;
+                        String visualSummary = extraction != null ? extraction.pageSummary() : null;
+                        if ((visualSummary != null && !visualSummary.isBlank())
+                                || (extraction != null && !extraction.elements().isEmpty())) {
                             // Visual blocks cover the whole page — bbox is the page rectangle
                             PositionedPage page = pages.get(i);
                             BBox fullPage = new BBox(0.0, 0.0, page.pageWidth(), page.pageHeight());
-                            pending.add(new PendingBlock(
-                                    page.pageNumber(), 0, visualSummary, BLOCK_VISUAL,
-                                    fullPage, page.pageWidth(), page.pageHeight()
-                            ));
+                            if (visualSummary != null && !visualSummary.isBlank()) {
+                                pending.add(new PendingBlock(
+                                        page.pageNumber(), 0, visualSummary, BLOCK_VISUAL,
+                                        fullPage, page.pageWidth(), page.pageHeight(),
+                                        visualSummary, null, null, null, null, null, null, null,
+                                        extraction.rawJson()
+                                ));
+                            }
+                            addStructuredVisualBlocks(
+                                    pending,
+                                    documentId,
+                                    page,
+                                    result.pngBytes(),
+                                    extraction
+                            );
                         } else {
                             int failedPage = i + 1;
                             if (failedVisualPages.add(failedPage)) {
@@ -275,7 +319,8 @@ public class IngestionRunner {
                             0,
                             summary,
                             BLOCK_DOC_SUMMARY,
-                            null, null, null    // no bbox — this is a synthetic block
+                            null, null, null,    // no bbox — this is a synthetic block
+                            null, null, null, null, null, null, null, null, null
                     ));
                     log.info("Added document_summary block for document {} — summary:\n{}", documentId, summary);
 
@@ -326,6 +371,15 @@ public class IngestionRunner {
                             .bboxHeight(bb != null ? bb.height() : null)
                             .pageWidth(pb.pageWidth())
                             .pageHeight(pb.pageHeight())
+                            .visualSummary(pb.visualSummary())
+                            .tableStructure(pb.tableStructure())
+                            .chartSummary(pb.chartSummary())
+                            .axisLabels(pb.axisLabels())
+                            .units(pb.units())
+                            .dataPoints(pb.dataPoints())
+                            .figureCropPath(pb.figureCropPath())
+                            .figureCaption(pb.figureCaption())
+                            .extractionMetadata(pb.extractionMetadata())
                             .build());
                 }
                 List<ContentBlock> savedBlocks = contentBlockRepository.saveAll(blockEntities);
@@ -363,6 +417,146 @@ public class IngestionRunner {
         long singleCharCount = 0;
         for (String t : tokens) if (t.length() == 1) singleCharCount++;
         return (double) singleCharCount / tokens.length > 0.65;
+    }
+
+    private void addStructuredVisualBlocks(
+            List<PendingBlock> pending,
+            UUID documentId,
+            PositionedPage page,
+            byte[] pagePng,
+            VisualExtractionResult extraction
+    ) {
+        int elementIndex = 0;
+        for (VisualElement element : extraction.elements()) {
+            elementIndex++;
+            BBox bbox = toPageBBox(element.bbox(), page.pageWidth(), page.pageHeight());
+            String cropPath = uploadVisualCrop(
+                    documentId,
+                    page.pageNumber(),
+                    elementIndex,
+                    element.type(),
+                    pagePng,
+                    element.bbox()
+            );
+            String text = buildElementEmbeddingText(page.pageNumber(), element);
+            pending.add(new PendingBlock(
+                    page.pageNumber(),
+                    elementIndex,
+                    text,
+                    element.type(),
+                    bbox,
+                    page.pageWidth(),
+                    page.pageHeight(),
+                    element.summary(),
+                    toJson(element.tableStructure()),
+                    element.chartSummary(),
+                    toJson(element.axisLabels()),
+                    toJson(element.units()),
+                    toJson(element.dataPoints()),
+                    cropPath,
+                    element.caption(),
+                    elementMetadataJson(element)
+            ));
+        }
+    }
+
+    private String buildElementEmbeddingText(int pageNumber, VisualElement element) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Page ").append(pageNumber).append(' ')
+          .append(element.type()).append(" visual evidence");
+        appendIfPresent(sb, "Title", element.title());
+        appendIfPresent(sb, "Summary", element.summary());
+        appendIfPresent(sb, "Chart summary", element.chartSummary());
+        appendIfPresent(sb, "Caption", element.caption());
+        appendIfPresent(sb, "Table structure", toJson(element.tableStructure()));
+        appendIfPresent(sb, "Axis labels", toJson(element.axisLabels()));
+        appendIfPresent(sb, "Units", toJson(element.units()));
+        appendIfPresent(sb, "Data points", toJson(element.dataPoints()));
+        return sb.toString();
+    }
+
+    private static void appendIfPresent(StringBuilder sb, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            sb.append('\n').append(label).append(": ").append(value);
+        }
+    }
+
+    private BBox toPageBBox(NormalizedBBox bbox, double pageWidth, double pageHeight) {
+        NormalizedBBox safe = bbox != null ? bbox : new NormalizedBBox(0, 0, 1, 1);
+        return new BBox(
+                safe.x() * pageWidth,
+                safe.y() * pageHeight,
+                safe.width() * pageWidth,
+                safe.height() * pageHeight
+        );
+    }
+
+    private String uploadVisualCrop(
+            UUID documentId,
+            int pageNumber,
+            int elementIndex,
+            String elementType,
+            byte[] pagePng,
+            NormalizedBBox bbox
+    ) {
+        try {
+            byte[] crop = cropPng(pagePng, bbox);
+            String path = "extracted-visuals/%s/page-%d/%s-%d.png"
+                    .formatted(documentId, pageNumber, elementType, elementIndex);
+            storageService.uploadFile(path, crop, "image/png");
+            return path;
+        } catch (Exception ex) {
+            log.warn("Failed to upload visual crop for document {} page {} element {}: {}",
+                    documentId, pageNumber, elementIndex, ex.getMessage());
+            return null;
+        }
+    }
+
+    private static byte[] cropPng(byte[] pagePng, NormalizedBBox bbox) throws Exception {
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(pagePng));
+        if (image == null) {
+            return pagePng;
+        }
+        NormalizedBBox safe = bbox != null ? bbox : new NormalizedBBox(0, 0, 1, 1);
+        int x = Math.max(0, Math.min(image.getWidth() - 1, (int) Math.floor(safe.x() * image.getWidth())));
+        int y = Math.max(0, Math.min(image.getHeight() - 1, (int) Math.floor(safe.y() * image.getHeight())));
+        int width = Math.max(1, Math.min(image.getWidth() - x, (int) Math.ceil(safe.width() * image.getWidth())));
+        int height = Math.max(1, Math.min(image.getHeight() - y, (int) Math.ceil(safe.height() * image.getHeight())));
+        BufferedImage subimage = image.getSubimage(x, y, width, height);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            ImageIO.write(subimage, "png", baos);
+            return baos.toByteArray();
+        }
+    }
+
+    private String elementMetadataJson(VisualElement element) {
+        try {
+            return objectMapper.writeValueAsString(elementMetadata(element));
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize visual extraction metadata: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> elementMetadata(VisualElement element) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("type", element.type());
+        if (element.title() != null) metadata.put("title", element.title());
+        if (element.bbox() != null) metadata.put("bbox", element.bbox());
+        if (element.confidence() != null) metadata.put("confidence", element.confidence());
+        return metadata;
+    }
+
+    private String toJson(JsonNode node) {
+        if (node == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize visual extraction JSON: {}", ex.getMessage());
+            return null;
+        }
     }
 
     /**
