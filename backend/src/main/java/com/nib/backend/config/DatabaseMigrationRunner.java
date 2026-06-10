@@ -91,7 +91,26 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
     private void migrateIngestionWarningColumns() {
         jdbcTemplate.execute("""
                 ALTER TABLE ingestion_jobs
-                  ADD COLUMN IF NOT EXISTS pages_failed integer NOT NULL DEFAULT 0
+                  ADD COLUMN IF NOT EXISTS pages_failed integer
+                """);
+
+        int updated = jdbcTemplate.update("""
+                UPDATE ingestion_jobs
+                SET pages_failed = 0
+                WHERE pages_failed IS NULL
+                """);
+        if (updated > 0) {
+            log.info("Backfilled pages_failed on {} existing ingestion_jobs rows", updated);
+        }
+
+        jdbcTemplate.execute("""
+                ALTER TABLE ingestion_jobs
+                  ALTER COLUMN pages_failed SET DEFAULT 0
+                """);
+
+        jdbcTemplate.execute("""
+                ALTER TABLE ingestion_jobs
+                  ALTER COLUMN pages_failed SET NOT NULL
                 """);
 
         jdbcTemplate.execute("""

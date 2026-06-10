@@ -1,6 +1,7 @@
 package com.nib.backend.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -57,8 +58,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RateLimitException.class)
     public ResponseEntity<ErrorResponse> handleRateLimit(RateLimitException ex) {
         log.warn("Rate limit: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ErrorResponse("RATE_LIMITED", ex.getMessage()));
+        var response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        if (ex.getRetryAfterSeconds() != null) {
+            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()));
+        }
+        return response.body(new ErrorResponse("RATE_LIMITED", ex.getMessage()));
     }
 
     @ExceptionHandler(RuntimeException.class)
