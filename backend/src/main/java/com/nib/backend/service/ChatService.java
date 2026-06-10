@@ -83,6 +83,7 @@ public class ChatService {
     private double confidenceMidpoint;
 
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
+    private static final Pattern SOURCE_CITATION_PATTERN = Pattern.compile("\\[B(\\d+)]");
 
     /** Sentence boundary — split on `.` / `!` / `?` followed by whitespace or end. */
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
@@ -494,8 +495,9 @@ public class ChatService {
     }
 
     /**
-     * Phase 3 — fraction of answer sentences that contain at least one [Page N]
-     * citation. Used as a "did the model actually ground its claims?" signal.
+     * Phase 3 — fraction of answer sentences that contain at least one block
+     * citation ([B1]) or legacy page citation ([Page N]). Used as a "did the
+     * model actually ground its claims?" signal.
      * 1.0 means every sentence is cited, 0.0 means none.
      */
     private double computeGroundedness(String answer) {
@@ -508,7 +510,10 @@ public class ChatService {
             String trimmed = s.trim();
             if (trimmed.length() < 8) continue; // skip stubs like "OK." or fragments
             total++;
-            if (PAGE_CITATION_PATTERN.matcher(trimmed).find()) cited++;
+            if (SOURCE_CITATION_PATTERN.matcher(trimmed).find()
+                    || PAGE_CITATION_PATTERN.matcher(trimmed).find()) {
+                cited++;
+            }
         }
         return total == 0 ? 0.0 : (double) cited / total;
     }
@@ -562,18 +567,18 @@ public class ChatService {
             // feel robotic. Only cite when quoting a specific number, name, or claim
             // that the reader might want to verify.
             sb.append("- This is a summary / overview question. Write naturally without citing every sentence.\n");
-            sb.append("- Only add a [Page N] citation when you quote a specific number, date, price, name, ");
+            sb.append("- Only add a [B#] citation when you quote a specific number, date, price, name, ");
             sb.append("or claim that the reader might want to verify.\n");
             sb.append("- If no specific numbers or claims are mentioned, you may omit citations entirely.\n");
         } else {
             sb.append("- Every sentence that states a fact, number, name, or claim MUST end with at least one ");
-            sb.append("[Page N] citation, where N is the page number shown in the section header.\n");
+            sb.append("[B#] citation, where B# is the source id shown in the section header.\n");
         }
-        sb.append("- Write each page as its own tag. NEVER combine: write \"[Page 1][Page 2]\", NEVER \"[Page 1, Page 2]\".\n");
-        sb.append("- Use the exact format [Page N] — no other citation style is accepted.\n");
+        sb.append("- Write each source as its own tag. NEVER combine: write \"[B1][B2]\", NEVER \"[B1, B2]\".\n");
+        sb.append("- Use the exact source ids from the context, such as [B1] or [B12]. Do not cite page numbers unless no source id is available.\n");
         sb.append("- Example of correct citation style:\n");
-        sb.append("    The system reached a peak load of 62.4 kW under sustained training [Page 4]. ");
-        sb.append("This exceeded the design budget by 95% [Page 4][Page 6].\n\n");
+        sb.append("    The system reached a peak load of 62.4 kW under sustained training [B1]. ");
+        sb.append("This exceeded the design budget by 95% [B1][B4].\n\n");
 
         // ── REASONING APPROACH ─────────────────────────────────────────────
         sb.append("# How to Answer\n");
@@ -639,13 +644,28 @@ public class ChatService {
         // ── CONTEXT ────────────────────────────────────────────────────────
         sb.append("# Context (Document Content)\n");
         sb.append("The following are the retrieved sections from the document, in order of relevance. ");
-        sb.append("Each section is labelled with its page number and content type. ");
+        sb.append("Each section is labelled with a source id, page number, block id, block type, chunk index, and bounding box. ");
         sb.append("If a section is labelled \"(visual description)\" it was produced by analysing the page image ");
         sb.append("and may include readings of charts, tables, prices, and other graphical content.\n\n");
 
-        for (VectorSearchService.ChunkMatch chunk : chunks) {
+        for (int i = 0; i < chunks.size(); i++) {
+            VectorSearchService.ChunkMatch chunk = chunks.get(i);
             boolean isVisual = "visual_summary".equals(chunk.blockType());
-            sb.append("\n--- Page ").append(chunk.pageNumber())
+            String bbox = chunk.bbox() == null
+                    ? "none"
+                    : "x=%s,y=%s,width=%s,height=%s,pageWidth=%s,pageHeight=%s".formatted(
+                            chunk.bbox().x(),
+                            chunk.bbox().y(),
+                            chunk.bbox().width(),
+                            chunk.bbox().height(),
+                            chunk.pageWidth(),
+                            chunk.pageHeight());
+            sb.append("\n--- Source ").append(sourceIdForIndex(i))
+              .append(" | Page ").append(chunk.pageNumber())
+              .append(" | Block ").append(chunk.blockId())
+              .append(" | Type ").append(chunk.blockType())
+              .append(" | Chunk ").append(chunk.chunkIndex())
+              .append(" | BBox ").append(bbox)
               .append(isVisual ? " (visual description)" : " (text extract)")
               .append(" ---\n");
             sb.append(chunk.extractedText()).append("\n");
@@ -700,6 +720,30 @@ public class ChatService {
 
     private List<CitationDto> extractCitations(String answer, List<VectorSearchService.ChunkMatch> chunks) {
         List<CitationDto> citations = new ArrayList<>();
+        Matcher sourceMatcher = SOURCE_CITATION_PATTERN.matcher(answer);
+
+        while (sourceMatcher.find()) {
+            int sourceIndex = Integer.parseInt(sourceMatcher.group(1)) - 1;
+            if (sourceIndex < 0 || sourceIndex >= chunks.size()) continue;
+
+            VectorSearchService.ChunkMatch anchor = chunks.get(sourceIndex);
+            boolean alreadyAdded = citations.stream()
+                    .anyMatch(existing -> anchor.blockId().equals(existing.blockId()));
+            if (alreadyAdded) continue;
+
+            citations.add(buildCitation(
+                    anchor.pageNumber(),
+                    sourceIdForIndex(sourceIndex),
+                    anchor,
+                    true,
+                    chunks
+            ));
+        }
+
+        if (!citations.isEmpty()) {
+            return citations;
+        }
+
         Matcher matcher = PAGE_CITATION_PATTERN.matcher(answer);
 
         while (matcher.find()) {
@@ -733,39 +777,77 @@ public class ChatService {
                             .findFirst().orElse(null)));
             if (anchor == null) continue;
 
-            String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
-            String visualSummary = visualBlock.map(c -> truncate(c.extractedText(), 600)).orElse(null);
-            UUID textBlockId = textBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
-            UUID visualBlockId = visualBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
-
-            // Anchor's bbox drives the viewer overlay
-            BBox bbox = anchor.bbox();
-            Double pageWidth = anchor.pageWidth();
-            Double pageHeight = anchor.pageHeight();
-            String evidenceType = visualBlock.isPresent() && textBlock.isPresent()
-                    ? "text_and_visual"
-                    : visualBlock.isPresent() ? "visual" : "text";
-
-            citations.add(new CitationDto(
-                    pageNumber,
-                    anchor.blockId(),
-                    anchor.blockType(),
-                    evidenceType,
-                    textExcerpt,
-                    textBlockId,
-                    visualSummary,
-                    visualBlockId,
-                    bbox,
-                    pageWidth,
-                    pageHeight
-            ));
+            citations.add(buildCitation(pageNumber, null, anchor, false, chunks));
         }
         return citations;
     }
 
+    private CitationDto buildCitation(
+            int pageNumber,
+            String sourceId,
+            VectorSearchService.ChunkMatch anchor,
+            boolean exactBlockCitation,
+            List<VectorSearchService.ChunkMatch> chunks
+    ) {
+        Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
+                .filter(c -> c.pageNumber() == pageNumber)
+                .filter(c -> !"visual_summary".equals(c.blockType()))
+                .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
+                .findFirst();
+
+        Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
+                .filter(c -> c.pageNumber() == pageNumber)
+                .filter(c -> "visual_summary".equals(c.blockType()))
+                .findFirst();
+
+        String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
+        String visualSummary = visualBlock.map(c -> truncate(c.extractedText(), 600)).orElse(null);
+        UUID textBlockId = textBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
+        UUID visualBlockId = visualBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
+        String evidenceType = exactBlockCitation
+                ? evidenceTypeForBlock(anchor.blockType())
+                : combinedEvidenceType(textBlock, visualBlock);
+
+        return new CitationDto(
+                pageNumber,
+                sourceId,
+                anchor.blockId(),
+                anchor.documentId(),
+                anchor.blockType(),
+                anchor.chunkIndex(),
+                evidenceType,
+                textExcerpt,
+                textBlockId,
+                visualSummary,
+                visualBlockId,
+                anchor.bbox(),
+                anchor.pageWidth(),
+                anchor.pageHeight()
+        );
+    }
+
+    private static String sourceIdForIndex(int index) {
+        return "B" + (index + 1);
+    }
+
+    private static String evidenceTypeForBlock(String blockType) {
+        if ("visual_summary".equals(blockType)) return "visual";
+        if ("document_summary".equals(blockType)) return "document_summary";
+        return "text";
+    }
+
+    private static String combinedEvidenceType(
+            Optional<VectorSearchService.ChunkMatch> textBlock,
+            Optional<VectorSearchService.ChunkMatch> visualBlock
+    ) {
+        if (visualBlock.isPresent() && textBlock.isPresent()) return "text_and_visual";
+        if (visualBlock.isPresent()) return "visual";
+        return "text";
+    }
+
     private static String truncate(String s, int max) {
         if (s == null) return null;
-        return s.length() > max ? s.substring(0, max) + "…" : s;
+        return s.length() > max ? s.substring(0, max) + "..." : s;
     }
 
     private String serializeCitations(List<CitationDto> citations) {
