@@ -19,9 +19,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -121,6 +122,8 @@ public class IngestionRunner {
                     Double pageHeight
             ) {}
             List<PendingBlock> pending = new ArrayList<>();
+            List<String> warnings = new ArrayList<>();
+            Set<Integer> failedVisualPages = new HashSet<>();
 
             // ── 3a. Fire all visual analysis tasks in parallel ──────────────────
             List<CompletableFuture<String>> visionFutures = new ArrayList<>(totalPages);
@@ -142,8 +145,11 @@ public class IngestionRunner {
                         try {
                             pngBytes = visionService.renderPageFromDocument(pdfDoc, i);
                         } catch (Exception ex) {
-                            log.warn("Failed to render page {} — skipping its visual block: {}",
-                                    i + 1, ex.getMessage());
+                            int failedPage = i + 1;
+                            failedVisualPages.add(failedPage);
+                            String warning = "Page " + failedPage + " visual extraction failed during render: " + ex.getMessage();
+                            warnings.add(warning);
+                            log.warn("{} — skipping its visual block", warning);
                             visionFutures.add(CompletableFuture.completedFuture(null));
                             continue;
                         }
@@ -199,9 +205,19 @@ public class IngestionRunner {
                                     page.pageNumber(), 0, visualSummary, BLOCK_VISUAL,
                                     fullPage, page.pageWidth(), page.pageHeight()
                             ));
+                        } else {
+                            int failedPage = i + 1;
+                            if (failedVisualPages.add(failedPage)) {
+                                warnings.add("Page " + failedPage + " visual extraction produced no summary");
+                            }
                         }
                     } catch (Exception ex) {
-                        log.warn("Vision task for page {} failed: {}", i + 1, ex.getMessage());
+                        int failedPage = i + 1;
+                        if (failedVisualPages.add(failedPage)) {
+                            String warning = "Page " + failedPage + " visual extraction failed: " + ex.getMessage();
+                            warnings.add(warning);
+                            log.warn("{}", warning);
+                        }
                     }
                 }
                 if (visionExecutor != null) {
@@ -268,6 +284,8 @@ public class IngestionRunner {
                         documentRepository.save(doc);
                         log.info("Document type classified as '{}' for document {}", docType, documentId);
                     }
+                } else {
+                    warnings.add("Document summary generation failed; overview questions may be less reliable");
                 }
             }
 
@@ -311,6 +329,8 @@ public class IngestionRunner {
             }
 
             job.setPagesProcessed(totalPages);
+            job.setPagesFailed(failedVisualPages.size());
+            job.setWarningMessage(warnings.isEmpty() ? null : String.join("\n", warnings));
             job.setStatus(IngestionStatus.COMPLETE);
             job.setCompletedAt(LocalDateTime.now());
             ingestionJobRepository.save(job);

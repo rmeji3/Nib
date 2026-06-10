@@ -43,13 +43,20 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 <!-- START_AUTO_MAP -->
 ### API Controller & Endpoints Map
 
-#### Controller: [`AuthController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
+#### Controller: [`AuthController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/authenticate` |
 
-#### Controller: [`CollectionController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/CollectionController.java)
+#### Controller: [`ChatController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/ChatController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `GET` | `/api/v1/chat/sessions/document/{documentId}` |
+| `GET` | `/api/v1/chat/sessions/{sessionId}/messages` |
+| `POST` | `/api/v1/chat/sessions/{sessionId}/query` |
+
+#### Controller: [`CollectionController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/CollectionController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/collections/{id}/documents` |
@@ -60,7 +67,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `DELETE` | `/api/v1/collections/{id}/documents/{documentId}` |
 | `PATCH` | `/api/v1/collections/{id}` |
 
-#### Controller: [`DocumentController`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
+#### Controller: [`DocumentController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/DocumentController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/documents/trash` |
@@ -78,55 +85,88 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `PATCH` | `/api/v1/documents/{id}` |
 | `PATCH` | `/api/v1/documents/{id}/star` |
 
-#### Controller: [`IngestionController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
+#### Controller: [`IngestionController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/IngestionController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/documents/{id}/status` |
 | `POST` | `/api/v1/documents/{id}/ingest` |
 
-#### Controller: [`TestController`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
+#### Controller: [`TestController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
 | Verb | Endpoint Route |
 | --- | --- |
 | `GET` | `/api/v1/test/hello` |
 | `POST` | `/api/v1/test/email` |
 
+#### Controller: [`UserController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/UserController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `PUT` | `/api/v1/users/me/settings` |
+
 ### Database Entities (`backend/src/.../model`)
-- [`Collection`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Collection.java)
-- [`CollectionDocument`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/CollectionDocument.java)
-- [`Document`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/Document.java)
-- [`User`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/model/User.java)
+
+- [`ChatMessage`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ChatMessage.java)
+- [`ChatSession`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ChatSession.java)
+- [`Collection`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/Collection.java)
+- [`CollectionDocument`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/CollectionDocument.java)
+- [`ContentBlock`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ContentBlock.java)
+- [`Document`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/Document.java)
+- [`IngestionJob`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/IngestionJob.java)
+- [`IngestionStatus`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/IngestionStatus.java)
+- [`User`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/User.java)
 
 ### Data Access Repositories (`backend/src/.../repository`)
 
-- [`CollectionDocumentRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/CollectionDocumentRepository.java)
-- [`CollectionRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/CollectionRepository.java)
-- [`DocumentRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
-- [`UserRepository`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
+- [`ChatMessageRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ChatMessageRepository.java)
+- [`ChatSessionRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ChatSessionRepository.java)
+- [`CollectionDocumentRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/CollectionDocumentRepository.java)
+- [`CollectionRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/CollectionRepository.java)
+- [`ContentBlockRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ContentBlockRepository.java)
+- [`DocumentRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
+- [`IngestionJobRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/IngestionJobRepository.java)
+- [`UserRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
 
 ### Business Services (`backend/src/.../service`)
 
-- [`AuthService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/AuthService.java)
-- [`CollectionService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/CollectionService.java)
-- [`DocumentService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/DocumentService.java)
-- [`JwtService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/JwtService.java)
-- [`SupabaseStorageService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
-- [`TestIService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/TestIService.java)
-- [`TestService`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/service/TestService.java)
+- [`AuthService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/AuthService.java)
+- [`ChatRateLimiter`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChatRateLimiter.java)
+- [`ChatService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChatService.java)
+- [`ChunkingService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChunkingService.java)
+- [`CollectionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/CollectionService.java)
+- [`DocumentService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/DocumentService.java)
+- [`EmbeddingService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/EmbeddingService.java)
+- [`IngestionRunner`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/IngestionRunner.java)
+- [`IngestionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/IngestionService.java)
+- [`JwtService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
+- [`PositionedTextExtractor`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/PositionedTextExtractor.java)
+- [`SupabaseStorageService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
+- [`TestIService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
+- [`TestService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TestService.java)
+- [`TextExtractionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TextExtractionService.java)
+- [`UserService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/UserService.java)
+- [`VectorSearchService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/VectorSearchService.java)
+- [`VisionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/VisionService.java)
 
 ### Data Transfer Objects (`backend/src/.../dto`)
 
-- [`AddToCollectionRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/AddToCollectionRequest.java)
-- [`AuthRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
-- [`AuthResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
-- [`CollectionSummary`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/CollectionSummary.java)
-- [`CreateCollectionRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/CreateCollectionRequest.java)
-- [`DocumentResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
-- [`PagedResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/PagedResponse.java)
-- [`RegisterRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
-- [`RenameRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/RenameRequest.java)
-- [`TestRequest`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
-- [`TestResponse`](file:///A:/Coding/ai-pdf-viewer/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
-
+- [`AddToCollectionRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/AddToCollectionRequest.java)
+- [`AuthRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/AuthRequest.java)
+- [`AuthResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/AuthResponse.java)
+- [`BBox`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/BBox.java)
+- [`ChatMessageResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ChatMessageResponse.java)
+- [`ChatQueryRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryRequest.java)
+- [`ChatQueryResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ChatQueryResponse.java)
+- [`ChatSessionResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ChatSessionResponse.java)
+- [`CitationDto`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CitationDto.java)
+- [`CollectionSummary`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CollectionSummary.java)
+- [`CreateCollectionRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CreateCollectionRequest.java)
+- [`DocumentResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
+- [`IngestionStatusResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/IngestionStatusResponse.java)
+- [`PagedResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/PagedResponse.java)
+- [`RegisterRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
+- [`RenameRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/RenameRequest.java)
+- [`TestRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
+- [`TestResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
+- [`UserSettingsRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/UserSettingsRequest.java)
 
 
 <!-- END_AUTO_MAP -->
@@ -138,6 +178,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
+- **2026-06-10**: Started Phase 1 backend trust hardening. `CitationDto` now carries block-level provenance (`blockId`, `blockType`, `evidenceType`, `textBlockId`, `visualBlockId`) while preserving existing excerpt/summary/bbox fields. `IngestionJob` and `IngestionStatusResponse` now expose partial-ingestion visibility via `pagesFailed` and `warningMessage`; `IngestionRunner` records page-level Gemini Vision failures without marking the whole job failed, and `DatabaseMigrationRunner` adds the new columns idempotently. Added mocked-provider tests for Mistral embeddings, Gemini Vision parsing, chat low-confidence refusal, citation provenance extraction, and ingestion warning status.
 - **2026-05-24**: Phase 4 Tiers 1–3 implementation. **Tier 1 — Hybrid Search**: `VectorSearchService` gains `hybridSearch()` combining pgvector cosine distance with BM25 full-text (tsvector/tsquery) via Reciprocal Rank Fusion (RRF, k=60). New `HybridSearchResult` record returns merged chunks + raw vector results for confidence scoring. `fullTextSearch()` uses `ts_rank_cd` + `plainto_tsquery`. New `DatabaseMigrationRunner` runs idempotent schema migrations on startup (tsvector column, GIN index, auto-populate trigger). **Tier 1 — Dynamic TopK**: `ChatService.computeDynamicTopK()` scales topK per document page count — `clamp(pages*1.5, 5, 20)`. Injected `IngestionJobRepository`. **Tier 1 — Chunk Overlap**: bumped from 10% to 15% (300/2000 chars). **Tier 2 — Multi-Turn Query Rewriting**: `ChatService.rewriteQueryIfNeeded()` detects prior conversation turns and calls Gemini to rewrite follow-up questions as standalone queries before embedding. `ChatMessageRepository` gains `findBySessionIdOrderByCreatedAtDesc(sessionId, Pageable)`. **Tier 3 — Document-Type Classification**: `IngestionRunner.extractDocType()` parses the `TYPE:` line from the document summary to classify docs as academic/financial/menu/technical/legal/catalog/mixed. Persists to `Document.docType` (new nullable column). **Tier 3 — Type-Aware Prompting**: `ChatService.buildPrompt()` now accepts `docType` and injects document-type-specific instructions (price precision for menus, figure references for academic papers, clause references for legal docs, etc.).
 - **2026-05-22**: Phase 3 accuracy hardening. `ChatService` extended with: `rerank()` (visual boost +0.10 / per-page diversity penalty -0.05), `computeConfidence()` (1 - mean cosine distance of top-3 chunks, clamped to [0,1]), `computeGroundedness()` (fraction of answer sentences containing `[Page N]`), and a refusal guard that returns a canned "not enough info" answer when confidence falls below `chat.refusal.threshold` (default 0.25) and the query isn't an aggregation query. Prompt rule #3 added: every factual sentence MUST end with a `[Page X]` citation. `ChatQueryResponse` extended with `confidence`, `groundedness`, `refused`. `IngestionRunner.updateProgress()` writes `pages_processed` to `ingestion_jobs` after each Gemini Vision task completes (via `CompletableFuture#whenComplete`), giving the frontend real-time progress instead of a single end-of-run jump. New tunables in `application.properties`: `chat.refusal.threshold`, `chat.rerank.visual-boost`, `chat.rerank.diversity-penalty`.
 - **2026-05-20**: Renamed package structure from `com.aipdfviewer.backend` to `com.nib.backend`. Removed deprecated `spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS` config due to Jackson 3/Spring Boot 4.0.6 upgrade compatibility. Moved JWT Secret Key to environment variable `JWT_SECRET_KEY` in `.env` and loaded it dynamically in `application.properties` with a newly generated cryptographically secure 256-bit key.

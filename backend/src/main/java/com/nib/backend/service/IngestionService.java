@@ -60,10 +60,12 @@ public class IngestionService {
                         j.getStatus().name(),
                         j.getPagesTotal(),
                         j.getPagesProcessed(),
+                        j.getPagesFailed(),
+                        j.getWarningMessage(),
                         j.getErrorMessage(),
                         j.getStartedAt() != null ? j.getStartedAt().toString() : null,
                         j.getCompletedAt() != null ? j.getCompletedAt().toString() : null
                 ))
-                .orElse(new IngestionStatusResponse(null, documentId, "NOT_STARTED", null, 0, null, null, null));
+                .orElse(new IngestionStatusResponse(null, documentId, "NOT_STARTED", null, 0, 0, null, null, null, null));
     }
 }
