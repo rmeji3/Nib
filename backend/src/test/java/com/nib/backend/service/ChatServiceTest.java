@@ -133,16 +133,19 @@ class ChatServiceTest {
         List<CitationDto> citations = ReflectionTestUtils.invokeMethod(
                 service,
                 "extractCitations",
-                "The relevant value is shown here [Page 2].",
+                "The relevant value is shown here [B1].",
                 List.of(textBlock, visualBlock)
         );
 
         assertThat(citations).hasSize(1);
         CitationDto citation = citations.get(0);
         assertThat(citation.pageNumber()).isEqualTo(2);
+        assertThat(citation.sourceId()).isEqualTo("B1");
         assertThat(citation.blockId()).isEqualTo(textBlockId);
+        assertThat(citation.documentId()).isEqualTo(documentId);
         assertThat(citation.blockType()).isEqualTo("text");
-        assertThat(citation.evidenceType()).isEqualTo("text_and_visual");
+        assertThat(citation.chunkIndex()).isZero();
+        assertThat(citation.evidenceType()).isEqualTo("text");
         assertThat(citation.textBlockId()).isEqualTo(textBlockId);
         assertThat(citation.visualBlockId()).isEqualTo(visualBlockId);
         assertThat(citation.textExcerpt()).contains("grounded citation evidence");
