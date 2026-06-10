@@ -1,6 +1,7 @@
 package com.nib.backend.service;
 
 import com.nib.backend.config.CostControlProperties;
+import com.nib.backend.dto.IngestionIssueDto;
 import com.nib.backend.dto.IngestionStatusResponse;
 import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.exception.RateLimitException;
@@ -12,12 +13,18 @@ import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +32,7 @@ import java.util.UUID;
 public class IngestionService {
 
     private static final String SCOPE = "ingestion";
+    private static final Pattern PAGE_ISSUE_PATTERN = Pattern.compile("^Page (\\d+) (.+)$");
 
     private final IngestionJobRepository ingestionJobRepository;
     private final DocumentRepository documentRepository;
@@ -32,15 +40,24 @@ public class IngestionService {
     private final CostControlProperties costControls;
     private final SlidingWindowRateLimiter rateLimiter;
 
+    @Value("${ingestion.job.stale-after-minutes:60}")
+    private long staleAfterMinutes = 60;
+
     /**
      * Creates an ingestion job and fires the async pipeline via IngestionRunner.
      * Returns immediately — the pipeline runs in the ingestionExecutor thread pool.
      */
     @Transactional
     public IngestionJob createAndTrigger(UUID documentId) {
-        if (ingestionJobRepository.existsByDocumentIdAndStatus(documentId, IngestionStatus.PROCESSING)) {
-            log.info("Ingestion already in progress for document {}", documentId);
-            return ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId).orElseThrow();
+        Optional<IngestionJob> activeJob = ingestionJobRepository
+                .findFirstByDocumentIdAndStatusOrderByCreatedAtDesc(documentId, IngestionStatus.PROCESSING);
+        if (activeJob.isPresent()) {
+            IngestionJob job = activeJob.get();
+            if (!isStale(job)) {
+                log.info("Ingestion already in progress for document {}", documentId);
+                return job;
+            }
+            markStaleJobFailed(job);
         }
 
         Document document = documentRepository.findById(documentId)
@@ -58,7 +75,12 @@ public class IngestionService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                ingestionRunner.run(documentId, jobId);
+                try {
+                    ingestionRunner.run(documentId, jobId);
+                } catch (RuntimeException ex) {
+                    markLaunchFailed(jobId, ex);
+                    throw ex;
+                }
             }
         });
 
@@ -107,18 +129,111 @@ public class IngestionService {
     public IngestionStatusResponse getStatus(UUID documentId) {
         return ingestionJobRepository
                 .findFirstByDocumentIdOrderByCreatedAtDesc(documentId)
-                .map(j -> new IngestionStatusResponse(
-                        j.getId(),
-                        j.getDocumentId(),
-                        j.getStatus().name(),
-                        j.getPagesTotal(),
-                        j.getPagesProcessed(),
-                        j.getPagesFailed(),
-                        j.getWarningMessage(),
-                        j.getErrorMessage(),
-                        j.getStartedAt() != null ? j.getStartedAt().toString() : null,
-                        j.getCompletedAt() != null ? j.getCompletedAt().toString() : null
-                ))
-                .orElse(new IngestionStatusResponse(null, documentId, "NOT_STARTED", null, 0, 0, null, null, null, null));
+                .map(this::toStatusResponse)
+                .orElse(new IngestionStatusResponse(
+                        null,
+                        documentId,
+                        "NOT_STARTED",
+                        null,
+                        0,
+                        0,
+                        false,
+                        true,
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null
+                ));
+    }
+
+    private IngestionStatusResponse toStatusResponse(IngestionJob job) {
+        List<IngestionIssueDto> issues = parseIssues(job.getWarningMessage());
+        boolean hasPartialFailures = (job.getPagesFailed() != null && job.getPagesFailed() > 0)
+                || !issues.isEmpty();
+        boolean retryable = job.getStatus() == IngestionStatus.FAILED || isStale(job);
+
+        return new IngestionStatusResponse(
+                job.getId(),
+                job.getDocumentId(),
+                job.getStatus().name(),
+                job.getPagesTotal(),
+                job.getPagesProcessed(),
+                job.getPagesFailed(),
+                hasPartialFailures,
+                retryable,
+                job.getWarningMessage(),
+                issues,
+                job.getErrorMessage(),
+                job.getStartedAt() != null ? job.getStartedAt().toString() : null,
+                job.getCompletedAt() != null ? job.getCompletedAt().toString() : null
+        );
+    }
+
+    private List<IngestionIssueDto> parseIssues(String warningMessage) {
+        if (warningMessage == null || warningMessage.isBlank()) return List.of();
+
+        return warningMessage.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .map(this::parseIssue)
+                .toList();
+    }
+
+    private IngestionIssueDto parseIssue(String line) {
+        Matcher pageMatcher = PAGE_ISSUE_PATTERN.matcher(line);
+        if (pageMatcher.matches()) {
+            int pageNumber = Integer.parseInt(pageMatcher.group(1));
+            return new IngestionIssueDto(
+                    pageNumber,
+                    stageForMessage(line),
+                    "warning",
+                    line
+            );
+        }
+
+        return new IngestionIssueDto(
+                null,
+                stageForMessage(line),
+                "warning",
+                line
+        );
+    }
+
+    private static String stageForMessage(String message) {
+        String lower = message.toLowerCase();
+        if (lower.contains("render")) return "visual_render";
+        if (lower.contains("visual")) return "visual_analysis";
+        if (lower.contains("summary")) return "document_summary";
+        if (lower.contains("text")) return "text_extraction";
+        return "ingestion";
+    }
+
+    private boolean isStale(IngestionJob job) {
+        if (job.getStatus() != IngestionStatus.PROCESSING) return false;
+        LocalDateTime startedAt = job.getStartedAt();
+        if (startedAt == null) return true;
+        return startedAt.isBefore(LocalDateTime.now().minusMinutes(staleAfterMinutes));
+    }
+
+    private void markStaleJobFailed(IngestionJob job) {
+        String message = "Ingestion job was marked failed after being stuck in PROCESSING for more than "
+                + staleAfterMinutes + " minutes; retry is allowed.";
+        log.warn("{} document={} job={}", message, job.getDocumentId(), job.getId());
+        job.setStatus(IngestionStatus.FAILED);
+        job.setErrorMessage(message);
+        job.setCompletedAt(LocalDateTime.now());
+        ingestionJobRepository.save(job);
+    }
+
+    private void markLaunchFailed(UUID jobId, RuntimeException ex) {
+        ingestionJobRepository.findById(jobId).ifPresent(job -> {
+            String message = "Failed to start ingestion worker: " + ex.getMessage();
+            log.error("{} document={} job={}", message, job.getDocumentId(), jobId, ex);
+            job.setStatus(IngestionStatus.FAILED);
+            job.setErrorMessage(message);
+            job.setCompletedAt(LocalDateTime.now());
+            ingestionJobRepository.save(job);
+        });
     }
 }

@@ -8,6 +8,7 @@ import com.nib.backend.dto.ChatMessageResponse;
 import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
 import com.nib.backend.dto.CitationDto;
+import com.nib.backend.dto.GroundingVerificationDto;
 import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.model.ChatMessage;
 import com.nib.backend.model.ChatSession;
@@ -26,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -78,6 +80,11 @@ public class ChatService {
 
     /** Sentence boundary — split on `.` / `!` / `?` followed by whitespace or end. */
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
+    private static final Pattern CHECKABLE_CLAIM_PATTERN = Pattern.compile(
+            "\\b(is|are|was|were|has|have|had|costs|contains|include|includes|shows|states|reached|exceeded|uses|requires|supports|lists|reports)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern NUMBER_OR_MEASURE_PATTERN = Pattern.compile("[$€£¥%]|\\b\\d+(?:\\.\\d+)?\\b");
 
     /** Canned answer when confidence is below refusal threshold. */
     private static final String REFUSAL_TEXT =
@@ -262,7 +269,7 @@ public class ChatService {
             return new ChatQueryResponse(
                     refusalMsg.getId(), sessionId, REFUSAL_TEXT, List.of(),
                     geminiModel, refusalMsg.getCreatedAt().toString(),
-                    confidence, 0.0, true
+                    confidence, 0.0, refusedVerification(), true
             );
         }
 
@@ -289,6 +296,9 @@ public class ChatService {
         List<CitationDto> citations = verification.refused()
                 ? List.of()
                 : extractCitations(answer, chunks);
+        GroundingVerificationDto groundingVerification = verification.refused()
+                ? refusedVerification()
+                : verifyGrounding(answer, chunks, citations);
 
         // Persist the assistant turn
         ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
@@ -310,6 +320,7 @@ public class ChatService {
                 assistantMsg.getCreatedAt().toString(),
                 confidence,
                 groundedness,
+                groundingVerification,
                 verification.refused()
         );
     }
@@ -516,6 +527,135 @@ public class ChatService {
             }
         }
         return total == 0 ? 0.0 : (double) cited / total;
+    }
+
+    private GroundingVerificationDto verifyGrounding(
+            String answer,
+            List<VectorSearchService.ChunkMatch> chunks,
+            List<CitationDto> citations
+    ) {
+        if (answer == null || answer.isBlank()) {
+            return new GroundingVerificationDto(true, "EMPTY", 1.0, 0, 0, List.of(), List.of(), List.of());
+        }
+
+        Set<String> validSourceIds = new HashSet<>();
+        Set<Integer> validPages = new HashSet<>();
+        for (int i = 0; i < chunks.size(); i++) {
+            validSourceIds.add(sourceIdForIndex(i));
+            validPages.add(chunks.get(i).pageNumber());
+        }
+
+        List<String> unmappedCitations = findUnmappedCitations(answer, validSourceIds, validPages);
+        List<String> uncitedClaims = new ArrayList<>();
+        int checkedSentences = 0;
+        int citedSentences = 0;
+
+        for (String rawSentence : SENTENCE_SPLIT.split(answer.trim())) {
+            String sentence = normalizeSentence(rawSentence);
+            if (sentence.length() < 8 || !looksLikeCheckableClaim(sentence)) continue;
+
+            checkedSentences++;
+            if (hasValidCitation(sentence, validSourceIds, validPages)) {
+                citedSentences++;
+            } else {
+                uncitedClaims.add(sentence);
+            }
+        }
+
+        double citationCoverage = checkedSentences == 0 ? 1.0 : (double) citedSentences / checkedSentences;
+        double penalty = Math.min(0.5, unmappedCitations.size() * 0.2);
+        double score = Math.max(0.0, citationCoverage - penalty);
+        boolean verified = uncitedClaims.isEmpty() && unmappedCitations.isEmpty();
+        String verdict = verified
+                ? "VERIFIED"
+                : citedSentences > 0 ? "PARTIAL" : "UNVERIFIED";
+
+        List<UUID> citedBlockIds = citations.stream()
+                .map(CitationDto::blockId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+
+        return new GroundingVerificationDto(
+                verified,
+                verdict,
+                score,
+                checkedSentences,
+                citedSentences,
+                uncitedClaims,
+                unmappedCitations,
+                citedBlockIds
+        );
+    }
+
+    private GroundingVerificationDto refusedVerification() {
+        return new GroundingVerificationDto(
+                true,
+                "REFUSED",
+                1.0,
+                0,
+                0,
+                List.of(),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private List<String> findUnmappedCitations(String answer, Set<String> validSourceIds, Set<Integer> validPages) {
+        Set<String> unmapped = new LinkedHashSet<>();
+
+        Matcher sourceMatcher = SOURCE_CITATION_PATTERN.matcher(answer);
+        while (sourceMatcher.find()) {
+            String sourceId = "B" + sourceMatcher.group(1);
+            if (!validSourceIds.contains(sourceId)) {
+                unmapped.add("[" + sourceId + "]");
+            }
+        }
+
+        Matcher pageMatcher = PAGE_CITATION_PATTERN.matcher(answer);
+        while (pageMatcher.find()) {
+            int pageNumber = Integer.parseInt(pageMatcher.group(1));
+            if (!validPages.contains(pageNumber)) {
+                unmapped.add("[Page " + pageNumber + "]");
+            }
+        }
+
+        return new ArrayList<>(unmapped);
+    }
+
+    private boolean hasValidCitation(String sentence, Set<String> validSourceIds, Set<Integer> validPages) {
+        Matcher sourceMatcher = SOURCE_CITATION_PATTERN.matcher(sentence);
+        while (sourceMatcher.find()) {
+            if (validSourceIds.contains("B" + sourceMatcher.group(1))) return true;
+        }
+
+        Matcher pageMatcher = PAGE_CITATION_PATTERN.matcher(sentence);
+        while (pageMatcher.find()) {
+            if (validPages.contains(Integer.parseInt(pageMatcher.group(1)))) return true;
+        }
+
+        return false;
+    }
+
+    private static String normalizeSentence(String sentence) {
+        return sentence == null
+                ? ""
+                : sentence.trim().replaceFirst("^[-*•]\\s*", "");
+    }
+
+    private static boolean looksLikeCheckableClaim(String sentence) {
+        String lower = sentence.toLowerCase();
+        if (lower.startsWith("i cannot find") || lower.startsWith("cannot find")) return false;
+        if (NUMBER_OR_MEASURE_PATTERN.matcher(sentence).find()) return true;
+        if (CHECKABLE_CLAIM_PATTERN.matcher(sentence).find()) return true;
+
+        String[] words = sentence.split("\\s+");
+        for (int i = 1; i < words.length; i++) {
+            String cleaned = words[i].replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9-]+$", "");
+            if (cleaned.matches("[A-Z][A-Za-z0-9-]{2,}")) return true;
+        }
+
+        return false;
     }
 
     /**
