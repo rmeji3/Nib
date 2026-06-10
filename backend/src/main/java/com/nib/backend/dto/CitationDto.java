@@ -1,5 +1,7 @@
 package com.nib.backend.dto;
 
+import java.util.UUID;
+
 /**
  * One cited page in an assistant message. The frontend uses {@link #bbox}
  * + {@link #pageWidth}/{@link #pageHeight} to draw a precise highlight
@@ -15,8 +17,13 @@ package com.nib.backend.dto;
  */
 public record CitationDto(
         int pageNumber,
+        UUID blockId,
+        String blockType,
+        String evidenceType,
         String textExcerpt,
+        UUID textBlockId,
         String visualSummary,
+        UUID visualBlockId,
         BBox bbox,
         Double pageWidth,
         Double pageHeight

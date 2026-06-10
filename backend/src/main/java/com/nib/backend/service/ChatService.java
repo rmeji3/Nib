@@ -735,13 +735,30 @@ public class ChatService {
 
             String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
             String visualSummary = visualBlock.map(c -> truncate(c.extractedText(), 600)).orElse(null);
+            UUID textBlockId = textBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
+            UUID visualBlockId = visualBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
 
             // Anchor's bbox drives the viewer overlay
             BBox bbox = anchor.bbox();
             Double pageWidth = anchor.pageWidth();
             Double pageHeight = anchor.pageHeight();
+            String evidenceType = visualBlock.isPresent() && textBlock.isPresent()
+                    ? "text_and_visual"
+                    : visualBlock.isPresent() ? "visual" : "text";
 
-            citations.add(new CitationDto(pageNumber, textExcerpt, visualSummary, bbox, pageWidth, pageHeight));
+            citations.add(new CitationDto(
+                    pageNumber,
+                    anchor.blockId(),
+                    anchor.blockType(),
+                    evidenceType,
+                    textExcerpt,
+                    textBlockId,
+                    visualSummary,
+                    visualBlockId,
+                    bbox,
+                    pageWidth,
+                    pageHeight
+            ));
         }
         return citations;
     }

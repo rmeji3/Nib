@@ -28,6 +28,7 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("Running idempotent database migrations...");
         migrateTsvectorColumn();
+        migrateIngestionWarningColumns();
         log.info("Database migrations complete.");
     }
 
@@ -81,5 +82,23 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
                 """);
 
         log.info("tsvector column, GIN index, and auto-populate trigger verified on content_blocks");
+    }
+
+    /**
+     * Phase 1 hardening: surface partial ingestion failures to the API without
+     * changing the existing COMPLETE/FAILED status contract.
+     */
+    private void migrateIngestionWarningColumns() {
+        jdbcTemplate.execute("""
+                ALTER TABLE ingestion_jobs
+                  ADD COLUMN IF NOT EXISTS pages_failed integer NOT NULL DEFAULT 0
+                """);
+
+        jdbcTemplate.execute("""
+                ALTER TABLE ingestion_jobs
+                  ADD COLUMN IF NOT EXISTS warning_message text
+                """);
+
+        log.info("Partial-ingestion warning columns verified on ingestion_jobs");
     }
 }

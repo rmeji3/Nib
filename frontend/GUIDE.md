@@ -40,40 +40,41 @@ This is a live developer guide and project directory index for the Next.js front
 
 | URL Route | Type | File Path |
 | --- | --- | --- |
-| `/` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/page.tsx) |
-| `/document/[id]` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/[id]/page.tsx) |
-| `/document/uploading` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/document/uploading/page.tsx) |
-| `/file` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/file/page.tsx) |
-| `/home` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/home/page.tsx) |
-| `/settings` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/settings/page.tsx) |
-| `/signin` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signin/page.tsx) |
-| `/signup` | Page | [`page.tsx`](file:///A:/Coding/ai-pdf-viewer/frontend/app/signup/page.tsx) |
+| `/` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/page.tsx) |
+| `/document/[id]` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/[id]/page.tsx) |
+| `/document/uploading` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/uploading/page.tsx) |
+| `/file` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/file/page.tsx) |
+| `/home` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/home/page.tsx) |
+| `/settings` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/page.tsx) |
+| `/signin` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/signin/page.tsx) |
+| `/signup` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/signup/page.tsx) |
 
 ### Feature Modules (`frontend/app/features`)
 
 #### Feature: `auth`
 - **Components**:
-  - [`auth-card.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/auth-card.tsx)
-  - [`auth-provider.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/auth-provider.tsx)
-  - [`oauth-button.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/oauth-button.tsx)
-  - [`protected-route.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/components/protected-route.tsx)
+  - [`auth-card.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/auth/components/auth-card.tsx)
+  - [`auth-provider.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/auth/components/auth-provider.tsx)
+  - [`oauth-button.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/auth/components/oauth-button.tsx)
+  - [`protected-route.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/auth/components/protected-route.tsx)
 - **Hooks**:
-  - [`use-auth.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/auth/hooks/use-auth.ts)
+  - [`use-auth.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/auth/hooks/use-auth.ts)
 
 #### Feature: `nib`
 - **Hooks**:
-  - [`use-ingestion-status.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-ingestion-status.ts)
-  - [`use-merge-pdf.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-merge-pdf.ts)
-  - [`use-nib-chat.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-chat.ts)
-  - [`use-nib-state.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-state.ts)
-  - [`use-nib-upload.ts`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/app/features/nib/hooks/use-nib-upload.ts)
+  - [`use-ingestion-status.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-ingestion-status.ts)
+  - [`use-merge-pdf.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-merge-pdf.ts)
+  - [`use-nib-chat.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-nib-chat.ts)
+  - [`use-nib-state.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-nib-state.ts)
+  - [`use-nib-upload.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-nib-upload.ts)
+  - [`use-pdf-search.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-pdf-search.ts)
 
 #### Feature: `upload`
 
 ### Shared Global Components (`frontend/components`)
 
-- [`ui/drawer.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/components/ui/drawer.tsx)
-- [`ui/dropdown-menu.tsx`](file:///C:/Users/haide/Documents/Coding Projects/Working Projects/Nib/frontend/components/ui/dropdown-menu.tsx)
+- [`ui/drawer.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/drawer.tsx)
+- [`ui/dropdown-menu.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/dropdown-menu.tsx)
 
 <!-- END_AUTO_MAP -->
 

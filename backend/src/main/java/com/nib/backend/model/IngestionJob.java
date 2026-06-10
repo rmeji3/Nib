@@ -34,6 +34,13 @@ public class IngestionJob {
     @Builder.Default
     private Integer pagesProcessed = 0;
 
+    @Column(name = "pages_failed", nullable = false)
+    @Builder.Default
+    private Integer pagesFailed = 0;
+
+    @Column(name = "warning_message", columnDefinition = "TEXT")
+    private String warningMessage;
+
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 

@@ -8,6 +8,8 @@ public record IngestionStatusResponse(
         String status,
         Integer pagesTotal,
         Integer pagesProcessed,
+        Integer pagesFailed,
+        String warningMessage,
         String errorMessage,
         String startedAt,
         String completedAt
