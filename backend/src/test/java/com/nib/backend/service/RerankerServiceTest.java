@@ -35,6 +35,7 @@ class RerankerServiceTest {
         ReflectionTestUtils.setField(service, "model", "rerank-v3.5");
         ReflectionTestUtils.setField(service, "candidatePoolSize", 40);
         ReflectionTestUtils.setField(service, "maxChunkChars", 2000);
+        ReflectionTestUtils.setField(service, "minTopRelevance", 0.10);
         return service;
     }
 
@@ -77,6 +78,31 @@ class RerankerServiceTest {
         assertThat(result).isPresent();
         assertThat(result.get().chunkMatches()).containsExactly(revenue);
         assertThat(result.get().topRelevance()).isCloseTo(0.91, within(1e-9));
+        server.verify();
+    }
+
+    @Test
+    void rerankKeepsBiEncoderOrderWhenAllRelevanceScoresAreBelowFloor() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RerankerService service = buildService(builder.build(), "rerank-key");
+
+        // Terse-query failure mode: the cross-encoder scores everything ~0.05.
+        server.expect(requestTo(API_URL))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("""
+                        {
+                          "results": [
+                            { "index": 0, "relevance_score": 0.055 },
+                            { "index": 1, "relevance_score": 0.041 }
+                          ]
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        var result = service.rerank("what uni?",
+                List.of(chunk("Education: University of Illinois Chicago", 1), chunk("Skills: Java", 1)), 5);
+
+        assertThat(result).isEmpty();
         server.verify();
     }
 

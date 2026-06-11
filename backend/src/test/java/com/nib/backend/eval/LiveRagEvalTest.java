@@ -2,7 +2,6 @@ package com.nib.backend.eval;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.dto.ChatQueryResponse;
 import org.junit.jupiter.api.Test;
@@ -110,16 +109,20 @@ class LiveRagEvalTest {
                 .isEmpty();
     }
 
+    // HTTP responses are read as Maps: Spring Boot 4's RestClient converters use
+    // Jackson 3 (tools.jackson), whose JsonNode is a different type than the
+    // Jackson 2 node used to load cases.json.
     private String registerThrowawayUser() {
         String email = "eval-" + UUID.randomUUID() + "@nib-eval.local";
-        JsonNode auth = restClient.post()
+        @SuppressWarnings("unchecked")
+        Map<String, Object> auth = restClient.post()
                 .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("name", "Eval Runner", "email", email, "password", "eval-" + UUID.randomUUID()))
                 .retrieve()
-                .body(JsonNode.class);
-        assertThat(auth).isNotNull();
-        return auth.get("token").asText();
+                .body(Map.class);
+        assertThat(auth).isNotNull().containsKey("token");
+        return String.valueOf(auth.get("token"));
     }
 
     private UUID uploadPdf(String token, String pdf) throws Exception {
@@ -135,28 +138,40 @@ class LiveRagEvalTest {
             }
         });
 
-        JsonNode doc = restClient.post()
+        @SuppressWarnings("unchecked")
+        Map<String, Object> doc = restClient.post()
                 .uri("/api/v1/documents/upload")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(form)
                 .retrieve()
-                .body(JsonNode.class);
-        assertThat(doc).isNotNull();
-        return UUID.fromString(doc.get("id").asText());
+                .body(Map.class);
+        assertThat(doc).isNotNull().containsKey("id");
+        return UUID.fromString(String.valueOf(doc.get("id")));
     }
 
     private void awaitIngestion(String token, UUID documentId, String pdf) throws InterruptedException {
         long deadline = System.currentTimeMillis() + INGESTION_TIMEOUT_SECONDS * 1000L;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode status = restClient.get()
-                    .uri("/api/v1/documents/{id}/status", documentId)
-                    .header("Authorization", "Bearer " + token)
-                    .retrieve()
-                    .body(JsonNode.class);
+            Map<String, Object> status;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = restClient.get()
+                        .uri("/api/v1/documents/{id}/status", documentId)
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .body(Map.class);
+                status = body;
+            } catch (org.springframework.web.client.ResourceAccessException ex) {
+                // Dev backends restart; ingestion state is persisted, so keep polling.
+                System.out.println("Backend unreachable while polling " + pdf + " (" + ex.getMessage()
+                        + ") — retrying");
+                Thread.sleep(INGESTION_POLL_SECONDS * 1000L);
+                continue;
+            }
             String state = status == null || status.get("status") == null
                     ? "UNKNOWN"
-                    : status.get("status").asText();
+                    : String.valueOf(status.get("status"));
             if ("COMPLETE".equalsIgnoreCase(state)) {
                 return;
             }
@@ -170,13 +185,14 @@ class LiveRagEvalTest {
     }
 
     private UUID createSession(String token, UUID documentId) {
-        JsonNode session = restClient.post()
-                .uri("/api/v1/chat/sessions/document/{documentId}", documentId)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> session = restClient.post()
+                .uri("/api/v1/chat/sessions/document/" + documentId)
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
-                .body(JsonNode.class);
-        assertThat(session).isNotNull();
-        return UUID.fromString(session.get("id").asText());
+                .body(Map.class);
+        assertThat(session).isNotNull().containsKey("id");
+        return UUID.fromString(String.valueOf(session.get("id")));
     }
 
     private ChatQueryResponse query(String token, UUID sessionId, String question) {

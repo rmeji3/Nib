@@ -661,11 +661,22 @@ public class ChatService {
         List<CitationDto> citations = verification.refused()
                 ? List.of()
                 : extractCitations(answer, chunks);
-        GroundingVerificationDto groundingVerification = verification.refused()
+
+        // An uncited "I cannot find this information" answer is a refusal in
+        // substance even though the model produced it instead of the canned
+        // refusal path — classify it as one so the API reports refused=true with
+        // zero confidence rather than a confident-looking empty answer.
+        boolean refusedAnswer = verification.refused();
+        if (!refusedAnswer && citations.isEmpty() && isNoInformationAnswer(answer)) {
+            refusedAnswer = true;
+            log.info("Treating uncited no-information answer as refusal for session {}", sessionId);
+        }
+
+        GroundingVerificationDto groundingVerification = refusedAnswer
                 ? refusedVerification()
                 : verifyGrounding(answer, chunks, citations);
         trace.recordVerification(
-                verification.verified(), verification.refused(), verification.issues(), groundingVerification);
+                verification.verified(), refusedAnswer, verification.issues(), groundingVerification);
 
         // Persist the assistant turn
         ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
@@ -682,7 +693,7 @@ public class ChatService {
                 rerankRelevance,
                 groundedness,
                 groundingVerification,
-                verification.refused(),
+                refusedAnswer,
                 verification.verified(),
                 verification.issues().size(),
                 citations.size()
@@ -697,11 +708,11 @@ public class ChatService {
                 groundedness,
                 elapsedMillis(startedNanos),
                 generation.tokenUsage(),
-                verification.refused()
+                refusedAnswer
         );
         if (answerCacheEnabled
                 && documentVersionId.isPresent()
-                && !verification.refused()
+                && !refusedAnswer
                 && groundingVerification.verified()
                 && answerConfidence >= answerCacheMinConfidence) {
             semanticCacheService.saveAnswer(
@@ -720,7 +731,9 @@ public class ChatService {
         }
 
         trace.end(
-                verification.refused() ? "verifier_refused" : "answered",
+                verification.refused() ? "verifier_refused"
+                        : refusedAnswer ? "no_information"
+                        : "answered",
                 answerConfidence,
                 groundedness,
                 answer
@@ -735,11 +748,33 @@ public class ChatService {
                 answerConfidence,
                 groundedness,
                 groundingVerification,
-                verification.refused()
+                refusedAnswer
         );
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Detects answers where the model itself declined for lack of evidence
+     * ("I cannot find this information in the indexed pages..."). Only consulted
+     * when the answer carries zero citations, so a cited answer that merely
+     * notes a gap in passing is never reclassified.
+     */
+    private static final List<String> NO_INFORMATION_PHRASES = List.of(
+            "cannot find this information",
+            "could not find this information",
+            "couldn't find this information",
+            "cannot find information about",
+            "no information about this in the document",
+            "not enough relevant information",
+            "does not contain information about"
+    );
+
+    private static boolean isNoInformationAnswer(String answer) {
+        if (answer == null || answer.isBlank()) return false;
+        String normalized = answer.toLowerCase(Locale.ROOT);
+        return NO_INFORMATION_PHRASES.stream().anyMatch(normalized::contains);
+    }
 
     /**
      * Phase 4 — dynamic topK based on document page count. A 3-page menu needs

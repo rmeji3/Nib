@@ -53,6 +53,12 @@ public class ChunkingService {
             String chunk = text.substring(start, end).trim();
             if (!chunk.isEmpty()) chunks.add(chunk);
 
+            // The chunk reaching end-of-text is the last one. Without this stop,
+            // `start = end - overlap` pins behind the text end and the
+            // forward-progress fallback emits one suffix fragment per character
+            // of overlap ("ing.", "ng.", "g.", ...).
+            if (end >= length) break;
+
             // Next chunk starts with overlap
             int next = end - overlapChars;
             start = Math.max(next, start + 1); // guarantee forward progress
@@ -98,6 +104,9 @@ public class ChunkingService {
                 result.add(new PositionedChunk(chunkIndex, chunkText, bbox));
                 chunkIndex++;
             }
+
+            // Same end-of-text stop as chunk() — see comment there.
+            if (end >= length) break;
 
             int next = end - overlapChars;
             start = Math.max(next, start + 1);
