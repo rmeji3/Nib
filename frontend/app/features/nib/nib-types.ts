@@ -39,6 +39,11 @@ export interface PromptLibraryEntry {
   a: PromptAnswer;
 }
 
+export interface ConversationStarter {
+  q: string;
+  icon: string;
+}
+
 export interface UserMessage {
   id: string;
   role: 'user';
@@ -52,10 +57,13 @@ export interface AssistantMessage {
   reasoningShown: string[];
   segments: MessageSegment[];
   citations: Citation[];
-  confidence: number;
+  confidence: number | null;
+  reported?: boolean;
   streaming: boolean;
   streamDone: boolean;
+  queued?: boolean;
   streamedText?: string;
+  animate?: boolean;
 }
 
 export type ChatMessage = UserMessage | AssistantMessage;

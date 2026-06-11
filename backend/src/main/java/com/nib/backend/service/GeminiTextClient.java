@@ -3,30 +3,46 @@ package com.nib.backend.service;
 import com.nib.backend.exception.RateLimitException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
+/**
+ * Text-only Gemini calls on top of Spring AI's ChatModel (Google GenAI).
+ *
+ * Spring AI owns the HTTP transport and response parsing; this client keeps the
+ * Nib-specific generation policy: the primary→fallback model chain, per-model
+ * transient retry with backoff, rate-limit mapping to {@link RateLimitException},
+ * and the {@link GenerationResult} contract (text + token usage + the model that
+ * actually answered) that chat audits and the answer cache depend on.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class GeminiTextClient {
 
-    private final RestClient restClient;
+    private final ChatModel chatModel;
 
-    @Value("${gemini.api.key}")
-    private String geminiApiKey;
-
-    @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta}")
-    private String geminiApiUrl;
-
-    @Value("${gemini.model:gemini-2.5-flash}")
+    @Value("${gemini.model:gemini-2.5-flash-lite}")
     private String geminiModel;
+
+    @Value("${gemini.fallback-models:gemini-2.5-flash}")
+    private String fallbackModels;
+
+    @Value("${gemini.retry.max-attempts-per-model:2}")
+    private int maxAttemptsPerModel;
+
+    @Value("${gemini.retry.backoff-ms:500}")
+    private long retryBackoffMs;
 
     public record TokenUsage(
             Integer promptTokenCount,
@@ -36,8 +52,13 @@ public class GeminiTextClient {
 
     public record GenerationResult(
             String text,
-            TokenUsage tokenUsage
-    ) {}
+            TokenUsage tokenUsage,
+            String modelVersion
+    ) {
+        public GenerationResult(String text, TokenUsage tokenUsage) {
+            this(text, tokenUsage, null);
+        }
+    }
 
     public String generate(String prompt) {
         return generate(prompt, 2048, 0.1);
@@ -47,67 +68,124 @@ public class GeminiTextClient {
         return generateWithMetadata(prompt, maxOutputTokens, temperature).text();
     }
 
-    @SuppressWarnings("unchecked")
     public GenerationResult generateWithMetadata(String prompt, int maxOutputTokens, double temperature) {
-        Map<String, Object> body = Map.of(
-                "contents", List.of(Map.of(
-                        "parts", List.of(Map.of("text", prompt))
-                )),
-                "generationConfig", Map.of(
-                        "temperature", temperature,
-                        "maxOutputTokens", maxOutputTokens
-                )
-        );
+        RuntimeException lastFailure = null;
+        for (String model : candidateModels()) {
+            int attempts = Math.max(1, maxAttemptsPerModel);
+            for (int attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    return callModel(prompt, maxOutputTokens, temperature, model);
+                } catch (RateLimitException ex) {
+                    throw ex;
+                } catch (RuntimeException ex) {
+                    if (isRateLimit(ex)) {
+                        log.warn("Gemini API rate limit hit — check billing/quota at https://ai.dev/rate-limit");
+                        throw new RateLimitException(
+                                "The AI service quota has been reached. Please enable billing on your Google Cloud project " +
+                                        "(console.cloud.google.com) or wait for your daily quota to reset, then try again.");
+                    }
+                    lastFailure = ex;
+                    if (!isTransientFailure(ex) || attempt == attempts) {
+                        break;
+                    }
+                    backoff(model, attempt, ex);
+                }
+            }
+            if (lastFailure != null && isTransientFailure(lastFailure)) {
+                log.warn("Gemini model {} failed with transient error; trying next fallback if configured", model);
+            } else if (lastFailure != null) {
+                throw lastFailure;
+            }
+        }
+        throw lastFailure != null ? lastFailure : new RuntimeException("Gemini generation failed");
+    }
 
-        String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
+    private GenerationResult callModel(String prompt, int maxOutputTokens, double temperature, String model) {
+        ChatOptions options = ChatOptions.builder()
+                .model(model)
+                .temperature(temperature)
+                .maxTokens(maxOutputTokens)
+                .build();
 
-        Map<String, Object> response;
-        try {
-            response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(Map.class);
-        } catch (HttpClientErrorException.TooManyRequests ex) {
-            log.warn("Gemini API rate limit hit — check billing/quota at https://ai.dev/rate-limit");
-            throw new RateLimitException(
-                    "The AI service quota has been reached. Please enable billing on your Google Cloud project " +
-                            "(console.cloud.google.com) or wait for your daily quota to reset, then try again.");
-        } catch (HttpClientErrorException ex) {
-            log.error("Gemini API HTTP error {}: {}", ex.getStatusCode(), ex.getMessage());
-            throw new RuntimeException("Gemini API returned error " + ex.getStatusCode().value() + ": " + ex.getMessage());
+        ChatResponse response = chatModel.call(new Prompt(prompt, options));
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            throw new RuntimeException("Empty response from Gemini API");
+        }
+        String text = response.getResult().getOutput().getText();
+        if (text == null) {
+            throw new RuntimeException("No text in Gemini response");
         }
 
-        if (response == null) throw new RuntimeException("Empty response from Gemini API");
-
-        List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
-        if (candidates == null || candidates.isEmpty()) throw new RuntimeException("No candidates in Gemini response");
-
-        Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-        List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-        if (parts == null || parts.isEmpty()) throw new RuntimeException("No parts in Gemini response");
+        String reportedModel = response.getMetadata() == null ? null : response.getMetadata().getModel();
         return new GenerationResult(
-                (String) parts.get(0).get("text"),
-                parseTokenUsage((Map<String, Object>) response.get("usageMetadata"))
+                text,
+                parseTokenUsage(response),
+                reportedModel == null || reportedModel.isBlank() ? model : reportedModel
         );
     }
 
-    private static TokenUsage parseTokenUsage(Map<String, Object> usageMetadata) {
-        if (usageMetadata == null) {
+    private List<String> candidateModels() {
+        Set<String> models = new LinkedHashSet<>();
+        if (geminiModel != null && !geminiModel.isBlank()) {
+            models.add(geminiModel.trim());
+        }
+        if (fallbackModels != null && !fallbackModels.isBlank()) {
+            for (String fallback : fallbackModels.split(",")) {
+                if (!fallback.isBlank()) {
+                    models.add(fallback.trim());
+                }
+            }
+        }
+        return new ArrayList<>(models);
+    }
+
+    /**
+     * Provider failures surface as Google GenAI SDK exceptions or Spring AI
+     * retry exceptions depending on the call path, so classification is done on
+     * the status code / status name embedded in the message rather than on
+     * exception types.
+     */
+    private static boolean isRateLimit(RuntimeException ex) {
+        String message = ex.getMessage();
+        return message != null && (message.contains("429") || message.contains("RESOURCE_EXHAUSTED"));
+    }
+
+    private static boolean isTransientFailure(RuntimeException ex) {
+        String message = ex.getMessage();
+        return message != null && (
+                message.contains("500") ||
+                message.contains("502") ||
+                message.contains("503") ||
+                message.contains("504") ||
+                message.contains("UNAVAILABLE") ||
+                message.contains("DEADLINE_EXCEEDED")
+        );
+    }
+
+    private void backoff(String model, int attempt, RuntimeException ex) {
+        long delay = Math.max(0, retryBackoffMs) * attempt;
+        log.warn("Gemini model {} attempt {} failed transiently: {}; retrying in {} ms",
+                model, attempt, ex.getMessage(), delay);
+        if (delay <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while backing off after Gemini failure", interrupted);
+        }
+    }
+
+    private static TokenUsage parseTokenUsage(ChatResponse response) {
+        Usage usage = response.getMetadata() == null ? null : response.getMetadata().getUsage();
+        if (usage == null) {
             return new TokenUsage(null, null, null);
         }
         return new TokenUsage(
-                intOrNull(usageMetadata.get("promptTokenCount")),
-                intOrNull(usageMetadata.get("candidatesTokenCount")),
-                intOrNull(usageMetadata.get("totalTokenCount"))
+                usage.getPromptTokens(),
+                usage.getCompletionTokens(),
+                usage.getTotalTokens()
         );
-    }
-
-    private static Integer intOrNull(Object value) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        return null;
     }
 }

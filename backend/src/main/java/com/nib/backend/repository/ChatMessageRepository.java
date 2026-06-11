@@ -12,6 +12,10 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
 
     List<ChatMessage> findBySessionIdOrderByCreatedAtAsc(UUID sessionId);
 
+    long countBySessionId(UUID sessionId);
+
+    void deleteBySessionId(UUID sessionId);
+
     /**
      * Returns the most recent N messages for a session, ordered newest-first.
      * Used by the multi-turn query rewriter to get conversation context.

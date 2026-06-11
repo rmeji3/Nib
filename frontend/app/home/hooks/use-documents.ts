@@ -17,7 +17,7 @@ export interface DocumentItem {
   title: string;
   meta: string;
   tag: string;
-  storageUrl: string;
+  storageUrl: string | null;
   pageCount: number | null;
   fileSizeBytes: number | null;
   createdAt: string;

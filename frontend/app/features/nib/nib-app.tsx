@@ -41,9 +41,35 @@ export default function NibApp() {
     onDividerPointerUp,
   } = useNibState();
 
-  const { messages, busy, sendPrompt, onPickSuggestion } = useNibChat(documentId);
+  const {
+    sessionId,
+    sessions,
+    starters,
+    messages,
+    busy,
+    canSubmitPrompt,
+    isLoadingMessages,
+    deletingSessionId,
+    chatError,
+    canCreateNewChat,
+    sendPrompt,
+    onPickSuggestion,
+    createNewChat,
+    deleteChat,
+    regenerateResponse,
+    removeMessage,
+    reportMessage,
+    selectSession,
+  } = useNibChat(documentId);
   const searchState = usePdfSearch(pdf);
-  const { isIndexing, progress, pagesProcessed, pagesTotal } = useIngestionStatus(documentId);
+  const {
+    isIndexing,
+    isFailed,
+    progress,
+    pagesProcessed,
+    pagesTotal,
+    shouldHideDocument,
+  } = useIngestionStatus(documentId);
 
   useEffect(() => {
     // Jump to match when next/prev is clicked
@@ -107,6 +133,11 @@ export default function NibApp() {
             searchQuery={searchState.query}
             setPdf={setPdf}
             highlight={highlight}
+            lockedUntilIndexed={shouldHideDocument}
+            indexingFailed={isFailed}
+            indexingProgress={progress}
+            indexingPagesProcessed={pagesProcessed}
+            indexingPagesTotal={pagesTotal}
           />
         </div>
 
@@ -135,9 +166,25 @@ export default function NibApp() {
               {/* Chat */}
               <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ChatPanel
+                  sessions={sessions}
+                  activeSessionId={sessionId}
+                  starters={starters}
                   messages={messages}
+                  chatError={chatError}
+                  isLoadingMessages={isLoadingMessages}
+                  canSubmitPrompt={canSubmitPrompt}
                   onSendPrompt={sendPrompt}
                   onPickSuggestion={onPickSuggestion}
+                  onNewChat={createNewChat}
+                  onSelectSession={(nextSessionId) => {
+                    void selectSession(nextSessionId);
+                  }}
+                  onDeleteSession={deleteChat}
+                  onRegenerateResponse={regenerateResponse}
+                  onRemoveMessage={removeMessage}
+                  onReportMessage={reportMessage}
+                  deletingSessionId={deletingSessionId}
+                  canCreateNewChat={canCreateNewChat}
                   onCiteClick={onCiteClick}
                   onEvidenceOpen={openEvidence}
                   busy={busy}

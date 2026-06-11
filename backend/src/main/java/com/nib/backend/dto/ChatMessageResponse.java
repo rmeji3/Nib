@@ -8,5 +8,8 @@ public record ChatMessageResponse(
         String role,
         String content,
         List<CitationDto> citations,
-        String createdAt
+        String createdAt,
+        Double confidence,
+        Double groundedness,
+        boolean reported
 ) {}

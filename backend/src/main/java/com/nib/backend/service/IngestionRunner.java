@@ -107,6 +107,8 @@ public class IngestionRunner {
 
     private record VisionPageResult(byte[] pngBytes, VisualExtractionResult extraction) {}
 
+    private record VisualCropUpload(String path, boolean unsupportedMimeType) {}
+
     @Value("${ingestion.vision.enabled:true}")
     private boolean visionEnabled;
 
@@ -451,17 +453,30 @@ public class IngestionRunner {
             VisualExtractionResult extraction
     ) {
         int elementIndex = 0;
+        boolean cropUploadsDisabled = false;
         for (VisualElement element : extraction.elements()) {
             elementIndex++;
             BBox bbox = toPageBBox(element.bbox(), page.pageWidth(), page.pageHeight());
-            String cropPath = uploadVisualCrop(
-                    documentId,
-                    page.pageNumber(),
-                    elementIndex,
-                    element.type(),
-                    pagePng,
-                    element.bbox()
-            );
+            String cropPath = null;
+            if (!cropUploadsDisabled) {
+                VisualCropUpload cropUpload = uploadVisualCrop(
+                        documentId,
+                        page.pageNumber(),
+                        elementIndex,
+                        element.type(),
+                        pagePng,
+                        element.bbox()
+                );
+                cropPath = cropUpload.path();
+                if (cropUpload.unsupportedMimeType()) {
+                    cropUploadsDisabled = true;
+                    log.warn(
+                            "Visual crop uploads disabled for document {} because storage rejected image/png. "
+                                    + "Structured visual evidence will still be indexed without crop assets.",
+                            documentId
+                    );
+                }
+            }
             String text = buildElementEmbeddingText(page.pageNumber(), element);
             pending.add(new PendingBlock(
                     page.pageNumber(),
@@ -515,7 +530,7 @@ public class IngestionRunner {
         );
     }
 
-    private String uploadVisualCrop(
+    private VisualCropUpload uploadVisualCrop(
             UUID documentId,
             int pageNumber,
             int elementIndex,
@@ -528,12 +543,27 @@ public class IngestionRunner {
             String path = "extracted-visuals/%s/page-%d/%s-%d.png"
                     .formatted(documentId, pageNumber, elementType, elementIndex);
             storageService.uploadFile(path, crop, "image/png");
-            return path;
+            return new VisualCropUpload(path, false);
         } catch (Exception ex) {
+            if (isUnsupportedMimeType(ex)) {
+                return new VisualCropUpload(null, true);
+            }
             log.warn("Failed to upload visual crop for document {} page {} element {}: {}",
                     documentId, pageNumber, elementIndex, ex.getMessage());
-            return null;
+            return new VisualCropUpload(null, false);
         }
+    }
+
+    private static boolean isUnsupportedMimeType(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains("invalid_mime_type")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static byte[] cropPng(byte[] pagePng, NormalizedBBox bbox) throws Exception {
@@ -606,6 +636,8 @@ public class IngestionRunner {
                     return "legal";
                 if (raw.contains("technical") || raw.contains("specification") || raw.contains("manual") || raw.contains("engineering"))
                     return "technical";
+                if (raw.contains("resume") || raw.contains("résumé") || raw.contains("cv") || raw.contains("curriculum vitae"))
+                    return "resume";
                 if (raw.contains("catalog") || raw.contains("catalogue") || raw.contains("product") || raw.contains("brochure"))
                     return "catalog";
                 return "mixed";

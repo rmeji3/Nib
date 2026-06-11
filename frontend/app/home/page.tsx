@@ -144,11 +144,18 @@ function InfiniteScrollTrigger({ onIntersect, hasMore }: { onIntersect: () => vo
 
 function RecentDocCard({ doc, onClick }: { doc: DocumentItem; onClick: () => void }) {
   const formatMeta = useFormattedMeta();
+  const isAvailable = !!doc.storageUrl;
   return (
     <button
       onClick={onClick}
       type="button"
-      className="shrink-0 group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-3 py-3 w-[210px] hover:border-white/20 hover:bg-[var(--bg-elevated)] text-left transition"
+      disabled={!isAvailable}
+      title={isAvailable ? doc.title : 'Storage file missing'}
+      className={`shrink-0 group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-3 py-3 w-[210px] text-left transition ${
+        isAvailable
+          ? 'hover:border-white/20 hover:bg-[var(--bg-elevated)]'
+          : 'cursor-not-allowed opacity-60'
+      }`}
     >
       <div className="shrink-0 flex h-9 w-7 items-center justify-center rounded-[3px] bg-white/5 text-[var(--text-faint)] group-hover:text-[var(--text-dim)] transition-colors">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -160,6 +167,21 @@ function RecentDocCard({ doc, onClick }: { doc: DocumentItem; onClick: () => voi
         <p className="text-[11px] text-[var(--text-faint)] mt-0.5 truncate">{formatMeta(doc)}</p>
       </div>
     </button>
+  );
+}
+
+function MissingFilePreview() {
+  return (
+    <div className="mb-4 flex h-72 w-full items-center justify-center rounded-md border border-dashed border-red-400/20 bg-red-500/5 text-red-300/70">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="9" x2="15" y1="15" y2="15" />
+        </svg>
+        <span className="text-[11px] font-medium uppercase tracking-wider">Missing file</span>
+      </div>
+    </div>
   );
 }
 
@@ -221,16 +243,25 @@ interface DocumentCardProps {
 
 function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting }: DocumentCardProps) {
   const formatMeta = useFormattedMeta();
+  const isAvailable = !!doc.storageUrl;
   return (
-    <div className={`group relative rounded-xl border border-white/10 bg-[var(--bg-surface)] transition hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg flex flex-col h-full ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
-      <button type="button" onClick={onClick} className="w-full text-left p-4 flex-1 flex flex-col">
-        <DocumentPreview documentId={doc.id} />
+    <div className={`group relative rounded-xl border border-white/10 bg-[var(--bg-surface)] transition flex flex-col h-full ${isAvailable ? 'hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg' : 'opacity-75'} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!isAvailable}
+        title={isAvailable ? doc.title : 'Storage file missing'}
+        className={`w-full text-left p-4 flex-1 flex flex-col ${isAvailable ? '' : 'cursor-not-allowed'}`}
+      >
+        {isAvailable ? <DocumentPreview documentId={doc.id} /> : <MissingFilePreview />}
         <h4 className="font-serif text-lg leading-6 line-clamp-2 pr-7 break-words">
           <Highlight text={doc.title} search={search} />
         </h4>
         <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
         <div className="mt-auto pt-3">
-          <span className="inline-flex rounded bg-white/10 px-2 py-1 text-[10px] text-[var(--text-dim)]">{doc.tag}</span>
+          <span className="inline-flex rounded bg-white/10 px-2 py-1 text-[10px] text-[var(--text-dim)]">
+            {isAvailable ? doc.tag : 'Missing file'}
+          </span>
         </div>
       </button>
 
@@ -582,6 +613,7 @@ export default function HomePage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleDocumentClick = (doc: DocumentItem) => {
+    if (!doc.storageUrl) return;
     setDocument(null, doc.id, doc.storageUrl, doc.title);
     router.push(`/document/${doc.id}`);
   };
@@ -990,7 +1022,13 @@ export default function HomePage() {
                     <div className="relative shrink-0 w-[140px] h-[180px] hidden sm:block mt-1">
                       <div className="absolute top-2 left-2 w-full h-full bg-white/5 rounded-[4px] transform rotate-3 border border-white/10" />
                       <div className="absolute top-1 left-1 w-full h-full bg-white/20 rounded-[4px] transform rotate-1 border border-white/20" />
-                      <BannerDocumentPreview documentId={sortedDocuments[0].id} />
+                      {sortedDocuments[0].storageUrl ? (
+                        <BannerDocumentPreview documentId={sortedDocuments[0].id} />
+                      ) : (
+                        <div className="absolute top-0 left-0 flex h-full w-full items-center justify-center rounded-[4px] border border-dashed border-red-400/20 bg-red-500/5 text-[10px] font-medium uppercase tracking-wider text-red-300/70">
+                          Missing file
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col flex-1 items-start">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-3 py-1 text-xs text-[var(--text-dim)]">
@@ -1001,8 +1039,9 @@ export default function HomePage() {
                       <p className="mt-2 text-[13px] text-[var(--text-faint)]">{formatMeta(sortedDocuments[0])}</p>
                       <div className="mt-5 flex flex-wrap gap-3">
                         <button type="button" onClick={() => handleDocumentClick(sortedDocuments[0])}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90">
-                          Open document
+                          disabled={!sortedDocuments[0].storageUrl}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                          {sortedDocuments[0].storageUrl ? 'Open document' : 'Missing file'}
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                         </button>
                         <button type="button" onClick={() => toggleStar.mutate(sortedDocuments[0].id)}

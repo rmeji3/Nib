@@ -6,5 +6,7 @@ public record ChatSessionResponse(
         UUID id,
         UUID documentId,
         String title,
-        String createdAt
+        String createdAt,
+        String updatedAt,
+        long messageCount
 ) {}

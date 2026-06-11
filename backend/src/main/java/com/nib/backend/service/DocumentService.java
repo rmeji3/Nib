@@ -95,7 +95,7 @@ public class DocumentService {
                 : documentRepository.findByUserAndDeletedAtIsNullOrderByCreatedAtDesc(user, pageable);
 
         List<DocumentResponse> content = docs.stream()
-                .map(doc -> toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600)))
+                .map(doc -> toResponse(doc, generateSignedUrlIfPresent(doc)))
                 .collect(Collectors.toList());
 
         return new PagedResponse<>(
@@ -112,7 +112,7 @@ public class DocumentService {
     public PagedResponse<DocumentResponse> listTrash(User user, Pageable pageable) {
         Page<Document> docs = documentRepository.findByUserAndDeletedAtIsNotNullOrderByDeletedAtDesc(user, pageable);
         List<DocumentResponse> content = docs.stream()
-                .map(doc -> toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600)))
+                .map(doc -> toResponse(doc, generateSignedUrlIfPresent(doc)))
                 .collect(Collectors.toList());
 
         return new PagedResponse<>(
@@ -129,7 +129,7 @@ public class DocumentService {
     public PagedResponse<DocumentResponse> listStarredDocuments(User user, Pageable pageable) {
         Page<Document> docs = documentRepository.findByUserAndIsStarredTrueAndDeletedAtIsNullOrderByCreatedAtDesc(user, pageable);
         List<DocumentResponse> content = docs.stream()
-                .map(doc -> toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600)))
+                .map(doc -> toResponse(doc, generateSignedUrlIfPresent(doc)))
                 .collect(Collectors.toList());
 
         return new PagedResponse<>(
@@ -146,7 +146,7 @@ public class DocumentService {
     public DocumentResponse getDocument(UUID id, User user) {
         Document doc = documentRepository.findByIdAndUserAndDeletedAtIsNull(id, user)
                 .orElseThrow(() -> new DocumentNotFoundException(id));
-        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+        return toResponse(doc, generateSignedUrlIfPresent(doc));
     }
 
     @Transactional(readOnly = true)
@@ -165,7 +165,7 @@ public class DocumentService {
         doc.setFilename(sanitizeFilename(displayName));
         documentRepository.save(doc);
         log.info("Renamed document {} to '{}'", id, displayName);
-        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+        return toResponse(doc, generateSignedUrlIfPresent(doc));
     }
 
     public DocumentResponse toggleStar(UUID id, User user) {
@@ -174,7 +174,7 @@ public class DocumentService {
         doc.setStarred(!doc.isStarred());
         documentRepository.save(doc);
         log.info("Toggled star on document {} for user {}. Now starred: {}", id, user.getId(), doc.isStarred());
-        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+        return toResponse(doc, generateSignedUrlIfPresent(doc));
     }
 
     /** Move a document to trash (soft delete). */
@@ -194,7 +194,7 @@ public class DocumentService {
         doc.setDeletedAt(null);
         documentRepository.save(doc);
         log.info("Restored document {} for user {}", id, user.getId());
-        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+        return toResponse(doc, generateSignedUrlIfPresent(doc));
     }
 
     /** Permanently delete a document from both the DB and Supabase storage. */
@@ -364,7 +364,7 @@ public class DocumentService {
         Page<Document> docs = documentRepository
                 .findByUserAndLastOpenedAtIsNotNullAndDeletedAtIsNullOrderByLastOpenedAtDesc(user, pageable);
         List<DocumentResponse> content = docs.stream()
-                .map(doc -> toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600)))
+                .map(doc -> toResponse(doc, generateSignedUrlIfPresent(doc)))
                 .collect(Collectors.toList());
         return new PagedResponse<>(content, docs.getNumber(), docs.getSize(),
                 docs.getTotalElements(), docs.getTotalPages(), docs.isLast());
@@ -375,7 +375,35 @@ public class DocumentService {
         if (updated == 0) throw new DocumentNotFoundException(id);
         Document doc = documentRepository.findByIdAndUserAndDeletedAtIsNull(id, user)
                 .orElseThrow(() -> new DocumentNotFoundException(id));
-        return toResponse(doc, storageService.generateSignedUrl(doc.getStoragePath(), 3600));
+        return toResponse(doc, generateSignedUrlIfPresent(doc));
+    }
+
+    private String generateSignedUrlIfPresent(Document doc) {
+        try {
+            return storageService.generateSignedUrl(doc.getStoragePath(), 3600);
+        } catch (StorageException ex) {
+            if (isMissingStorageObject(ex)) {
+                log.warn("Storage object missing for document {} at {}; returning metadata without a signed URL",
+                        doc.getId(), doc.getStoragePath());
+                return null;
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isMissingStorageObject(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null
+                    && (message.contains("Object not found")
+                    || message.contains("\"error\":\"not_found\"")
+                    || message.contains("\"statusCode\":\"404\""))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private DocumentResponse toResponse(Document doc, String signedUrl) {

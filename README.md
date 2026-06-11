@@ -31,7 +31,7 @@ Core problem to solve: most PDF chat tools only embed extracted text and ignore 
 ## 3) Proposed Tech Stack
 
 - Frontend: Next.js + TypeScript (App Router)
-- Backend AI/API: Spring Boot (Java 17, Web, Data JPA)
+- Backend AI/API: Spring Boot (Java 21, Web, Data JPA, Spring AI model clients)
 - Data/Auth/Storage: Supabase (Postgres, Auth, Storage, pgvector)
 - Hosting:
   - Next.js app on Vercel

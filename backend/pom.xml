@@ -27,7 +27,9 @@
 		<url/>
 	</scm>
 	<properties>
-		<java.version>17</java.version>
+		<!-- Spring AI 2.x (the Spring Boot 4 line) has a Java 21 baseline. -->
+		<java.version>21</java.version>
+		<spring-ai.version>2.0.0-M8</spring-ai.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -77,6 +79,17 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
+		<!-- Spring AI model clients only — Gemini chat/vision + Mistral embeddings.
+		     Deliberately NOT using Spring AI's VectorStore or Advisor RAG chain:
+		     retrieval, reranking, citations, and verification stay first-party. -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-google-genai</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-mistral-ai</artifactId>
+		</dependency>
 		<!-- PDF processing -->
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
@@ -116,6 +129,17 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
+		<!-- LLM tracing — RAG pipeline spans exported over OTLP to Langfuse
+		     (or any OpenTelemetry backend). Complements Prometheus metrics. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -133,6 +157,18 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>

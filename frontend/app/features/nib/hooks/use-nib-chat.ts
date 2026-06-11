@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createChatSession,
+  deleteChatMessage,
+  deleteChatSession,
+  fetchConversationStarters,
   fetchSessionMessages,
   getOrCreateSession,
+  listChatSessions,
+  reportChatMessage,
   sendChatQuery,
 } from '../../../../lib/api/chat';
-import type { ApiCitation } from '../../../../lib/api/chat';
+import type { ApiChatMessage, ApiCitation, ChatSession } from '../../../../lib/api/chat';
 import type {
   AssistantMessage,
   ChatMessage,
+  ConversationStarter,
   Citation,
   MessageSegment,
-  PromptLibraryEntry,
   UserMessage,
 } from '../nib-types';
 
@@ -18,8 +25,7 @@ function nextId() {
   return crypto.randomUUID();
 }
 
-// Case-insensitive — catches [Page 1], [page 1], [PAGE 1]
-const PAGE_REF_RE = /\[Page (\d+)\]/gi;
+const CITATION_REF_RE = /\[(B(\d+)|Page (\d+))\]/gi;
 
 /**
  * Gemini sometimes combines citations like [Page 1, Page 2] instead of writing
@@ -27,82 +33,97 @@ const PAGE_REF_RE = /\[Page (\d+)\]/gi;
  * match each one normally.
  */
 function expandCombinedCitations(answer: string): string {
-  return answer.replace(/\[Page \d+(?:,\s*Page \d+)+\]/gi, (match) => {
-    const nums = match.match(/\d+/g) ?? [];
-    return nums.map((n) => `[Page ${n}]`).join('');
-  });
+  return answer
+    .replace(/\[Page \d+(?:,\s*Page \d+)+\]/gi, (match) => {
+      const nums = match.match(/\d+/g) ?? [];
+      return nums.map((n) => `[Page ${n}]`).join('');
+    })
+    .replace(/\[B\d+(?:,\s*B\d+)+\]/gi, (match) => {
+      const sourceIds = match.match(/B\d+/gi) ?? [];
+      return sourceIds.map((sourceId) => `[${sourceId.toUpperCase()}]`).join('');
+    });
+}
+
+function normalizeAnswerFormatting(answer: string): string {
+  return answer
+    .replace(/\r\n/g, '\n')
+    .replace(/(^|\n)\s*\*\s+/g, '$1- ')
+    .replace(/([^\n])\s+\*\s+/g, '$1\n- ')
+    .replace(/([.!?])\s+[-•]\s+/g, '$1\n- ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**
  * Single source of truth for converting an answer string + backend API citations
- * into the { segments, citations } pair the UI needs.
- *
- * Why not rely on response.citations alone?
- * The backend extracts citations only for pages that appeared in the top-k
- * vector-search results. If Gemini cites a page that wasn't retrieved, the
- * backend drops it — leaving [Page N] as an un-mappable marker in the text.
- *
- * This function solves it by scanning the answer text directly:
- *  1. Finds every [Page N] marker in the text (case-insensitive).
- *  2. Builds the citations array from those page numbers (order of first appearance).
- *  3. Fills in excerpt snippets from apiCitations when the backend has them.
- *  4. Replaces every [Page N] with a { cite: idx } segment → clickable chip.
+ * into the { segments, citations } pair the UI needs. The backend now prefers
+ * exact block citations like [B1], while older answers may still contain [Page 1].
  */
 function buildMessageContent(
   answer: string,
   apiCitations: ApiCitation[],
 ): { segments: MessageSegment[]; citations: Citation[] } {
   // Normalize combined citations before any processing
-  const normalizedAnswer = expandCombinedCitations(answer);
+  const normalizedAnswer = normalizeAnswerFormatting(expandCombinedCitations(answer));
 
-  // Build a lookup by page number so we can attach text/visual/bbox to each citation
+  const bySource = new Map<string, ApiCitation>();
   const byPage = new Map<number, ApiCitation>();
   apiCitations.forEach((c) => {
+    if (c.sourceId) bySource.set(c.sourceId.toUpperCase(), c);
     if (!byPage.has(c.pageNumber)) byPage.set(c.pageNumber, c);
   });
 
-  // First pass: collect unique page numbers in order of first appearance
-  const pageOrder: number[] = [];
-  const seen = new Set<number>();
-  for (const m of normalizedAnswer.matchAll(PAGE_REF_RE)) {
-    const n = parseInt(m[1], 10);
-    if (!seen.has(n)) { seen.add(n); pageOrder.push(n); }
-  }
+  const citations: Citation[] = [];
+  const citationIndex = new Map<string, number>();
 
-  // Build citations array — one entry per unique cited page
-  const citations: Citation[] = pageOrder.map((pageNum) => {
-    const api = byPage.get(pageNum);
+  const addCitation = (key: string, label: string, pageNum: number, api?: ApiCitation) => {
+    const existing = citationIndex.get(key);
+    if (existing !== undefined) return existing;
     // `snippet` powers the legacy text-layer search highlight: use the real text
     // excerpt when available, otherwise fall back to the visual description (the
     // search will silently no-op on visual text, which is fine).
     const snippet = api?.textExcerpt ?? api?.visualSummary ?? '';
-    return {
+    citations.push({
       page: pageNum - 1,                           // 0-indexed for the PDF viewer
-      blockId: `page-${pageNum}`,
-      label: `Page ${pageNum}`,
+      blockId: api?.blockId ?? `page-${pageNum}`,
+      label,
       snippet,
       textExcerpt: api?.textExcerpt ?? null,
       visualSummary: api?.visualSummary ?? null,
       bbox: api?.bbox ?? null,
       pageWidth: api?.pageWidth ?? null,
       pageHeight: api?.pageHeight ?? null,
-    };
-  });
+    });
+    const nextIndex = citations.length;
+    citationIndex.set(key, nextIndex);
+    return nextIndex;
+  };
 
-  // Map page number → 1-based citation index (used by MessageSegments)
-  const pageToIdx = new Map<number, number>();
-  pageOrder.forEach((n, i) => pageToIdx.set(n, i + 1));
+  for (const match of normalizedAnswer.matchAll(CITATION_REF_RE)) {
+    if (match[2]) {
+      const sourceId = `B${match[2]}`;
+      const api = bySource.get(sourceId);
+      if (!api) continue;
+      addCitation(sourceId, `${sourceId} · Page ${api.pageNumber}`, api.pageNumber, api);
+      continue;
+    }
 
-  // Second pass: build segments on the normalised answer, replacing [Page N] with { cite: idx }
+    const pageNum = parseInt(match[3], 10);
+    const api = byPage.get(pageNum);
+    addCitation(`Page ${pageNum}`, `Page ${pageNum}`, pageNum, api);
+  }
+
+  // Second pass: build segments on the normalised answer, replacing citations with chips.
   const segments: MessageSegment[] = [];
-  const re = new RegExp(PAGE_REF_RE.source, PAGE_REF_RE.flags); // fresh instance
+  const re = new RegExp(CITATION_REF_RE.source, CITATION_REF_RE.flags); // fresh instance
   let lastIndex = 0;
   let m: RegExpExecArray | null;
 
   while ((m = re.exec(normalizedAnswer)) !== null) {
     if (m.index > lastIndex) segments.push(normalizedAnswer.slice(lastIndex, m.index));
-    const pageNum = parseInt(m[1], 10);
-    const idx = pageToIdx.get(pageNum);
+    const idx = m[2]
+      ? citationIndex.get(`B${m[2]}`)
+      : citationIndex.get(`Page ${parseInt(m[3], 10)}`);
     segments.push(idx !== undefined ? { cite: idx } : m[0]);
     lastIndex = re.lastIndex;
   }
@@ -113,13 +134,7 @@ function buildMessageContent(
 
 /** Convert stored API messages into the local ChatMessage format. */
 function mapApiMessages(
-  apiMessages: Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    citations: ApiCitation[] | null;
-    createdAt: string;
-  }>,
+  apiMessages: ApiChatMessage[],
 ): ChatMessage[] {
   return apiMessages.map((msg) => {
     if (msg.role === 'user') {
@@ -133,98 +148,434 @@ function mapApiMessages(
       reasoningShown: [],
       segments,
       citations,
-      confidence: citations.length > 0 ? 0.85 : 0.5,
+      confidence: msg.confidence,
+      reported: msg.reported,
       streaming: false,
       streamDone: true,
       streamedText: msg.content,
+      animate: false,
     } satisfies AssistantMessage;
   });
 }
 
-const REASONING_STEPS = [
-  'Embedding query with Mistral…',
-  'Retrieving relevant passages from pgvector…',
-  'Generating grounded response with Gemini…',
-] as const;
+const DEFAULT_STARTERS: ConversationStarter[] = [
+  { q: 'Give me the executive summary.', icon: 'sparkles' },
+  { q: 'What are the most important details in this document?', icon: 'search' },
+  { q: 'What should I pay attention to in tables or visuals?', icon: 'sparkles' },
+  { q: 'Walk me through the document page by page.', icon: 'search' },
+];
+
+function normalizeStarters(
+  starterRows: Array<{ prompt: string; icon: string }>,
+): ConversationStarter[] {
+  const normalized = starterRows
+    .map((starter) => ({
+      q: starter.prompt.trim(),
+      icon: starter.icon.trim() || 'sparkles',
+    }))
+    .filter((starter) => starter.q.length > 0);
+
+  return normalized.length > 0 ? normalized : DEFAULT_STARTERS;
+}
+
+function apiMessagesSignature(
+  apiMessages: Pick<ApiChatMessage, 'id' | 'role' | 'content' | 'createdAt'>[],
+): string {
+  return apiMessages
+    .map((message) => `${message.id}:${message.role}:${message.createdAt}:${message.content.length}`)
+    .join('|');
+}
+
+function localMessagesSignature(messages: ChatMessage[]): string {
+  return messages
+    .map((message) => {
+      if (message.role === 'user') {
+        return `${message.id}:user:${message.text.length}`;
+      }
+      return `${message.id}:assistant:${(message.streamedText ?? '').length}:${message.streaming ? 'streaming' : 'done'}`;
+    })
+    .join('|');
+}
+
+async function createSessionForDocument(documentId: string): Promise<ChatSession> {
+  return createChatSession(documentId).catch(() => getOrCreateSession(documentId));
+}
+
+interface QueuedPrompt {
+  text: string;
+  userMessageId: string;
+  assistantMessageId: string;
+}
+
+function createPendingAssistantMessage(id: string, queued: boolean): AssistantMessage {
+  return {
+    id,
+    role: 'assistant',
+    reasoning: [],
+    reasoningShown: [],
+    segments: [],
+    citations: [],
+    confidence: null,
+    streaming: true,
+    streamDone: false,
+    queued,
+    streamedText: '',
+  };
+}
+
+function activeSessionStorageKey(documentId: string) {
+  return `nib:active-chat-session:${documentId}`;
+}
+
+function writeStoredSessionId(documentId: string, nextSessionId: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(activeSessionStorageKey(documentId), nextSessionId);
+}
+
+function clearStoredSessionId(documentId: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(activeSessionStorageKey(documentId));
+}
 
 export function useNibChat(documentId: string | null) {
+  const queryClient = useQueryClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
-  // Guard against React Strict Mode double-invocation of effects
-  const initRef = useRef(false);
+  const [localChatError, setLocalChatError] = useState<string | null>(null);
+  const [queueVersion, setQueueVersion] = useState(0);
+  const pendingAssistantIdRef = useRef<string | null>(null);
+  const queuedPromptsRef = useRef<QueuedPrompt[]>([]);
+  const processingQueuedPromptRef = useRef(false);
+  const previousDocumentIdRef = useRef<string | null>(null);
+  const hydratedMessagesKeyRef = useRef<string | null>(null);
 
-  // On mount (or when documentId becomes available), get/create the session
-  // and load any existing message history.
+  const sessionsQuery = useQuery({
+    queryKey: ['chat-sessions', documentId],
+    queryFn: () => listChatSessions(documentId!),
+    enabled: Boolean(documentId),
+    staleTime: 10_000,
+  });
+
+  const startersQuery = useQuery({
+    queryKey: ['chat-starters', documentId],
+    queryFn: () => fetchConversationStarters(documentId!),
+    enabled: Boolean(documentId),
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
-    if (!documentId || initRef.current) return;
-    initRef.current = true;
-
-    getOrCreateSession(documentId)
-      .then(async (session) => {
-        setSessionId(session.id);
-        const apiMessages = await fetchSessionMessages(session.id);
-        if (apiMessages.length > 0) setMessages(mapApiMessages(apiMessages));
-      })
-      .catch((err: unknown) => {
-        console.error('Failed to initialise chat session:', err);
-      });
+    if (previousDocumentIdRef.current === documentId) return;
+    previousDocumentIdRef.current = documentId;
+    queueMicrotask(() => {
+      pendingAssistantIdRef.current = null;
+      queuedPromptsRef.current = [];
+      processingQueuedPromptRef.current = false;
+      hydratedMessagesKeyRef.current = null;
+      setSessionId(null);
+      setMessages([]);
+      setLocalChatError(null);
+      setQueueVersion((version) => version + 1);
+    });
   }, [documentId]);
 
-  const sendPrompt = useCallback(
-    async (text: string) => {
-      if (!sessionId || busy) return;
+  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const starters = useMemo(
+    () => normalizeStarters(startersQuery.data ?? []),
+    [startersQuery.data],
+  );
 
-      const userMsg: UserMessage = { id: nextId(), role: 'user', text };
-      const pendingId = nextId();
+  useEffect(() => {
+    if (documentId && sessionId) {
+      writeStoredSessionId(documentId, sessionId);
+    }
+  }, [documentId, sessionId]);
 
-      const pendingMsg: AssistantMessage = {
-        id: pendingId,
-        role: 'assistant',
-        reasoning: [...REASONING_STEPS],
-        reasoningShown: [REASONING_STEPS[0]],
-        segments: [],
-        citations: [],
-        confidence: 0.8,
-        streaming: true,
-        streamDone: false,
-        streamedText: '',
-      };
+  const messagesQuery = useQuery({
+    queryKey: ['chat-messages', sessionId],
+    queryFn: () => fetchSessionMessages(sessionId!),
+    enabled: Boolean(sessionId),
+    staleTime: 10_000,
+  });
+  const queryError =
+    sessionsQuery.error instanceof Error
+      ? sessionsQuery.error.message
+      : messagesQuery.error instanceof Error
+        ? messagesQuery.error.message
+        : null;
+  const chatError = localChatError ?? queryError;
 
-      setMessages((prev) => [...prev, userMsg, pendingMsg]);
-      setBusy(true);
-      setChatError(null);
+  useEffect(() => {
+    if (!messagesQuery.data || pendingAssistantIdRef.current || queuedPromptsRef.current.length > 0) return;
+    const nextSignature = apiMessagesSignature(messagesQuery.data);
+    const nextHydrationKey = `${sessionId ?? 'none'}:${nextSignature}`;
+    if (hydratedMessagesKeyRef.current === nextHydrationKey) return;
+    hydratedMessagesKeyRef.current = nextHydrationKey;
 
-      // Animate reasoning steps while the network request is in flight
-      let stepIndex = 0;
-      const stepTimer = window.setInterval(() => {
-        stepIndex = Math.min(stepIndex + 1, REASONING_STEPS.length - 1);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === pendingId && m.role === 'assistant'
-              ? { ...m, reasoningShown: [...REASONING_STEPS].slice(0, stepIndex + 1) }
-              : m,
-          ),
+    queueMicrotask(() => {
+      setMessages((prev) => {
+        const mapped = mapApiMessages(messagesQuery.data);
+        return localMessagesSignature(prev) === localMessagesSignature(mapped) ? prev : mapped;
+      });
+    });
+  }, [messagesQuery.data, sessionId]);
+
+  const createSessionMutation = useMutation({
+    mutationFn: (nextDocumentId: string) => createSessionForDocument(nextDocumentId),
+    onSuccess: (session) => {
+      queryClient.setQueryData<ChatSession[]>(['chat-sessions', session.documentId], (prev) => {
+        const previous = prev ?? [];
+        if (previous.some((item) => item.id === session.id)) return previous;
+        return [session, ...previous];
+      });
+      setSessionId(session.id);
+      setMessages((prev) =>
+        pendingAssistantIdRef.current || queuedPromptsRef.current.length > 0 ? prev : [],
+      );
+      setLocalChatError(null);
+      writeStoredSessionId(session.documentId, session.id);
+    },
+  });
+
+  const sendQueryMutation = useMutation({
+    mutationFn: ({ activeSessionId, text }: { activeSessionId: string; text: string }) =>
+      sendChatQuery(activeSessionId, text),
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: (targetSessionId: string) => deleteChatSession(targetSessionId),
+    onSuccess: (_data, deletedSessionId) => {
+      if (documentId) {
+        queryClient.setQueryData<ChatSession[]>(['chat-sessions', documentId], (prev) =>
+          prev?.filter((session) => session.id !== deletedSessionId) ?? prev,
         );
-      }, 800);
+      }
+      queryClient.removeQueries({ queryKey: ['chat-messages', deletedSessionId] });
+      if (sessionId === deletedSessionId) {
+        pendingAssistantIdRef.current = null;
+        queuedPromptsRef.current = [];
+        processingQueuedPromptRef.current = false;
+        hydratedMessagesKeyRef.current = null;
+        setSessionId(null);
+        setMessages([]);
+        setQueueVersion((version) => version + 1);
+        if (documentId) clearStoredSessionId(documentId);
+      }
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'Could not delete this chat. Please try again.';
+      setLocalChatError(message);
+    },
+    onSettled: async () => {
+      if (documentId) {
+        await queryClient.invalidateQueries({ queryKey: ['chat-sessions', documentId] });
+      }
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: (messageId: string) => deleteChatMessage(messageId),
+    onSuccess: (_data, messageId) => {
+      setMessages((prev) => prev.filter((message) => message.id !== messageId));
+      if (sessionId) {
+        queryClient.removeQueries({ queryKey: ['chat-messages', sessionId] });
+        void queryClient.invalidateQueries({ queryKey: ['chat-sessions', documentId] });
+      }
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'Could not delete this message. Please try again.';
+      setLocalChatError(message);
+    },
+  });
+
+  const reportMessageMutation = useMutation({
+    mutationFn: (messageId: string) => reportChatMessage(messageId),
+    onSuccess: (_data, messageId) => {
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.id !== messageId || message.role !== 'assistant') return message;
+          return { ...message, reported: true };
+        }),
+      );
+      if (sessionId) {
+        void queryClient.invalidateQueries({ queryKey: ['chat-messages', sessionId] });
+      }
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'Could not report this answer. Please try again.';
+      setLocalChatError(message);
+    },
+  });
+
+  const activeSession = sessions.find((session) => session.id === sessionId) ?? null;
+  const busy = createSessionMutation.isPending || sendQueryMutation.isPending || deleteSessionMutation.isPending;
+  const canSubmitPrompt = Boolean(documentId && !deleteSessionMutation.isPending);
+  const isLoadingMessages = Boolean(
+    sessionId &&
+    messages.length === 0 &&
+    (activeSession?.messageCount ?? 0) > 0 &&
+    messagesQuery.isLoading,
+  );
+  const deletingSessionId = deleteSessionMutation.isPending
+    ? deleteSessionMutation.variables ?? null
+    : null;
+  const hasNoSessions = sessions.length === 0 && sessionId === null;
+  const currentChatIsEmpty = messages.length === 0 && (activeSession?.messageCount ?? 0) === 0;
+  const canCreateNewChat = Boolean(documentId && !busy && (sessionId === null || hasNoSessions || !currentChatIsEmpty));
+
+  const selectSession = useCallback(
+    (nextSessionId: string) => {
+      if (nextSessionId === sessionId || busy) return;
+      setSessionId(nextSessionId);
+      setLocalChatError(null);
+      pendingAssistantIdRef.current = null;
+      queuedPromptsRef.current = [];
+      processingQueuedPromptRef.current = false;
+      const cachedMessages = queryClient.getQueryData<ApiChatMessage[]>(['chat-messages', nextSessionId]);
+      hydratedMessagesKeyRef.current = cachedMessages
+        ? `${nextSessionId}:${apiMessagesSignature(cachedMessages)}`
+        : null;
+      setMessages((prev) => {
+        const mapped = cachedMessages ? mapApiMessages(cachedMessages) : [];
+        return localMessagesSignature(prev) === localMessagesSignature(mapped) ? prev : mapped;
+      });
+    },
+    [busy, queryClient, sessionId],
+  );
+
+  const createNewChat = useCallback(async () => {
+    if (!documentId || busy || (sessionId !== null && !hasNoSessions && currentChatIsEmpty)) return;
+    pendingAssistantIdRef.current = null;
+    queuedPromptsRef.current = [];
+    processingQueuedPromptRef.current = false;
+    hydratedMessagesKeyRef.current = null;
+    setSessionId(null);
+    setMessages([]);
+    setLocalChatError(null);
+    setQueueVersion((version) => version + 1);
+    await createSessionMutation.mutateAsync(documentId);
+  }, [busy, createSessionMutation, currentChatIsEmpty, documentId, hasNoSessions, sessionId]);
+
+  const deleteChat = useCallback(
+    async (targetSessionId: string) => {
+      if (!documentId || deleteSessionMutation.isPending) return;
+      setLocalChatError(null);
+      await deleteSessionMutation.mutateAsync(targetSessionId);
+    },
+    [deleteSessionMutation, documentId],
+  );
+
+  const ensureActiveSession = useCallback(async () => {
+    if (sessionId) return sessionId;
+    if (!documentId) return null;
+
+    const session = await createSessionMutation.mutateAsync(documentId);
+    return session.id;
+  }, [createSessionMutation, documentId, sessionId]);
+
+  const bumpSessionAfterMessage = useCallback((activeSessionId: string, firstQuestion: string) => {
+    if (!documentId) return;
+    queryClient.setQueryData<ChatSession[]>(['chat-sessions', documentId], (prev) => {
+      if (!prev) return prev;
+      const updated = prev.map((session) => {
+        if (session.id !== activeSessionId) return session;
+        const hasExistingMessages = session.messageCount > 0;
+        return {
+          ...session,
+          title: hasExistingMessages || (session.title && session.title !== 'New chat')
+            ? session.title
+            : firstQuestion.length > 64
+              ? `${firstQuestion.slice(0, 61)}...`
+              : firstQuestion,
+          updatedAt: new Date().toISOString(),
+          messageCount: session.messageCount + 2,
+        };
+      });
+      return updated.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    });
+  }, [documentId, queryClient]);
+
+  const processPrompt = useCallback(
+    async (prompt: QueuedPrompt) => {
+      if (!documentId) return;
+
+      processingQueuedPromptRef.current = true;
+      pendingAssistantIdRef.current = prompt.assistantMessageId;
+      setLocalChatError(null);
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.id !== prompt.assistantMessageId || message.role !== 'assistant') return message;
+          return {
+            ...message,
+            queued: false,
+            streaming: true,
+            streamDone: false,
+            reasoning: [],
+            reasoningShown: [],
+            segments: [],
+            citations: [],
+            confidence: null,
+            streamedText: '',
+            animate: false,
+          } satisfies AssistantMessage;
+        }),
+      );
+
+      let activeSessionId: string | null;
+      try {
+        activeSessionId = await ensureActiveSession();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Could not start a chat. Please try again.';
+        setLocalChatError(message);
+        setMessages((prev) =>
+          prev.map((item) => {
+            if (item.id !== prompt.assistantMessageId || item.role !== 'assistant') return item;
+            return {
+              ...item,
+              queued: false,
+              reasoning: ['Failed to start this chat.'],
+              reasoningShown: ['Failed to start this chat.'],
+              segments: [message],
+              citations: [],
+              confidence: 0,
+              streaming: false,
+              streamDone: true,
+              streamedText: message,
+              animate: true,
+            } satisfies AssistantMessage;
+          }),
+        );
+        pendingAssistantIdRef.current = null;
+        processingQueuedPromptRef.current = false;
+        setQueueVersion((version) => version + 1);
+        return;
+      }
+      if (!activeSessionId) {
+        pendingAssistantIdRef.current = null;
+        processingQueuedPromptRef.current = false;
+        setQueueVersion((version) => version + 1);
+        return;
+      }
 
       try {
-        const response = await sendChatQuery(sessionId, text);
-        window.clearInterval(stepTimer);
+        const response = await sendQueryMutation.mutateAsync({
+          activeSessionId,
+          text: prompt.text,
+        });
 
         const { segments, citations } = buildMessageContent(response.answer, response.citations);
         const finalReasoning = [
           'Embedded query with Mistral.',
-          `Retrieved ${response.citations.length} source passage${response.citations.length !== 1 ? 's' : ''}.`,
+          `Retrieved ${response.citations.length} cited source${response.citations.length !== 1 ? 's' : ''}.`,
           'Generated grounded response with Gemini.',
         ];
 
         setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== pendingId || m.role !== 'assistant') return m;
+          prev.map((message) => {
+            if (message.id !== prompt.assistantMessageId || message.role !== 'assistant') return message;
             return {
-              ...m,
+              ...message,
+              queued: false,
               reasoning: finalReasoning,
               reasoningShown: finalReasoning,
               segments,
@@ -233,20 +584,26 @@ export function useNibChat(documentId: string | null) {
               streaming: false,
               streamDone: true,
               streamedText: response.answer,
+              animate: true,
             } satisfies AssistantMessage;
           }),
         );
+        bumpSessionAfterMessage(activeSessionId, prompt.text);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['chat-sessions', documentId] }),
+          queryClient.invalidateQueries({ queryKey: ['chat-messages', activeSessionId] }),
+        ]);
       } catch (err) {
-        window.clearInterval(stepTimer);
         const message =
           err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-        setChatError(message);
+        setLocalChatError(message);
 
         setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== pendingId || m.role !== 'assistant') return m;
+          prev.map((item) => {
+            if (item.id !== prompt.assistantMessageId || item.role !== 'assistant') return item;
             return {
-              ...m,
+              ...item,
+              queued: false,
               reasoning: ['Failed to get a response.'],
               reasoningShown: ['Failed to get a response.'],
               segments: [message],
@@ -254,27 +611,220 @@ export function useNibChat(documentId: string | null) {
               confidence: 0,
               streaming: false,
               streamDone: true,
+              streamedText: message,
+              animate: true,
             } satisfies AssistantMessage;
           }),
         );
       } finally {
-        setBusy(false);
+        pendingAssistantIdRef.current = null;
+        processingQueuedPromptRef.current = false;
+        setQueueVersion((version) => version + 1);
       }
     },
-    [sessionId, busy],
+    [
+      bumpSessionAfterMessage,
+      documentId,
+      ensureActiveSession,
+      queryClient,
+      sendQueryMutation,
+    ],
   );
 
+  const sendPrompt = useCallback(
+    async (text: string) => {
+      if (!documentId || deleteSessionMutation.isPending) return;
+
+      const prompt: QueuedPrompt = {
+        text,
+        userMessageId: nextId(),
+        assistantMessageId: nextId(),
+      };
+      const userMsg: UserMessage = { id: prompt.userMessageId, role: 'user', text };
+      const shouldQueue =
+        sendQueryMutation.isPending ||
+        createSessionMutation.isPending ||
+        isLoadingMessages ||
+        processingQueuedPromptRef.current;
+
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        createPendingAssistantMessage(prompt.assistantMessageId, shouldQueue),
+      ]);
+
+      if (shouldQueue) {
+        queuedPromptsRef.current.push(prompt);
+        setQueueVersion((version) => version + 1);
+        return;
+      }
+
+      void processPrompt(prompt);
+    },
+    [
+      createSessionMutation.isPending,
+      deleteSessionMutation.isPending,
+      documentId,
+      isLoadingMessages,
+      processPrompt,
+      sendQueryMutation.isPending,
+    ],
+  );
+
+  useEffect(() => {
+    if (
+      !canSubmitPrompt ||
+      sendQueryMutation.isPending ||
+      createSessionMutation.isPending ||
+      isLoadingMessages ||
+      processingQueuedPromptRef.current
+    ) {
+      return;
+    }
+
+    const nextPrompt = queuedPromptsRef.current.shift();
+    if (!nextPrompt) return;
+    void processPrompt(nextPrompt);
+  }, [
+    canSubmitPrompt,
+    createSessionMutation.isPending,
+    isLoadingMessages,
+    processPrompt,
+    queueVersion,
+    sendQueryMutation.isPending,
+  ]);
+
+  const regenerateResponse = useCallback(
+    async (assistantMessageId: string) => {
+      if (busy || !sessionId || !documentId) return;
+      const assistantIndex = messages.findIndex((message) => message.id === assistantMessageId);
+      if (assistantIndex <= 0 || messages[assistantIndex]?.role !== 'assistant') return;
+
+      const previousUserMessage = [...messages.slice(0, assistantIndex)]
+        .reverse()
+        .find((message): message is UserMessage => message.role === 'user');
+      if (!previousUserMessage) return;
+
+      pendingAssistantIdRef.current = assistantMessageId;
+      setLocalChatError(null);
+      setMessages((prev) =>
+        prev.map((message) => {
+          if (message.id !== assistantMessageId || message.role !== 'assistant') return message;
+          return {
+            ...message,
+            reasoning: [],
+            reasoningShown: [],
+            segments: [],
+            citations: [],
+            confidence: null,
+            streaming: true,
+            streamDone: false,
+            streamedText: '',
+            animate: false,
+          } satisfies AssistantMessage;
+        }),
+      );
+
+      try {
+        const response = await sendQueryMutation.mutateAsync({
+          activeSessionId: sessionId,
+          text: previousUserMessage.text,
+        });
+        const { segments, citations } = buildMessageContent(response.answer, response.citations);
+        const finalReasoning = [
+          'Reused the previous prompt.',
+          `Retrieved ${response.citations.length} cited source${response.citations.length !== 1 ? 's' : ''}.`,
+          'Generated a refreshed grounded response.',
+        ];
+
+        setMessages((prev) =>
+          prev.map((message) => {
+            if (message.id !== assistantMessageId || message.role !== 'assistant') return message;
+            return {
+              ...message,
+              reasoning: finalReasoning,
+              reasoningShown: finalReasoning,
+              segments,
+              citations,
+              confidence: response.confidence,
+              streaming: false,
+              streamDone: true,
+              streamedText: response.answer,
+              animate: true,
+            } satisfies AssistantMessage;
+          }),
+        );
+        await queryClient.invalidateQueries({ queryKey: ['chat-sessions', documentId] });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+        setLocalChatError(message);
+        setMessages((prev) =>
+          prev.map((item) => {
+            if (item.id !== assistantMessageId || item.role !== 'assistant') return item;
+            return {
+              ...item,
+              reasoning: ['Failed to regenerate this response.'],
+              reasoningShown: ['Failed to regenerate this response.'],
+              segments: [message],
+              citations: [],
+              confidence: 0,
+              streaming: false,
+              streamDone: true,
+              streamedText: message,
+              animate: true,
+            } satisfies AssistantMessage;
+          }),
+        );
+      } finally {
+        pendingAssistantIdRef.current = null;
+      }
+    },
+    [busy, documentId, messages, queryClient, sendQueryMutation, sessionId],
+  );
+
+  const removeMessage = useCallback(async (messageId: string) => {
+    if (deleteMessageMutation.isPending) return;
+    setLocalChatError(null);
+    await deleteMessageMutation.mutateAsync(messageId);
+  }, [deleteMessageMutation]);
+
+  const reportMessage = useCallback(async (messageId: string) => {
+    if (reportMessageMutation.isPending) return;
+    setLocalChatError(null);
+    await reportMessageMutation.mutateAsync(messageId);
+  }, [reportMessageMutation]);
+
   const onPickSuggestion = useCallback(
-    (prompt: PromptLibraryEntry | { reset: true }) => {
+    (prompt: ConversationStarter | { reset: true }) => {
       if ('reset' in prompt) {
-        setMessages([]);
-        setChatError(null);
+        void createNewChat();
         return;
       }
       sendPrompt(prompt.q);
     },
-    [sendPrompt],
+    [createNewChat, sendPrompt],
   );
 
-  return { messages, busy, chatError, sendPrompt, onPickSuggestion };
+  return {
+    sessionId,
+    sessions,
+    activeSession,
+    starters,
+    messages,
+    busy,
+    canSubmitPrompt,
+    isLoadingMessages,
+    deletingSessionId,
+    chatError,
+    canCreateNewChat,
+    sendPrompt,
+    onPickSuggestion,
+    createNewChat,
+    deleteChat,
+    regenerateResponse,
+    removeMessage,
+    reportMessage,
+    selectSession,
+  };
 }

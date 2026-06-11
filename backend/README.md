@@ -58,7 +58,7 @@ We use the standard Controller-Service-Repository layers pattern under `com.nib.
   ```
 
 ### DTOs & Java Records
-- Since we are using Java 17, prefer **records** for DTOs to ensure immutability and reduce boilerplate.
+- Since we are using Java 21, prefer **records** for DTOs to ensure immutability and reduce boilerplate.
   ```java
   public record DocumentResponse(
       UUID id,

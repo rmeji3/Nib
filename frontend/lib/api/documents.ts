@@ -4,7 +4,7 @@ export interface DocumentResponse {
   id: string;
   filename: string;
   originalFilename: string;
-  storageUrl: string;
+  storageUrl: string | null;
   fileSizeBytes: number | null;
   pageCount: number | null;
   createdAt: string;
