@@ -563,6 +563,60 @@ class ChatServiceTest {
     }
 
     @Test
+    void queryTreatsUncitedNoInformationAnswerAsRefusal() {
+        ReflectionTestUtils.setField(service, "refusalThreshold", 0.25);
+        ReflectionTestUtils.setField(service, "confidenceSigmoidK", 8.0);
+        ReflectionTestUtils.setField(service, "confidenceMidpoint", 0.45);
+        ReflectionTestUtils.setField(service, "topK", 8);
+        ReflectionTestUtils.setField(service, "geminiModel", "gemini-2.5-flash");
+        ReflectionTestUtils.setField(service, "embeddingCacheEnabled", false);
+        ReflectionTestUtils.setField(service, "answerCacheEnabled", false);
+
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID documentId = UUID.randomUUID();
+        User user = User.builder().id(userId).email("a@example.com").name("Ada").password("pw").build();
+        ChatSession session = ChatSession.builder().id(sessionId).documentId(documentId).userId(userId).build();
+
+        when(chatSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage message = invocation.getArgument(0);
+            message.setId(UUID.randomUUID());
+            message.setCreatedAt(LocalDateTime.now());
+            return message;
+        });
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtDesc(any(), any())).thenReturn(List.of());
+        when(ingestionJobRepository.findFirstByDocumentIdOrderByCreatedAtDesc(documentId))
+                .thenReturn(Optional.of(IngestionJob.builder().documentId(documentId).pagesTotal(1).build()));
+        when(embeddingService.embed("Who is the CEO?")).thenReturn(new float[]{0.1f, 0.2f});
+        when(documentRepository.findById(documentId))
+                .thenReturn(Optional.of(Document.builder().id(documentId).docType("financial").build()));
+
+        VectorSearchService.ChunkMatch match = new VectorSearchService.ChunkMatch(
+                UUID.randomUUID(), documentId, 1, 0,
+                "Revenue by product for Q1.", "text", 0.2, null, null, null);
+        when(vectorSearchService.hybridSearch(eq(documentId), any(float[].class), eq("Who is the CEO?"), eq(5)))
+                .thenReturn(new VectorSearchService.HybridSearchResult(List.of(match), List.of(match)));
+
+        String noInfo = "I cannot find this information in the indexed pages of this document.";
+        when(geminiTextClient.generateWithMetadata(any(), eq(2048), eq(0.1)))
+                .thenReturn(new GeminiTextClient.GenerationResult(
+                        noInfo, new GeminiTextClient.TokenUsage(10, 12, 22), "gemini-2.5-flash"));
+        when(citationVerifier.verify(eq("Who is the CEO?"), any(String.class), anyList()))
+                .thenReturn(new CitationVerifier.VerificationResult(noInfo, false, true, List.of()));
+
+        var response = service.query(sessionId, "Who is the CEO?", user);
+
+        assertThat(response.refused()).isTrue();
+        assertThat(response.confidence()).isEqualTo(0.0);
+        assertThat(response.citations()).isEmpty();
+        assertThat(response.groundingVerification().verdict()).isEqualTo("REFUSED");
+        ArgumentCaptor<AnswerAudit> auditCaptor = ArgumentCaptor.forClass(AnswerAudit.class);
+        verify(answerAuditRepository).save(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getRefused()).isTrue();
+    }
+
+    @Test
     void queryUsesCrossEncoderRerankOrderWhenRerankerIsConfigured() {
         ReflectionTestUtils.setField(service, "refusalThreshold", 0.25);
         ReflectionTestUtils.setField(service, "confidenceSigmoidK", 8.0);

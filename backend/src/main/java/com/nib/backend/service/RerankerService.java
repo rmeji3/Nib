@@ -53,6 +53,15 @@ public class RerankerService {
     @Value("${reranker.max-chunk-chars:2000}")
     private int maxChunkChars;
 
+    /**
+     * Minimum best-candidate relevance for the cross-encoder ordering to be
+     * trusted. Below this, the reranker is saying "nothing matches" — which on
+     * terse queries ("what uni?") is a model failure mode, not a fact about the
+     * corpus — so the ordering is noise and the bi-encoder ranking is safer.
+     */
+    @Value("${reranker.min-top-relevance:0.10}")
+    private double minTopRelevance;
+
     /** A candidate chunk with the cross-encoder relevance score it received. */
     public record ScoredChunk(VectorSearchService.ChunkMatch chunk, double relevanceScore) {}
 
@@ -149,6 +158,13 @@ public class RerankerService {
             }
             // Providers return results sorted by relevance, but don't rely on it.
             scored.sort((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()));
+            if (scored.get(0).relevanceScore() < minTopRelevance) {
+                log.info("Cross-encoder found no relevant candidate (best={} < floor={}) — "
+                                + "keeping bi-encoder ranking instead",
+                        String.format("%.3f", scored.get(0).relevanceScore()),
+                        String.format("%.3f", minTopRelevance));
+                return Optional.empty();
+            }
             if (scored.size() > topK) {
                 scored = new ArrayList<>(scored.subList(0, topK));
             }
