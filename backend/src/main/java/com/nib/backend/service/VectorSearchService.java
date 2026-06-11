@@ -183,6 +183,51 @@ public class VectorSearchService {
     }
 
     /**
+     * Last-resort evidence retrieval for documents whose content blocks exist but
+     * vector/full-text search returns no rows, usually because embeddings or the
+     * tsvector trigger are out of sync after a failed/retried ingestion. This keeps
+     * broad first questions ("what is this person's experience?") grounded in
+     * stored document blocks instead of sending Gemini an empty context.
+     */
+    public List<ChunkMatch> fallbackDocumentBlocks(UUID documentId, int limit) {
+        return jdbcTemplate.query(
+                """
+                SELECT cb.id          AS block_id,
+                       cb.document_id,
+                       cb.page_number,
+                       cb.chunk_index,
+                       cb.extracted_text,
+                       cb.block_type,
+                       cb.bbox_x,
+                       cb.bbox_y,
+                       cb.bbox_width,
+                       cb.bbox_height,
+                       cb.page_width,
+                       cb.page_height,
+                       0.35           AS similarity
+                FROM   content_blocks cb
+                WHERE  cb.document_id = ?
+                ORDER  BY
+                       CASE cb.block_type
+                           WHEN 'document_summary' THEN 0
+                           WHEN 'visual_summary' THEN 1
+                           WHEN 'text' THEN 2
+                           WHEN 'table' THEN 3
+                           WHEN 'chart' THEN 4
+                           WHEN 'figure' THEN 5
+                           ELSE 6
+                       END,
+                       cb.page_number,
+                       cb.chunk_index
+                LIMIT  ?
+                """,
+                (rs, rowNum) -> mapRow(rs),
+                documentId,
+                limit
+        );
+    }
+
+    /**
      * Full-text search using PostgreSQL's tsvector/tsquery with ts_rank_cd scoring.
      * Returns up to {@code limit} results ordered by relevance. Uses plainto_tsquery
      * to handle natural-language user questions without requiring boolean syntax.

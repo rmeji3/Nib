@@ -9,18 +9,21 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.content.Media;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClient;
+import org.springframework.util.MimeTypeUtils;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Renders individual PDF pages to PNG images and sends them to Gemini Vision
@@ -34,16 +37,10 @@ import java.util.Map;
 @Slf4j
 public class VisionService {
 
-    private final RestClient restClient;
+    private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
 
-    @Value("${gemini.api.key}")
-    private String geminiApiKey;
-
-    @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta}")
-    private String geminiApiUrl;
-
-    @Value("${gemini.model:gemini-2.5-flash}")
+    @Value("${gemini.model:gemini-2.5-flash-lite}")
     private String geminiModel;
 
     /** Rendering DPI — 150 gives a clear image without bloating request size. */
@@ -191,8 +188,7 @@ public class VisionService {
      */
     public String analyzeRenderedImage(byte[] pngBytes, int pageNumberForLog) {
         try {
-            String base64 = Base64.getEncoder().encodeToString(pngBytes);
-            String description = callGeminiVision(base64);
+            String description = callGeminiVision(pngBytes, VISION_PROMPT, 4096, 0.1);
             log.debug("Vision analysis complete for page {} ({} chars)", pageNumberForLog,
                     description != null ? description.length() : 0);
             return description;
@@ -204,8 +200,7 @@ public class VisionService {
 
     public VisualExtractionResult analyzeRenderedImageStructured(byte[] pngBytes, int pageNumberForLog) {
         try {
-            String base64 = Base64.getEncoder().encodeToString(pngBytes);
-            String rawJson = callGeminiVision(base64, STRUCTURED_VISION_PROMPT, 4096);
+            String rawJson = callGeminiVision(pngBytes, STRUCTURED_VISION_PROMPT, 4096, 0.1);
             VisualExtractionResult result = parseStructuredVision(rawJson);
             log.debug("Structured vision analysis complete for page {} ({} elements)",
                     pageNumberForLog, result.elements().size());
@@ -225,7 +220,6 @@ public class VisionService {
      * The summary MUST include a "TYPE: &lt;category&gt;" line (second line) so
      * {@code IngestionRunner.extractDocType()} can classify the document.
      */
-    @SuppressWarnings("unchecked")
     public String generateDocumentSummary(byte[] firstPageImage, String combinedText) {
         String truncated = combinedText.length() > 12_000
                 ? combinedText.substring(0, 12_000) + "\n[...truncated...]"
@@ -248,49 +242,17 @@ public class VisionService {
                 TYPE: Legal services agreement
                 TYPE: Product catalog
                 TYPE: Technical specification
+                TYPE: Resume
 
                 Here is the document text (may be truncated):
                 ---
                 """ + truncated + "\n---";
 
         try {
-            List<Object> parts = new java.util.ArrayList<>();
-
             // If we have a first-page image, include it so Gemini can read titles/logos
-            if (firstPageImage != null) {
-                String base64 = Base64.getEncoder().encodeToString(firstPageImage);
-                parts.add(Map.of("inline_data", Map.of(
-                        "mime_type", "image/png",
-                        "data", base64
-                )));
-            }
-            parts.add(Map.of("text", summaryPrompt));
-
-            Map<String, Object> body = Map.of(
-                    "contents", List.of(Map.of("parts", parts)),
-                    "generationConfig", Map.of(
-                            "temperature", 0.2,
-                            "maxOutputTokens", 512
-                    )
-            );
-
-            String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
-
-            Map<String, Object> response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(Map.class);
-
-            if (response == null) return null;
-
-            List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
-            if (candidates == null || candidates.isEmpty()) return null;
-
-            Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-            List<Map<String, Object>> responseParts = (List<Map<String, Object>>) content.get("parts");
-            String summary = (String) responseParts.get(0).get("text");
+            String summary = firstPageImage != null
+                    ? callGeminiVision(firstPageImage, summaryPrompt, 512, 0.2)
+                    : callGeminiText(summaryPrompt, 512, 0.2);
             log.info("Generated document summary ({} chars)", summary != null ? summary.length() : 0);
             return summary;
         } catch (Exception ex) {
@@ -301,50 +263,43 @@ public class VisionService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
-    private String callGeminiVision(String base64Image) {
-        return callGeminiVision(base64Image, VISION_PROMPT, 4096);
+    /**
+     * Multimodal (image + text) Gemini call via Spring AI. Returns null when the
+     * provider call fails or yields no text, matching the previous fail-soft
+     * behavior callers rely on to skip a page instead of failing ingestion.
+     */
+    private String callGeminiVision(byte[] pngBytes, String prompt, int maxOutputTokens, double temperature) {
+        UserMessage message = UserMessage.builder()
+                .text(prompt)
+                .media(Media.builder()
+                        .mimeType(MimeTypeUtils.IMAGE_PNG)
+                        .data(new ByteArrayResource(pngBytes))
+                        .build())
+                .build();
+        return callChatModel(new Prompt(message, visionOptions(maxOutputTokens, temperature)));
     }
 
-    @SuppressWarnings("unchecked")
-    private String callGeminiVision(String base64Image, String prompt, int maxOutputTokens) {
-        Map<String, Object> body = Map.of(
-                "contents", List.of(Map.of(
-                        "parts", List.of(
-                                Map.of("inline_data", Map.of(
-                                        "mime_type", "image/png",
-                                        "data", base64Image
-                                )),
-                                Map.of("text", prompt)
-                        )
-                )),
-                "generationConfig", Map.of(
-                        "temperature", 0.1,
-                        "maxOutputTokens", maxOutputTokens
-                )
-        );
+    private String callGeminiText(String prompt, int maxOutputTokens, double temperature) {
+        return callChatModel(new Prompt(prompt, visionOptions(maxOutputTokens, temperature)));
+    }
 
-        String url = geminiApiUrl + "/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
+    private ChatOptions visionOptions(int maxOutputTokens, double temperature) {
+        return ChatOptions.builder()
+                .model(geminiModel)
+                .temperature(temperature)
+                .maxTokens(maxOutputTokens)
+                .build();
+    }
 
+    private String callChatModel(Prompt prompt) {
         try {
-            Map<String, Object> response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(Map.class);
-
-            if (response == null) return null;
-
-            List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
-            if (candidates == null || candidates.isEmpty()) return null;
-
-            Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-            List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-            return (String) parts.get(0).get("text");
-
-        } catch (HttpClientErrorException ex) {
-            log.warn("Gemini Vision API error {}: {}", ex.getStatusCode(), ex.getMessage());
+            ChatResponse response = chatModel.call(prompt);
+            if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+                return null;
+            }
+            return response.getResult().getOutput().getText();
+        } catch (RuntimeException ex) {
+            log.warn("Gemini Vision API error: {}", ex.getMessage());
             return null;
         }
     }

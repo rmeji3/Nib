@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -57,6 +58,13 @@ public class SupabaseStorageService {
                 return;
             } catch (Exception ex) {
                 lastEx = ex;
+                if (isNonRetryableUploadFailure(ex)) {
+                    throw new StorageException(
+                            "Upload rejected by storage service without retry: "
+                                    + storagePath + " (" + ex.getMessage() + ")",
+                            ex
+                    );
+                }
                 if (attempt < maxAttempts) {
                     log.warn("Upload attempt {}/{} failed for {}; retrying in {} ms: {}",
                             attempt, maxAttempts, storagePath, delayMs, ex.getMessage());
@@ -70,6 +78,20 @@ public class SupabaseStorageService {
         }
         throw new StorageException(
                 "Failed to upload file after " + maxAttempts + " attempts: " + storagePath, lastEx);
+    }
+
+    static boolean isNonRetryableUploadFailure(Exception ex) {
+        if (ex instanceof HttpClientErrorException httpEx) {
+            int status = httpEx.getStatusCode().value();
+            return status >= 400 && status < 500 && status != 408 && status != 429;
+        }
+
+        String message = ex.getMessage();
+        if (message == null) return false;
+        return message.contains("invalid_mime_type")
+                || message.contains("mime type")
+                || message.contains("400 Bad Request")
+                || message.contains("415");
     }
 
     public byte[] downloadFile(String storagePath) {

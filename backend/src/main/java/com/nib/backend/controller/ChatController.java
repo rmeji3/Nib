@@ -1,9 +1,11 @@
 package com.nib.backend.controller;
 
 import com.nib.backend.dto.ChatMessageResponse;
+import com.nib.backend.dto.ChatMessageFeedbackRequest;
 import com.nib.backend.dto.ChatQueryRequest;
 import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
+import com.nib.backend.dto.ChatStarterResponse;
 import com.nib.backend.exception.RateLimitException;
 import com.nib.backend.model.User;
 import com.nib.backend.service.ChatRateLimiter;
@@ -39,6 +41,33 @@ public class ChatController {
             @AuthenticationPrincipal User user
     ) {
         return ResponseEntity.ok(chatService.getOrCreateSession(documentId, user));
+    }
+
+    /** List chat sessions for a document, newest activity first. */
+    @GetMapping("/sessions/document/{documentId}/all")
+    public ResponseEntity<List<ChatSessionResponse>> listSessions(
+            @PathVariable UUID documentId,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(chatService.listSessions(documentId, user));
+    }
+
+    /** Create a fresh chat session for a document. */
+    @PostMapping("/sessions/document/{documentId}")
+    public ResponseEntity<ChatSessionResponse> createSession(
+            @PathVariable UUID documentId,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(chatService.createSession(documentId, user));
+    }
+
+    /** Document-aware suggested prompts shown only before a chat has messages. */
+    @GetMapping("/sessions/document/{documentId}/starters")
+    public ResponseEntity<List<ChatStarterResponse>> getConversationStarters(
+            @PathVariable UUID documentId,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(chatService.getConversationStarters(documentId, user));
     }
 
     /**
@@ -79,5 +108,36 @@ public class ChatController {
             @AuthenticationPrincipal User user
     ) {
         return ResponseEntity.ok(chatService.getMessages(sessionId, user));
+    }
+
+    /** Delete a single chat message from a session owned by the authenticated user. */
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<Void> deleteMessage(
+            @PathVariable UUID messageId,
+            @AuthenticationPrincipal User user
+    ) {
+        chatService.deleteMessage(messageId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Persist feedback for an assistant chat message. */
+    @PostMapping("/messages/{messageId}/feedback")
+    public ResponseEntity<Void> addMessageFeedback(
+            @PathVariable UUID messageId,
+            @Valid @RequestBody ChatMessageFeedbackRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        chatService.addMessageFeedback(messageId, request, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Delete a chat session and its message history. */
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<Void> deleteSession(
+            @PathVariable UUID sessionId,
+            @AuthenticationPrincipal User user
+    ) {
+        chatService.deleteSession(sessionId, user);
+        return ResponseEntity.noContent().build();
     }
 }

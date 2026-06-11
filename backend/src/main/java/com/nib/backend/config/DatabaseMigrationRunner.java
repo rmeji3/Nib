@@ -31,9 +31,38 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
         migrateIngestionWarningColumns();
         migrateStructuredVisualEvidenceColumns();
         migrateAnswerAuditTable();
+        migrateChatMessageFeedbackTable();
         migrateSemanticCacheTables();
         migrateCostUsageEventsTable();
         log.info("Database migrations complete.");
+    }
+
+    private void migrateChatMessageFeedbackTable() {
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS chat_message_feedback (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  message_id uuid NOT NULL,
+                  session_id uuid NOT NULL,
+                  document_id uuid NOT NULL,
+                  user_id uuid NOT NULL,
+                  feedback_type text NOT NULL,
+                  note text,
+                  created_at timestamp NOT NULL DEFAULT now(),
+                  CONSTRAINT uq_chat_message_feedback_user_type UNIQUE (message_id, user_id, feedback_type)
+                )
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_message_feedback_message
+                  ON chat_message_feedback (message_id)
+                """);
+
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_message_feedback_user_created
+                  ON chat_message_feedback (user_id, created_at DESC)
+                """);
+
+        log.info("Chat message feedback table verified");
     }
 
     /**

@@ -27,9 +27,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     enabled: needsFetch,
     staleTime: 50 * 60 * 1000, // 50 min (signed URLs expire in 60 min)
   });
+  const isStorageMissing = needsFetch && !!data && !data.storageUrl;
 
   useEffect(() => {
-    if (data && needsFetch) {
+    if (data?.storageUrl && needsFetch) {
       const displayName = data.originalFilename.replace(/\.pdf$/i, '');
       setDocument(null, data.id, data.storageUrl, displayName);
     }
@@ -56,6 +57,24 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   } = useIngestionStatus(isContextReady ? id : null);
 
   // ── Loading states ────────────────────────────────────────────────────────────
+  if (isStorageMissing) {
+    return (
+      <ProtectedRoute>
+        <main className="flex h-[100dvh] items-center justify-center bg-[var(--bg-base)]">
+          <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center">
+            <p className="text-sm text-red-400">This document record exists, but its storage file is missing.</p>
+            <p className="text-xs leading-5 text-[var(--text-dim)]">
+              Delete this stale library item or re-upload the PDF to open it again.
+            </p>
+            <a href="/home" className="text-xs text-[var(--text-dim)] underline hover:text-[var(--text)]">
+              Back to library
+            </a>
+          </div>
+        </main>
+      </ProtectedRoute>
+    );
+  }
+
   if (!isContextReady || (needsFetch && isLoading)) {
     return (
       <ProtectedRoute>

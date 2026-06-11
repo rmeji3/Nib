@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { TextHighlight } from './hooks/use-nib-state';
 import { motion, useAnimationControls } from 'framer-motion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { BorderBeam } from 'border-beam';
 import { NibLogo as NibLogoBase } from '../../components/nib-logo';
 export { NibLogoBase as NibLogo };
 import { NibLogoSpinner } from '../../components/nib-logo-spinner';
@@ -141,10 +142,18 @@ export function Icon({ name }: { name: string }) {
       return <svg {...props}><path d="M13 4v3h-3" /><path d="M13 7a5 5 0 1 0-1.5 3.5" /></svg>;
     case 'copy':
       return <svg {...props}><rect x="5" y="5" width="8" height="8" rx="1" /><path d="M3 11V4a1 1 0 0 1 1-1h7" /></svg>;
+    case 'check':
+      return <svg {...props}><path d="M3.5 8.5 6.5 11.5 12.5 4.5" /></svg>;
+    case 'flag':
+      return <svg {...props}><path d="M4 13V3" /><path d="M4 3h7l-1 2 1 2H4" /></svg>;
     case 'more':
       return <svg {...props}><circle cx="3" cy="8" r="1" /><circle cx="8" cy="8" r="1" /><circle cx="13" cy="8" r="1" /></svg>;
     case 'clear':
       return <svg {...props}><path d="M3 5h10M5 5V3h6v2M6 5v8M10 5v8M4 5l1 9h6l1-9" /></svg>;
+    case 'trash':
+      return <svg {...props}><path d="M3 5h10M5 5V3h6v2M6 7v6M10 7v6M4 5l1 9h6l1-9" /></svg>;
+    case 'new-chat':
+      return <svg {...props}><path d="M3 4.5A2.5 2.5 0 0 1 5.5 2h5A2.5 2.5 0 0 1 13 4.5v3A2.5 2.5 0 0 1 10.5 10H8l-3 3v-3A2 2 0 0 1 3 8V4.5Z" /><path d="M8 4.2v3.6M6.2 6h3.6" /></svg>;
     case 'settings':
       return <svg {...props}><circle cx="8" cy="8" r="2.2" /><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M3.7 3.7l1 1M11.3 11.3l1 1M3.7 12.3l1-1M11.3 4.7l1-1" /></svg>;
     case 'arrow-right':
@@ -491,19 +500,31 @@ export function ViewerToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="mx-1 h-4 w-px bg-white/15" />
-        <button
-          className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[12.5px] font-medium transition nib-fab-btn ${
-            chatMinimized
-              ? 'border-transparent text-[var(--text-dim)] hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-              : 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
-          }`}
-          type="button"
-          title={chatMinimized ? 'Open chat' : 'Close chat'}
-          onClick={onToggleChat}
+        <BorderBeam
+          active={chatMinimized}
+          borderRadius={6}
+          brightness={1.25}
+          className="nav-chat-beam-frame"
+          colorVariant="ocean"
+          duration={2.2}
+          size="sm"
+          strength={chatMinimized ? 0.75 : 0}
+          theme="dark"
         >
-          <NibLogoBase size={13} />
-          Chat
-        </button>
+          <button
+            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[12.5px] font-medium transition ${
+              chatMinimized
+                ? 'border-transparent text-[var(--text-dim)] hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                : 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
+            }`}
+            type="button"
+            title={chatMinimized ? 'Open chat' : 'Close chat'}
+            onClick={onToggleChat}
+          >
+            <NibLogoBase size={13} />
+            Chat
+          </button>
+        </BorderBeam>
         <div className="mx-1 h-4 w-px bg-white/15" />
         {user && <UserMenu user={user} onSignOut={signOut} variant="toolbar" />}
       </div>
@@ -523,6 +544,11 @@ export function Viewer({
   setPdf,
   scrollToPageRef,
   highlight,
+  lockedUntilIndexed,
+  indexingFailed,
+  indexingProgress,
+  indexingPagesProcessed,
+  indexingPagesTotal,
 }: {
   currentPage: number;
   totalPages: number;
@@ -535,6 +561,11 @@ export function Viewer({
   setPdf: (pdf: pdfjs.PDFDocumentProxy | null) => void;
   scrollToPageRef: React.MutableRefObject<((index: number) => void) | null>;
   highlight?: TextHighlight | null;
+  lockedUntilIndexed: boolean;
+  indexingFailed: boolean;
+  indexingProgress: number;
+  indexingPagesProcessed: number;
+  indexingPagesTotal: number | null;
 }) {
   const { settings } = useSettings();
   const [showThumbs, setShowThumbs] = useState(true);
@@ -573,15 +604,40 @@ export function Viewer({
   const activeBlobRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
+    if (lockedUntilIndexed) {
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+        activeBlobRef.current = undefined;
+      }
+      queueMicrotask(() => {
+        setBlobUrl(undefined);
+        setIsFetchingPdf(false);
+        setPdf(null);
+      });
+      return;
+    }
     if (file) {
       if (activeBlobRef.current) { URL.revokeObjectURL(activeBlobRef.current); activeBlobRef.current = undefined; }
-      setBlobUrl(undefined); setIsFetchingPdf(false); return;
+      queueMicrotask(() => {
+        setBlobUrl(undefined);
+        setIsFetchingPdf(false);
+      });
+      return;
     }
-    if (!documentId) { setBlobUrl(undefined); setIsFetchingPdf(false); return; }
+    if (!documentId) {
+      queueMicrotask(() => {
+        setBlobUrl(undefined);
+        setIsFetchingPdf(false);
+      });
+      return;
+    }
 
     let cancelled = false;
-    setIsFetchingPdf(true);
-    setBlobUrl(undefined);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIsFetchingPdf(true);
+      setBlobUrl(undefined);
+    });
 
     fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() })
       .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
@@ -596,7 +652,7 @@ export function Viewer({
       .catch((err) => { if (!cancelled) { console.error('[PDF] fetch error:', err); setIsFetchingPdf(false); } });
 
     return () => { cancelled = true; };
-  }, [file, documentId, documentUrl]);
+  }, [file, documentId, documentUrl, lockedUntilIndexed, setPdf]);
 
   useEffect(() => () => { if (activeBlobRef.current) URL.revokeObjectURL(activeBlobRef.current); }, []);
 
@@ -709,48 +765,91 @@ export function Viewer({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {isFetchingPdf && !file && (
+      {lockedUntilIndexed && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-5 bg-[var(--bg-base)] px-6 text-center">
+          {indexingFailed ? (
+            <>
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-400/30 bg-red-500/10 text-red-200">
+                <Icon name="close" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-[var(--text)]">Indexing failed</h2>
+                <p className="mt-2 max-w-[300px] text-[12px] leading-relaxed text-[var(--text-faint)]">
+                  This PDF stays hidden because Nib only opens documents after indexing completes.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <NibLogoSpinner size={30} label="Preparing document" />
+              <div className="w-full max-w-[260px]">
+                <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
+                  <span>
+                    {indexingPagesTotal !== null && indexingPagesTotal > 0
+                      ? `${indexingPagesProcessed} of ${indexingPagesTotal} pages`
+                      : 'Indexing document'}
+                  </span>
+                  <span>{indexingProgress}%</span>
+                </div>
+                <div className="h-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
+                    style={{ width: `${indexingProgress}%` }}
+                  />
+                </div>
+              </div>
+              <p className="max-w-[280px] text-[12px] leading-relaxed text-[var(--text-faint)]">
+                Nib is indexing the PDF before showing it, so citations and chat are ready with the document.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {!lockedUntilIndexed && isFetchingPdf && !file && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-base)]">
           <NibLogoSpinner size={26} label="Loading PDF" />
         </div>
       )}
 
-      {/* Thumbnail sidebar */}
-      <AnimatePresence>
-        {showThumbs && totalPages > 0 && (
-          <motion.div
-            key="thumb-panel"
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
-            className="fixed bottom-0 left-0 z-20 flex w-[80px] flex-col overflow-hidden border-r border-white/8 bg-[var(--bg-base)]"
-            style={{ top: '48px' }}
-          >
-            <Document file={pdfSource} loading={null} className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex flex-1 flex-col overflow-y-auto py-3 px-[10px] gap-2">
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`thumb${i === currentPage ? ' active' : ''}`}
-                    onClick={() => jumpToPage(i)}
-                    title={`Page ${i + 1}`}
-                  >
-                    <div className="thumb-img flex items-center justify-center overflow-hidden">
-                      <Page
-                        pageNumber={i + 1}
-                        width={50}
-                        devicePixelRatio={1}
-                        renderAnnotationLayer={false}
-                        renderTextLayer={false}
-                      />
-                    </div>
-                    <span className="thumb-num">{i + 1}</span>
-                  </button>
-                ))}
-              </div>
-            </Document>
+      {!lockedUntilIndexed && (
+        <>
+          {/* Thumbnail sidebar */}
+          <AnimatePresence>
+            {showThumbs && totalPages > 0 && (
+              <motion.div
+                key="thumb-panel"
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
+                className="fixed bottom-0 left-0 z-20 flex w-[80px] flex-col overflow-hidden border-r border-white/8 bg-[var(--bg-base)]"
+                style={{ top: '48px' }}
+              >
+                <Document file={pdfSource} loading={null} className="flex flex-1 flex-col overflow-hidden">
+                  <div className="flex flex-1 flex-col overflow-y-auto py-3 px-[10px] gap-2">
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`thumb${i === currentPage ? ' active' : ''}`}
+                        onClick={() => jumpToPage(i)}
+                        title={`Page ${i + 1}`}
+                      >
+                        <div className="thumb-img flex items-center justify-center overflow-hidden">
+                          <Page
+                            pageNumber={i + 1}
+                            width={50}
+                            devicePixelRatio={1}
+                            renderAnnotationLayer={false}
+                            renderTextLayer={false}
+                          />
+                        </div>
+                        <span className="thumb-num">{i + 1}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Document>
 
             <div className="shrink-0 border-t border-white/10 pt-2 pb-3 flex flex-col items-center gap-1">
               {mergeMutation.isError && (
@@ -790,22 +889,22 @@ export function Viewer({
         )}
       </AnimatePresence>
 
-      {/* Main PDF document */}
-      <Document
-        file={pdfSource}
-        loading={null}
-        onLoadSuccess={(pdf) => { onPageCountChange(pdf.numPages); setPdf(pdf); }}
-        onLoadError={(err) => console.error('[PDF] load error:', err)}
-        className="h-full w-full"
-      >
-        <div
-          className="h-full overflow-auto"
-          ref={scrollContainerRef}
-          style={{
-            paddingLeft: showThumbs && totalPages > 0 ? 80 : 0,
-            transition: 'padding-left 0.5s cubic-bezier(0.32, 0.72, 0, 1)',
-          }}
-        >
+          {/* Main PDF document */}
+          <Document
+            file={pdfSource}
+            loading={null}
+            onLoadSuccess={(pdf) => { onPageCountChange(pdf.numPages); setPdf(pdf); }}
+            onLoadError={(err) => console.error('[PDF] load error:', err)}
+            className="h-full w-full"
+          >
+            <div
+              className="h-full overflow-auto"
+              ref={scrollContainerRef}
+              style={{
+                paddingLeft: showThumbs && totalPages > 0 ? 80 : 0,
+                transition: 'padding-left 0.5s cubic-bezier(0.32, 0.72, 0, 1)',
+              }}
+            >
           {totalPages === 0 ? (
             <div className="flex h-full items-center justify-center">
               <div className="pdf-page flex min-h-[500px] w-[620px] flex-col items-center justify-center gap-3 rounded-lg border border-white/10 bg-[var(--bg-base)] text-sm text-[var(--text-dim)]">
@@ -833,8 +932,10 @@ export function Viewer({
               ))}
             </div>
           )}
-        </div>
-      </Document>
+            </div>
+          </Document>
+        </>
+      )}
     </div>
   );
 }
@@ -853,7 +954,7 @@ function PdfPageWrapper({
   pageW: number;
   renderW: number;
   scale: number;
-  textRenderer: (props: any) => string;
+  textRenderer: (props: { str: string }) => string;
   highlight?: TextHighlight | null;
   showPageNumbers: boolean;
   readingMode: string;

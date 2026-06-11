@@ -5,18 +5,27 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nib.backend.dto.BBox;
 import com.nib.backend.dto.ChatMessageResponse;
+import com.nib.backend.dto.ChatMessageFeedbackRequest;
 import com.nib.backend.dto.ChatQueryResponse;
 import com.nib.backend.dto.ChatSessionResponse;
+import com.nib.backend.dto.ChatStarterResponse;
 import com.nib.backend.dto.CitationDto;
 import com.nib.backend.dto.GroundingVerificationDto;
+import com.nib.backend.exception.ChatMessageNotFoundException;
+import com.nib.backend.exception.ChatSessionNotFoundException;
 import com.nib.backend.exception.DocumentNotFoundException;
 import com.nib.backend.model.AnswerAudit;
 import com.nib.backend.model.ChatMessage;
+import com.nib.backend.model.ChatMessageFeedback;
 import com.nib.backend.model.ChatSession;
+import com.nib.backend.model.ContentBlock;
+import com.nib.backend.model.Document;
 import com.nib.backend.model.User;
 import com.nib.backend.repository.AnswerAuditRepository;
 import com.nib.backend.repository.ChatMessageRepository;
+import com.nib.backend.repository.ChatMessageFeedbackRepository;
 import com.nib.backend.repository.ChatSessionRepository;
+import com.nib.backend.repository.ContentBlockRepository;
 import com.nib.backend.repository.DocumentRepository;
 import com.nib.backend.repository.IngestionJobRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,12 +34,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.MatchResult;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,6 +59,8 @@ public class ChatService {
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatMessageFeedbackRepository chatMessageFeedbackRepository;
+    private final ContentBlockRepository contentBlockRepository;
     private final DocumentRepository documentRepository;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
@@ -56,8 +71,10 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final AnswerAuditRepository answerAuditRepository;
     private final SemanticCacheService semanticCacheService;
+    private final RerankerService rerankerService;
+    private final RagChatTracer ragChatTracer;
 
-    @Value("${gemini.model:gemini-2.5-flash}")
+    @Value("${gemini.model:gemini-2.5-flash-lite}")
     private String geminiModel;
 
     @Value("${ingestion.top-k:5}")
@@ -101,7 +118,7 @@ public class ChatService {
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern NUMBER_OR_MEASURE_PATTERN = Pattern.compile("[$€£¥%]|\\b\\d+(?:\\.\\d+)?\\b");
-    private static final String PROMPT_VERSION = "rag-v5-block-grounded-structured-visuals";
+    private static final String PROMPT_VERSION = "rag-v9-deterministic-evaluative-verifier";
     private static final String QUERY_EMBED_MODEL = "mistral-embed";
 
     /** Canned answer when confidence is below refusal threshold. */
@@ -109,6 +126,18 @@ public class ChatService {
             "I cannot find enough relevant information in the indexed pages of this document to "
             + "answer this question confidently. Try rephrasing your question, or ask about a "
             + "topic that is covered in the document.";
+
+    private static final String MODEL_UNAVAILABLE_TEXT =
+            "The AI answer service is temporarily overloaded, so I could not generate an answer "
+            + "right now. Your question was saved in this chat. Please try again in a moment.";
+
+    private static final String LOW_SIGNAL_TEXT =
+            "I could not tell what you wanted to ask from that message. Try rephrasing it as a "
+            + "specific question about this document.";
+
+    private static final Set<String> SHORT_DOCUMENT_TERMS = Set.of(
+            "ai", "api", "aws", "cms", "cv", "gpa", "pdf", "qa", "rag", "ui", "ux", "uni"
+    );
 
     /** Max text blocks to add per explicitly-referenced page (prevents token explosion). */
     private static final int MAX_TEXT_BLOCKS_PER_PAGE_REF = 3;
@@ -138,33 +167,168 @@ public class ChatService {
         return false;
     }
 
+    private static boolean isLowSignalQuestion(String question) {
+        if (question == null) return true;
+        String trimmed = question.trim();
+        if (trimmed.isEmpty()) return true;
+
+        String compact = trimmed.replaceAll("\\s+", "");
+        long alnumCount = compact.chars().filter(Character::isLetterOrDigit).count();
+        if (alnumCount == 0) return true;
+
+        List<String> tokens = Pattern.compile("[\\p{L}\\p{N}]+")
+                .matcher(trimmed.toLowerCase(Locale.ROOT))
+                .results()
+                .map(MatchResult::group)
+                .toList();
+        if (tokens.isEmpty()) return true;
+
+        if (tokens.size() == 1 && isLowSignalSingleToken(tokens.get(0), trimmed)) {
+            return true;
+        }
+
+        long meaningfulTokens = tokens.stream()
+                .filter(token -> token.length() > 1 || token.chars().anyMatch(Character::isDigit))
+                .count();
+        return meaningfulTokens == 0;
+    }
+
+    private static boolean isLowSignalSingleToken(String token, String originalQuestion) {
+        if (SHORT_DOCUMENT_TERMS.contains(token)) return false;
+        if (originalQuestion.contains("?")) return false;
+        if (token.length() <= 2) return true;
+        if (token.length() >= 3 && token.chars().distinct().count() == 1) return true;
+        if (token.length() >= 6 && token.chars().distinct().count() <= Math.max(2, token.length() / 3)) {
+            return true;
+        }
+        return false;
+    }
+
     // ── Sessions ──────────────────────────────────────────────────────────────
 
     @Transactional
     public ChatSessionResponse getOrCreateSession(UUID documentId, User user) {
-        documentRepository.findByIdAndUserAndDeletedAtIsNull(documentId, user)
-                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        ensureDocument(documentId, user);
 
         List<ChatSession> existing = chatSessionRepository
-                .findByDocumentIdAndUserIdOrderByCreatedAtDesc(documentId, user.getId());
+                .findByDocumentIdAndUserIdOrderByUpdatedAtDesc(documentId, user.getId());
 
         ChatSession session = existing.isEmpty()
-                ? chatSessionRepository.save(ChatSession.builder()
-                        .documentId(documentId)
-                        .userId(user.getId())
-                        .build())
+                ? createSessionEntity(documentId, user)
                 : existing.get(0);
 
         return toSessionResponse(session);
     }
 
     @Transactional(readOnly = true)
+    public List<ChatSessionResponse> listSessions(UUID documentId, User user) {
+        ensureDocument(documentId, user);
+        return chatSessionRepository
+                .findByDocumentIdAndUserIdOrderByUpdatedAtDesc(documentId, user.getId())
+                .stream()
+                .map(this::toSessionResponse)
+                .toList();
+    }
+
+    @Transactional
+    public ChatSessionResponse createSession(UUID documentId, User user) {
+        ensureDocument(documentId, user);
+        return toSessionResponse(createSessionEntity(documentId, user));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatStarterResponse> getConversationStarters(UUID documentId, User user) {
+        Document document = ensureDocument(documentId, user);
+        List<ContentBlock> blocks = contentBlockRepository.findByDocumentIdOrderByPageNumberAscChunkIndexAsc(documentId);
+        return buildConversationStarters(document, blocks);
+    }
+
+    @Transactional(readOnly = true)
     public List<ChatMessageResponse> getMessages(UUID sessionId, User user) {
         chatSessionRepository.findByIdAndUserId(sessionId, user.getId())
-                .orElseThrow(() -> new RuntimeException("Session not found"));
+                .orElseThrow(() -> new ChatSessionNotFoundException(sessionId));
 
-        return chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId)
-                .stream().map(this::toMessageResponse).collect(Collectors.toList());
+        List<ChatMessage> messages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<UUID> assistantMessageIds = messages.stream()
+                .filter(message -> "assistant".equals(message.getRole()))
+                .map(ChatMessage::getId)
+                .toList();
+        Map<UUID, AnswerAudit> auditsByAssistantMessageId = assistantMessageIds.isEmpty()
+                ? Map.of()
+                : answerAuditRepository.findByAssistantMessageIdIn(assistantMessageIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                AnswerAudit::getAssistantMessageId,
+                                audit -> audit,
+                                (first, ignored) -> first
+                        ));
+        Set<UUID> reportedMessageIds = assistantMessageIds.isEmpty()
+                ? Set.of()
+                : chatMessageFeedbackRepository
+                        .findByMessageIdInAndUserIdAndFeedbackType(assistantMessageIds, user.getId(), "report")
+                        .stream()
+                        .map(ChatMessageFeedback::getMessageId)
+                        .collect(Collectors.toSet());
+
+        return messages.stream()
+                .map(message -> toMessageResponse(
+                        message,
+                        auditsByAssistantMessageId.get(message.getId()),
+                        reportedMessageIds.contains(message.getId())
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteSession(UUID sessionId, User user) {
+        ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, user.getId())
+                .orElseThrow(() -> new ChatSessionNotFoundException(sessionId));
+
+        chatMessageRepository.deleteBySessionId(sessionId);
+        chatSessionRepository.delete(session);
+    }
+
+    @Transactional
+    public void deleteMessage(UUID messageId, User user) {
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new ChatMessageNotFoundException(messageId));
+        chatSessionRepository.findByIdAndUserId(message.getSessionId(), user.getId())
+                .orElseThrow(() -> new ChatMessageNotFoundException(messageId));
+
+        if ("assistant".equals(message.getRole())) {
+            answerAuditRepository.deleteByAssistantMessageId(messageId);
+        }
+        chatMessageFeedbackRepository.deleteByMessageId(messageId);
+        chatMessageRepository.delete(message);
+    }
+
+    @Transactional
+    public void addMessageFeedback(UUID messageId, ChatMessageFeedbackRequest request, User user) {
+        String feedbackType = request.type().trim().toLowerCase();
+        if (!"report".equals(feedbackType)) {
+            throw new IllegalArgumentException("Unsupported feedback type: " + request.type());
+        }
+
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new ChatMessageNotFoundException(messageId));
+        ChatSession session = chatSessionRepository.findByIdAndUserId(message.getSessionId(), user.getId())
+                .orElseThrow(() -> new ChatMessageNotFoundException(messageId));
+
+        if (!"assistant".equals(message.getRole())) {
+            throw new IllegalArgumentException("Only assistant messages can be reported");
+        }
+        if (chatMessageFeedbackRepository.existsByMessageIdAndUserIdAndFeedbackType(messageId, user.getId(), feedbackType)) {
+            return;
+        }
+
+        chatMessageFeedbackRepository.save(ChatMessageFeedback.builder()
+                .messageId(messageId)
+                .sessionId(message.getSessionId())
+                .documentId(session.getDocumentId())
+                .userId(user.getId())
+                .feedbackType(feedbackType)
+                .note(request.note())
+                .build());
     }
 
     // ── Query ─────────────────────────────────────────────────────────────────
@@ -173,7 +337,7 @@ public class ChatService {
     public ChatQueryResponse query(UUID sessionId, String question, User user) {
         long startedNanos = System.nanoTime();
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, user.getId())
-                .orElseThrow(() -> new RuntimeException("Session not found"));
+                .orElseThrow(() -> new ChatSessionNotFoundException(sessionId));
 
         // Save the user turn
         ChatMessage userMessage = chatMessageRepository.save(ChatMessage.builder()
@@ -181,12 +345,51 @@ public class ChatService {
                 .role("user")
                 .content(question)
                 .build());
+        RagChatTracer.ChatTrace trace =
+                ragChatTracer.startTrace(sessionId, session.getDocumentId(), user.getId(), question);
+
+        boolean lowSignalQuestion = isLowSignalQuestion(question);
+        if (isUntitled(session.getTitle())) {
+            session.setTitle(lowSignalQuestion ? "Clarification needed" : titleFromQuestion(question));
+        }
+        session.setUpdatedAt(java.time.LocalDateTime.now());
+        chatSessionRepository.save(session);
+
+        if (lowSignalQuestion) {
+            log.info("Returning clarification for low-signal chat prompt in session {}", sessionId);
+            ChatMessage clarificationMsg = chatMessageRepository.save(ChatMessage.builder()
+                    .sessionId(sessionId)
+                    .role("assistant")
+                    .content(LOW_SIGNAL_TEXT)
+                    .modelVersion(geminiModel)
+                    .build());
+            saveAnswerAudit(
+                    session,
+                    user,
+                    userMessage,
+                    clarificationMsg,
+                    List.of(),
+                    0.0,
+                    0.0,
+                    elapsedMillis(startedNanos),
+                    new GeminiTextClient.TokenUsage(null, null, null),
+                    true
+            );
+
+            trace.end("clarification", 0.0, 0.0, LOW_SIGNAL_TEXT);
+            return new ChatQueryResponse(
+                    clarificationMsg.getId(), sessionId, LOW_SIGNAL_TEXT, List.of(),
+                    geminiModel, clarificationMsg.getCreatedAt().toString(),
+                    0.0, 0.0, refusedVerification(), true
+            );
+        }
 
         // Phase 4 — multi-turn query rewriting: if the conversation has prior
         // turns, rewrite the question as a standalone query so embeddings match
         // the right chunks. The rewritten query is also used in the final Gemini
         // prompt so the model understands what "those", "it", "that" refer to.
         String searchQuery = rewriteQueryIfNeeded(sessionId, question);
+        trace.recordRewrite(question, searchQuery);
 
         // Compute dynamic topK based on document page count:
         //   small docs (3 pages) → 5, medium (5-7 pages) → 8-10,
@@ -194,22 +397,68 @@ public class ChatService {
         //   and missing-page issues on large ones.
         int dynamicTopK = computeDynamicTopK(session.getDocumentId());
 
+        // When the cross-encoder reranker is configured, retrieve a wider
+        // candidate pool (default 40) so the reranker has real choices, then
+        // keep the best dynamicTopK after reranking. Without a reranker the
+        // pool stays at dynamicTopK and retrieval behaves exactly as before.
+        int candidateK = rerankerService.isEnabled()
+                ? Math.max(dynamicTopK, rerankerService.candidatePoolSize())
+                : dynamicTopK;
+
         // Embed the rewritten query and retrieve top-k chunks via hybrid search
         // (dense vector similarity + BM25 full-text, merged with RRF).
         float[] queryEmbedding = embedSearchQuery(searchQuery);
         VectorSearchService.HybridSearchResult hybridResult =
-                vectorSearchService.hybridSearch(session.getDocumentId(), queryEmbedding, searchQuery, dynamicTopK);
+                vectorSearchService.hybridSearch(session.getDocumentId(), queryEmbedding, searchQuery, candidateK);
         List<VectorSearchService.ChunkMatch> chunks = new ArrayList<>(hybridResult.chunks());
 
-        // Confidence is computed from the raw vector results (cosine distances),
-        // not the RRF-merged scores — the sigmoid operates on cosine distance scale.
-        double confidence = computeConfidence(hybridResult.vectorResults());
-        log.debug("Computed confidence={} for question '{}'", String.format("%.3f", confidence), question);
+        boolean usedStoredBlockFallback = false;
+        if (chunks.isEmpty()) {
+            chunks.addAll(vectorSearchService.fallbackDocumentBlocks(session.getDocumentId(), dynamicTopK));
+            if (!chunks.isEmpty()) {
+                usedStoredBlockFallback = true;
+                log.warn("Hybrid search returned 0 chunks for document {}; using {} stored block fallback(s)",
+                        session.getDocumentId(), chunks.size());
+            }
+        }
 
-        // Phase 3 — re-rank before any aggregation augmentation so we anchor on
-        // the genuinely most relevant blocks first, then optionally pad with all
+        // Retrieval confidence is computed from source-match distances only.
+        // The API-facing answer confidence is computed later after citations and
+        // verifier results are known.
+        double retrievalConfidence = hybridResult.vectorResults().isEmpty()
+                ? computeConfidence(chunks)
+                : computeConfidence(hybridResult.vectorResults());
+        log.debug("Computed retrieval confidence={} for question '{}'",
+                String.format("%.3f", retrievalConfidence), question);
+        trace.recordRetrieval(candidateK, chunks, retrievalConfidence, usedStoredBlockFallback);
+
+        // Re-rank before any aggregation augmentation so we anchor on the
+        // genuinely most relevant blocks first, then optionally pad with all
         // visual blocks when the user asks an aggregation question.
-        chunks = rerank(chunks);
+        //
+        // Preferred path: cross-encoder rerank over the wide candidate pool,
+        // keeping the top dynamicTopK by true query-chunk relevance. The
+        // reranker's relevance score also feeds answer confidence below — it is
+        // a far better calibrated signal than bi-encoder cosine distance.
+        // Fallback path (reranker disabled or provider failure): the Phase 3
+        // heuristic rerank (visual boost + page-diversity penalty), truncated
+        // back to dynamicTopK.
+        Double rerankRelevance = null;
+        Optional<RerankerService.RerankResult> crossEncoderRerank =
+                rerankerService.rerank(searchQuery, chunks, dynamicTopK);
+        if (crossEncoderRerank.isPresent()) {
+            RerankerService.RerankResult reranked = crossEncoderRerank.get();
+            chunks = new ArrayList<>(reranked.chunkMatches());
+            rerankRelevance = reranked.topRelevance();
+            log.info("Cross-encoder rerank: {} candidate(s) → {} chunk(s), top relevance={}",
+                    candidateK, chunks.size(), String.format("%.3f", rerankRelevance));
+        } else {
+            chunks = rerank(chunks);
+            if (chunks.size() > dynamicTopK) {
+                chunks = new ArrayList<>(chunks.subList(0, dynamicTopK));
+            }
+        }
+        trace.recordRerank(crossEncoderRerank.isPresent(), rerankRelevance, chunks.size());
 
         // For aggregation queries ("most expensive", "list all", "compare", etc.)
         // top-k similarity may miss pages whose embeddings don't sit close to the
@@ -269,14 +518,14 @@ public class ChatService {
         }
 
         // ── Refusal guard ────────────────────────────────────────────────────
-        // If confidence is below threshold, don't even call Gemini — return a
+        // If retrieval confidence is below threshold, don't even call Gemini — return a
         // canned response. This kills hallucinations on off-topic queries and
         // saves API spend. Skipped for aggregation queries and page-reference
         // queries because those have legitimate intent despite potentially
         // weaker per-chunk similarity.
-        if (confidence < refusalThreshold && !isAggregationQuery(searchQuery) && referencedPages.isEmpty()) {
+        if (retrievalConfidence < refusalThreshold && !isAggregationQuery(searchQuery) && referencedPages.isEmpty()) {
             log.info("Refusing query: confidence {} below threshold {} (question='{}')",
-                    String.format("%.3f", confidence), refusalThreshold, question);
+                    String.format("%.3f", retrievalConfidence), refusalThreshold, question);
 
             ChatMessage refusalMsg = chatMessageRepository.save(ChatMessage.builder()
                     .sessionId(sessionId)
@@ -290,17 +539,18 @@ public class ChatService {
                     userMessage,
                     refusalMsg,
                     chunks,
-                    confidence,
+                    0.0,
                     0.0,
                     elapsedMillis(startedNanos),
                     new GeminiTextClient.TokenUsage(null, null, null),
                     true
             );
 
+            trace.end("refused_low_confidence", 0.0, 0.0, REFUSAL_TEXT);
             return new ChatQueryResponse(
                     refusalMsg.getId(), sessionId, REFUSAL_TEXT, List.of(),
                     geminiModel, refusalMsg.getCreatedAt().toString(),
-                    confidence, 0.0, refusedVerification(), true
+                    0.0, 0.0, refusedVerification(), true
             );
         }
 
@@ -319,6 +569,16 @@ public class ChatService {
                 GroundingVerificationDto groundingVerification =
                         verifyGrounding(hit.answer(), chunks, hit.citations());
                 if (groundingVerification.verified()) {
+                    double answerConfidence = computeAnswerConfidence(
+                            retrievalConfidence,
+                            rerankRelevance,
+                            hit.groundedness(),
+                            groundingVerification,
+                            false,
+                            true,
+                            0,
+                            hit.citations().size()
+                    );
                     ChatMessage cachedMsg = chatMessageRepository.save(ChatMessage.builder()
                             .sessionId(sessionId)
                             .role("assistant")
@@ -332,7 +592,7 @@ public class ChatService {
                             userMessage,
                             cachedMsg,
                             chunks,
-                            hit.confidence(),
+                            answerConfidence,
                             hit.groundedness(),
                             elapsedMillis(startedNanos),
                             new GeminiTextClient.TokenUsage(null, null, null),
@@ -340,6 +600,7 @@ public class ChatService {
                     );
                     log.info("Semantic answer cache hit for document {} version {} (distance={})",
                             session.getDocumentId(), documentVersionId.get(), String.format("%.4f", hit.distance()));
+                    trace.end("cache_hit", answerConfidence, hit.groundedness(), hit.answer());
                     return new ChatQueryResponse(
                             cachedMsg.getId(),
                             sessionId,
@@ -347,7 +608,7 @@ public class ChatService {
                             hit.citations(),
                             geminiModel,
                             cachedMsg.getCreatedAt().toString(),
-                            hit.confidence(),
+                            answerConfidence,
                             hit.groundedness(),
                             groundingVerification,
                             false
@@ -366,9 +627,28 @@ public class ChatService {
         // so Gemini understands resolved pronouns (e.g. "those" → "the omelets").
         String prompt = buildPrompt(searchQuery, chunks, docType);
 
-        // Call Gemini
-        GeminiTextClient.GenerationResult generation = callGeminiWithMetadata(prompt);
+        // Call Gemini. Provider-side 5xx/high-demand errors should not make the
+        // chat feel dead; persist a visible assistant turn and let the user retry.
+        GeminiTextClient.GenerationResult generation;
+        try {
+            generation = callGeminiWithMetadata(prompt);
+        } catch (RuntimeException ex) {
+            log.warn("Gemini answer generation failed for session {}: {}", sessionId, ex.getMessage());
+            trace.end("model_unavailable", 0.0, 0.0, MODEL_UNAVAILABLE_TEXT);
+            return persistModelUnavailableResponse(
+                    session,
+                    user,
+                    userMessage,
+                    chunks,
+                    retrievalConfidence,
+                    elapsedMillis(startedNanos)
+            );
+        }
         String answer = generation.text();
+        String effectiveGeminiModel = generation.modelVersion() == null
+                ? geminiModel
+                : generation.modelVersion();
+        trace.recordGeneration(prompt, generation.text(), effectiveGeminiModel, generation.tokenUsage());
 
         CitationVerifier.VerificationResult verification =
                 citationVerifier.verify(searchQuery, answer, chunks);
@@ -384,6 +664,8 @@ public class ChatService {
         GroundingVerificationDto groundingVerification = verification.refused()
                 ? refusedVerification()
                 : verifyGrounding(answer, chunks, citations);
+        trace.recordVerification(
+                verification.verified(), verification.refused(), verification.issues(), groundingVerification);
 
         // Persist the assistant turn
         ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
@@ -391,17 +673,27 @@ public class ChatService {
                 .role("assistant")
                 .content(answer)
                 .citations(serializeCitations(citations))
-                .modelVersion(geminiModel)
+                .modelVersion(effectiveGeminiModel)
                 .build());
 
         double groundedness = computeGroundedness(answer);
+        double answerConfidence = computeAnswerConfidence(
+                retrievalConfidence,
+                rerankRelevance,
+                groundedness,
+                groundingVerification,
+                verification.refused(),
+                verification.verified(),
+                verification.issues().size(),
+                citations.size()
+        );
         saveAnswerAudit(
                 session,
                 user,
                 userMessage,
                 assistantMsg,
                 chunks,
-                confidence,
+                answerConfidence,
                 groundedness,
                 elapsedMillis(startedNanos),
                 generation.tokenUsage(),
@@ -411,30 +703,36 @@ public class ChatService {
                 && documentVersionId.isPresent()
                 && !verification.refused()
                 && groundingVerification.verified()
-                && confidence >= answerCacheMinConfidence) {
+                && answerConfidence >= answerCacheMinConfidence) {
             semanticCacheService.saveAnswer(
                     session.getDocumentId(),
                     documentVersionId.get(),
                     searchQuery,
                     queryEmbedding,
                     PROMPT_VERSION,
-                    geminiModel,
+                    effectiveGeminiModel,
                     answer,
                     citations,
                     retrievedBlockIds(chunks),
-                    confidence,
+                    answerConfidence,
                     groundedness
             );
         }
 
+        trace.end(
+                verification.refused() ? "verifier_refused" : "answered",
+                answerConfidence,
+                groundedness,
+                answer
+        );
         return new ChatQueryResponse(
                 assistantMsg.getId(),
                 sessionId,
                 answer,
                 citations,
-                geminiModel,
+                effectiveGeminiModel,
                 assistantMsg.getCreatedAt().toString(),
-                confidence,
+                answerConfidence,
                 groundedness,
                 groundingVerification,
                 verification.refused()
@@ -613,6 +911,76 @@ public class ChatService {
         double confMean = sigmoidScore(meanDistance);
         double conf = 0.7 * confBest + 0.3 * confMean;
         return Math.max(0.0, Math.min(1.0, conf));
+    }
+
+    /**
+     * API-facing answer confidence.
+     *
+     * This is intentionally conservative: the score can only be high when the
+     * system found relevant evidence, the final answer retained citations, the
+     * deterministic grounding pass maps those citations, and the semantic
+     * citation verifier did not refuse or report issues. It is not a model
+     * probability; it is an auditable reliability score for the returned answer.
+     *
+     * rerankRelevance is the cross-encoder relevance of the kept chunks (null
+     * when the reranker is disabled or failed). When present, it shares the
+     * retrieval-strength weight with the bi-encoder retrieval confidence — the
+     * cross-encoder reads the query and chunk together, so its score is the
+     * stronger of the two signals.
+     */
+    private double computeAnswerConfidence(
+            double retrievalConfidence,
+            Double rerankRelevance,
+            double sentenceCitationCoverage,
+            GroundingVerificationDto groundingVerification,
+            boolean verifierRefused,
+            boolean verifierPassed,
+            int verifierIssueCount,
+            int citationCount
+    ) {
+        if (verifierRefused) return 0.0;
+
+        double groundingScore = groundingVerification == null ? 0.0 : groundingVerification.score();
+        int checkedSentences = groundingVerification == null ? 0 : groundingVerification.checkedSentences();
+        int citedBlockCount = groundingVerification == null ? 0 : groundingVerification.citedBlockIds().size();
+        int expectedCitations = Math.max(1, Math.min(3, checkedSentences == 0 ? citationCount : checkedSentences));
+        double citationSupport = citationCount == 0
+                ? 0.0
+                : Math.min(1.0, (double) Math.max(citationCount, citedBlockCount) / expectedCitations);
+        double semanticVerifierScore = verifierPassed ? 1.0 : 0.25;
+
+        double retrievalTerm = rerankRelevance == null
+                ? 0.25 * clamp01(retrievalConfidence)
+                : 0.10 * clamp01(retrievalConfidence) + 0.15 * clamp01(rerankRelevance);
+
+        double score =
+                retrievalTerm
+                + 0.30 * clamp01(groundingScore)
+                + 0.25 * semanticVerifierScore
+                + 0.10 * clamp01(sentenceCitationCoverage)
+                + 0.10 * citationSupport;
+
+        if (verifierIssueCount > 0) {
+            score -= Math.min(0.20, verifierIssueCount * 0.05);
+        }
+
+        if (groundingVerification != null && !groundingVerification.verified()) {
+            String verdict = groundingVerification.verdict();
+            double cap = "PARTIAL".equals(verdict) ? 0.72 : 0.45;
+            score = Math.min(score, cap);
+        }
+        if (checkedSentences > 0 && citationCount == 0) {
+            score = Math.min(score, 0.35);
+        }
+        if (retrievalConfidence < refusalThreshold) {
+            score = Math.min(score, 0.60);
+        }
+
+        return Math.round(clamp01(score) * 1000.0) / 1000.0;
+    }
+
+    private double clamp01(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
     }
 
     /** Map a cosine distance to a [0,1] confidence using a sigmoid curve. */
@@ -794,15 +1162,19 @@ public class ChatService {
      */
     private String buildPrompt(String question, List<VectorSearchService.ChunkMatch> chunks, String docType) {
         StringBuilder sb = new StringBuilder(8192);
-        boolean meta = isMetaQuery(question);
-
         // ── ROLE ───────────────────────────────────────────────────────────
         sb.append("# Role\n");
-        sb.append("You are a senior research analyst at a professional services firm. ");
+        sb.append("You are Nib, a thoughtful PDF reading companion and personal teacher. ");
         sb.append("You read enterprise documents (research papers, reports, contracts, financial filings, ");
-        sb.append("technical specifications, menus, catalogues) and produce precise, defensible answers for ");
-        sb.append("colleagues who will rely on them in real work. Accuracy and traceability are paramount; ");
-        sb.append("speculation is never acceptable.\n\n");
+        sb.append("technical specifications, menus, catalogues, resumes) and explain them in a natural, helpful way. ");
+        sb.append("Sound like a sharp human tutor: warm, direct, and easy to follow. Accuracy and traceability are still paramount; ");
+        sb.append("do not invent unsupported facts.\n\n");
+
+        // ── CURRENT DATE ───────────────────────────────────────────────────
+        sb.append("# Current Date\n");
+        sb.append("Today is ").append(currentDateForPrompt()).append(". ");
+        sb.append("Use this only to interpret relative dates in the user's question or document text; ");
+        sb.append("do not infer facts that are not present in the retrieved sources.\n\n");
 
         // ── GROUNDING RULES ────────────────────────────────────────────────
         sb.append("# Grounding Rules\n");
@@ -812,6 +1184,9 @@ public class ChatService {
         sb.append("figures, and price lists.\n");
         sb.append("- If the answer is not present in the context, respond exactly: ");
         sb.append("\"I cannot find this information in the indexed pages of this document.\" Do not guess.\n");
+        sb.append("- For evaluative questions (weak points, strengths, risks, gaps, improvements, recommendations), ");
+        sb.append("you may make conservative professional judgments ONLY from the cited document evidence. ");
+        sb.append("The document does not need to literally say \"weakness\" or \"recommendation\"; the cited facts must support your judgment.\n");
         sb.append("- Never invent numbers, names, dates, prices, or claims that are not explicitly in the context.\n");
         sb.append("- Quote numerical values, units, dates, percentages, and proper nouns EXACTLY as written. ");
         sb.append("Never round, simplify, or paraphrase a numeric figure.\n\n");
@@ -829,18 +1204,10 @@ public class ChatService {
 
         // ── CITATIONS ──────────────────────────────────────────────────────
         sb.append("# Citation Format\n");
-        if (meta) {
-            // For summaries and overview questions, inline citations on every sentence
-            // feel robotic. Only cite when quoting a specific number, name, or claim
-            // that the reader might want to verify.
-            sb.append("- This is a summary / overview question. Write naturally without citing every sentence.\n");
-            sb.append("- Only add a [B#] citation when you quote a specific number, date, price, name, ");
-            sb.append("or claim that the reader might want to verify.\n");
-            sb.append("- If no specific numbers or claims are mentioned, you may omit citations entirely.\n");
-        } else {
-            sb.append("- Every sentence that states a fact, number, name, or claim MUST end with at least one ");
-            sb.append("[B#] citation, where B# is the source id shown in the section header.\n");
-        }
+        sb.append("- Every sentence that states a fact, number, name, date, role, employer, skill, or claim ");
+        sb.append("MUST end with at least one [B#] citation, where B# is the source id shown in the section header.\n");
+        sb.append("- For summaries and overview questions, you may group related facts into concise bullets, ");
+        sb.append("but each bullet still needs a citation.\n");
         sb.append("- Write each source as its own tag. NEVER combine: write \"[B1][B2]\", NEVER \"[B1, B2]\".\n");
         sb.append("- Use the exact source ids from the context, such as [B1] or [B12]. Do not cite page numbers unless no source id is available.\n");
         sb.append("- Example of correct citation style:\n");
@@ -857,10 +1224,20 @@ public class ChatService {
 
         // ── STRUCTURE ──────────────────────────────────────────────────────
         sb.append("# Answer Structure\n");
+        sb.append("- Write in a natural conversational voice. Avoid stiff audit phrasing and repeated sentence stems.\n");
+        sb.append("- A short opening sentence is welcome when it helps the answer feel human. If it states a document-specific judgment, cite it.\n");
+        sb.append("- Use markdown hyphen bullets (`-`) only when a list genuinely helps. Never use asterisk bullets (`*`).\n");
+        sb.append("- Do not use bold markdown, headings, or labelled bullet titles like `**Impact:**`; write plain sentences.\n");
         sb.append("- For list / enumeration questions (\"what are\", \"list\", \"all the\"): use a bulleted list, ");
         sb.append("one item per line, each with a citation.\n");
         sb.append("- For comparison / aggregation questions (\"most\", \"highest\", \"compare\"): give the ");
         sb.append("specific answer first, then briefly justify with the cited numbers.\n");
+        sb.append("- For evaluative questions (\"weak points\", \"strengths\", \"risks\", \"gaps\", \"improve\", \"recommend\"): ");
+        sb.append("start with one sentence that gives the overall read, then give 2-4 practical bullets. ");
+        sb.append("Each bullet should explain why the point matters, not just say something is missing. ");
+        sb.append("Prefer phrases like \"I would want to see...\", \"This could be stronger if...\", or \"The evidence shows...\". ");
+        sb.append("Every bullet must end with at least one [B#] citation. ");
+        sb.append("Avoid repeating \"The resume does not...\". Use \"not shown in the retrieved evidence\" only when absence is the actual point.\n");
         sb.append("- For explanatory questions (\"what is\", \"how does\", \"why\"): write 2-5 sentences of ");
         sb.append("clear prose, each sentence cited.\n");
         sb.append("- For factual lookups (\"what is the X of Y\"): give the direct answer in one sentence, cited.\n");
@@ -903,6 +1280,14 @@ public class ChatService {
                     sb.append("- Preserve exact units, tolerances, and specifications (e.g. \"±0.5mm\" not \"about half a millimeter\").\n");
                     sb.append("- Reference diagrams and figures by their labels when explaining procedures.\n");
                     sb.append("- For step-by-step procedures, maintain the document's exact ordering.\n\n");
+                }
+                case "resume" -> {
+                    sb.append("This is a RESUME / CV. Key rules:\n");
+                    sb.append("- For strengths, weaknesses, fit, gaps, or improvement questions, give an evidence-based resume critique in the voice of a helpful mentor reviewing the resume.\n");
+                    sb.append("- Ground each observation in cited resume facts such as roles, employers, dates, skills, projects, education, metrics, or missing detail in the retrieved evidence.\n");
+                    sb.append("- Do not invent accomplishments, seniority, gaps, or missing skills. Say \"not shown in the retrieved evidence\" when making an observation about absent detail.\n");
+                    sb.append("- Prefer practical coaching points such as impact, specificity, scope, recency, skills alignment, and quantified outcomes when the cited evidence supports them.\n");
+                    sb.append("- For weak-point questions, do not write a dry list of missing fields. Explain what would make the resume read stronger to a recruiter or reviewer.\n\n");
                 }
                 default -> {} // no extra instructions for "mixed" or unknown types
             }
@@ -958,6 +1343,10 @@ public class ChatService {
         return sb.toString();
     }
 
+    private String currentDateForPrompt() {
+        return LocalDate.now(ZoneId.systemDefault()).toString();
+    }
+
     private String callGemini(String prompt) {
         return geminiTextClient.generate(prompt);
     }
@@ -978,6 +1367,47 @@ public class ChatService {
 
     private GeminiTextClient.GenerationResult callGeminiWithMetadata(String prompt) {
         return geminiTextClient.generateWithMetadata(prompt, 2048, 0.1);
+    }
+
+    private ChatQueryResponse persistModelUnavailableResponse(
+            ChatSession session,
+            User user,
+            ChatMessage userMessage,
+            List<VectorSearchService.ChunkMatch> chunks,
+            double confidence,
+            long latencyMs
+    ) {
+        ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
+                .sessionId(session.getId())
+                .role("assistant")
+                .content(MODEL_UNAVAILABLE_TEXT)
+                .citations("[]")
+                .modelVersion(geminiModel)
+                .build());
+        saveAnswerAudit(
+                session,
+                user,
+                userMessage,
+                assistantMsg,
+                chunks,
+                confidence,
+                0.0,
+                latencyMs,
+                new GeminiTextClient.TokenUsage(null, null, null),
+                true
+        );
+        return new ChatQueryResponse(
+                assistantMsg.getId(),
+                session.getId(),
+                MODEL_UNAVAILABLE_TEXT,
+                List.of(),
+                geminiModel,
+                assistantMsg.getCreatedAt().toString(),
+                confidence,
+                0.0,
+                refusedVerification(),
+                true
+        );
     }
 
     private void saveAnswerAudit(
@@ -1199,14 +1629,119 @@ public class ChatService {
         }
     }
 
-    private ChatSessionResponse toSessionResponse(ChatSession s) {
-        return new ChatSessionResponse(s.getId(), s.getDocumentId(), s.getTitle(),
-                s.getCreatedAt().toString());
+    private Document ensureDocument(UUID documentId, User user) {
+        return documentRepository.findByIdAndUserAndDeletedAtIsNull(documentId, user)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
     }
 
-    private ChatMessageResponse toMessageResponse(ChatMessage m) {
-        return new ChatMessageResponse(m.getId(), m.getRole(), m.getContent(),
-                deserializeCitations(m.getCitations()), m.getCreatedAt().toString());
+    private ChatSession createSessionEntity(UUID documentId, User user) {
+        return chatSessionRepository.save(ChatSession.builder()
+                .documentId(documentId)
+                .userId(user.getId())
+                .title("New chat")
+                .build());
+    }
+
+    private boolean isUntitled(String title) {
+        return title == null || title.isBlank() || "New chat".equalsIgnoreCase(title.trim());
+    }
+
+    private String titleFromQuestion(String question) {
+        String singleLine = question == null ? "New chat" : question.replaceAll("\\s+", " ").trim();
+        if (singleLine.isBlank()) return "New chat";
+        return singleLine.length() <= 64 ? singleLine : singleLine.substring(0, 61) + "...";
+    }
+
+    private List<ChatStarterResponse> buildConversationStarters(Document document, List<ContentBlock> blocks) {
+        List<ChatStarterResponse> starters = new ArrayList<>();
+        String docType = document.getDocType() == null ? "" : document.getDocType().toLowerCase();
+        int pageCount = document.getPageCount() == null ? 0 : document.getPageCount();
+        boolean hasTables = hasBlockType(blocks, "table");
+        boolean hasCharts = hasBlockType(blocks, "chart");
+        boolean hasFigures = hasBlockType(blocks, "figure") || hasBlockType(blocks, "visual_summary");
+        Optional<ContentBlock> summary = blocks.stream()
+                .filter(block -> "document_summary".equals(block.getBlockType()))
+                .findFirst();
+
+        addStarter(starters, "Give me the executive summary.", "sparkles");
+
+        if ("resume".equals(docType) || summaryText(summary).toLowerCase().contains("resume")) {
+            addStarter(starters, "What are the strongest qualifications in this resume?", "search");
+            addStarter(starters, "Summarize the work experience and key projects.", "sparkles");
+            addStarter(starters, "What technical skills are listed?", "search");
+        } else if ("financial".equals(docType)) {
+            addStarter(starters, "What are the key financial figures and trends?", "search");
+            addStarter(starters, "Compare the most important period-over-period changes.", "sparkles");
+        } else if ("legal".equals(docType)) {
+            addStarter(starters, "What obligations and deadlines does this document mention?", "search");
+            addStarter(starters, "List the important clauses and what each says.", "sparkles");
+        } else if ("technical".equals(docType)) {
+            addStarter(starters, "What are the main technical requirements?", "search");
+            addStarter(starters, "Explain the architecture or workflow described here.", "sparkles");
+        } else if ("academic".equals(docType)) {
+            addStarter(starters, "What is the paper's main finding?", "search");
+            addStarter(starters, "What methods and evidence support the conclusion?", "sparkles");
+        } else if ("menu".equals(docType)) {
+            addStarter(starters, "What are the most expensive and cheapest items?", "search");
+            addStarter(starters, "List the menu sections with representative prices.", "sparkles");
+        } else {
+            addStarter(starters, "What are the most important details in this document?", "search");
+        }
+
+        if (hasTables) {
+            addStarter(starters, "What tables are in this document, and what do they show?", "search");
+        }
+        if (hasCharts) {
+            addStarter(starters, "Explain the charts and the main data points.", "sparkles");
+        }
+        if (hasFigures) {
+            addStarter(starters, "What figures or visuals should I pay attention to?", "sparkles");
+        }
+        if (pageCount > 1) {
+            addStarter(starters, "Walk me through the document page by page.", "search");
+        }
+
+        return starters.stream().limit(4).toList();
+    }
+
+    private boolean hasBlockType(List<ContentBlock> blocks, String blockType) {
+        return blocks.stream().anyMatch(block -> blockType.equals(block.getBlockType()));
+    }
+
+    private String summaryText(Optional<ContentBlock> summary) {
+        return summary.map(ContentBlock::getExtractedText).orElse("");
+    }
+
+    private void addStarter(List<ChatStarterResponse> starters, String prompt, String icon) {
+        boolean duplicate = starters.stream().anyMatch(existing -> existing.prompt().equalsIgnoreCase(prompt));
+        if (!duplicate) {
+            starters.add(new ChatStarterResponse(prompt, icon));
+        }
+    }
+
+    private ChatSessionResponse toSessionResponse(ChatSession s) {
+        long messageCount = s.getId() == null ? 0 : chatMessageRepository.countBySessionId(s.getId());
+        return new ChatSessionResponse(
+                s.getId(),
+                s.getDocumentId(),
+                s.getTitle(),
+                s.getCreatedAt() == null ? null : s.getCreatedAt().toString(),
+                s.getUpdatedAt() == null ? null : s.getUpdatedAt().toString(),
+                messageCount
+        );
+    }
+
+    private ChatMessageResponse toMessageResponse(ChatMessage m, AnswerAudit audit, boolean reported) {
+        return new ChatMessageResponse(
+                m.getId(),
+                m.getRole(),
+                m.getContent(),
+                deserializeCitations(m.getCitations()),
+                m.getCreatedAt().toString(),
+                audit == null ? null : audit.getConfidence(),
+                audit == null ? null : audit.getGroundedness(),
+                reported
+        );
     }
 
     /**

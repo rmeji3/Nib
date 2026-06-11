@@ -16,10 +16,11 @@ export function useIngestionStatus(documentId: string | null) {
     staleTime: 0,
   });
 
-  const status = data?.status ?? 'NOT_STARTED';
-  const isIndexing = status === 'PENDING' || status === 'PROCESSING';
+  const status = data?.status ?? (documentId ? 'PENDING' : 'NOT_STARTED');
+  const isIndexing = isLoading || status === 'PENDING' || status === 'PROCESSING';
   const isComplete = status === 'COMPLETE';
   const isFailed = status === 'FAILED';
+  const shouldHideDocument = Boolean(documentId && !isComplete);
   const progress = data?.pagesTotal
     ? Math.round((data.pagesProcessed / data.pagesTotal) * 100)
     : 0;
@@ -33,5 +34,6 @@ export function useIngestionStatus(documentId: string | null) {
     pagesProcessed: data?.pagesProcessed ?? 0,
     progress,
     isLoading,
+    shouldHideDocument,
   };
 }

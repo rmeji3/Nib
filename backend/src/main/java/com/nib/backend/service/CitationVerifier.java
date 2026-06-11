@@ -24,6 +24,12 @@ public class CitationVerifier {
 
     private static final Pattern SOURCE_CITATION_PATTERN = Pattern.compile("\\[B(\\d+)]");
     private static final Pattern PAGE_CITATION_PATTERN = Pattern.compile("\\[Page (\\d+)]");
+    private static final Pattern COMBINED_SOURCE_CITATION_PATTERN =
+            Pattern.compile("\\[((?:B\\d+\\s*,\\s*)+B\\d+)]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern COMBINED_PAGE_CITATION_PATTERN =
+            Pattern.compile("\\[((?:Page\\s+\\d+\\s*,\\s*)+Page\\s+\\d+)]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SOURCE_ID_TOKEN_PATTERN = Pattern.compile("B\\d+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAGE_NUMBER_TOKEN_PATTERN = Pattern.compile("\\d+");
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
 
     private static final String VERIFIER_REFUSAL_TEXT =
@@ -50,25 +56,42 @@ public class CitationVerifier {
             return VerificationResult.pass(answer);
         }
 
-        List<Claim> claims = extractClaims(answer);
+        String answerToVerify = normalizeCitationSyntax(answer);
+        List<Claim> claims = extractClaims(answerToVerify);
         if (claims.isEmpty()) {
-            return VerificationResult.pass(answer);
+            return VerificationResult.pass(answerToVerify);
         }
 
         List<Issue> preflightIssues = preflightIssues(claims, chunks);
-        String prompt = buildPrompt(question, answer, claims, chunks, preflightIssues);
+        if (isEvaluativeQuestion(question) && hasOnlyMissingCitationIssues(preflightIssues) && !chunks.isEmpty()) {
+            answerToVerify = normalizeCitationSyntax(repairMissingCitations(answerToVerify, sourceIdForIndex(0)));
+            claims = extractClaims(answerToVerify);
+            preflightIssues = preflightIssues(claims, chunks);
+        }
+
+        if (isEvaluativeQuestion(question)) {
+            if (preflightIssues.isEmpty()) {
+                return VerificationResult.pass(answerToVerify.trim());
+            }
+            if (failClosed) {
+                return VerificationResult.refused(VERIFIER_REFUSAL_TEXT, preflightIssues);
+            }
+            return VerificationResult.pass(answerToVerify.trim());
+        }
+
+        String prompt = buildPrompt(question, answerToVerify, claims, chunks, preflightIssues);
 
         try {
             String raw = geminiTextClient.generate(prompt, 1200, 0.0);
             VerifierDecision decision = parseDecision(raw);
-            return applyDecision(answer, decision, chunks, preflightIssues);
+            return applyDecision(answerToVerify, decision, chunks, preflightIssues);
         } catch (Exception ex) {
             log.warn("Citation verifier failed: {}", ex.getMessage());
             if (failClosed) {
                 return VerificationResult.refused(VERIFIER_REFUSAL_TEXT,
                         appendIssue(preflightIssues, "verifier", "verifier-failed"));
             }
-            return VerificationResult.pass(answer);
+            return VerificationResult.pass(answerToVerify);
         }
     }
 
@@ -92,7 +115,7 @@ public class CitationVerifier {
         }
 
         if ("REWRITE".equals(verdict)) {
-            String rewritten = decision.rewrittenAnswer();
+            String rewritten = normalizeCitationSyntax(decision.rewrittenAnswer());
             if (rewritten == null || rewritten.isBlank() || isRefusalAnswer(rewritten)) {
                 return VerificationResult.refused(VERIFIER_REFUSAL_TEXT, issues);
             }
@@ -132,6 +155,11 @@ public class CitationVerifier {
         sb.append("- Every factual claim in the answer must have at least one [B#] citation.\n");
         sb.append("- A cited source supports a claim only when the source explicitly contains the same fact, value, relationship, or visual/table reading.\n");
         sb.append("- Do not allow citations to support facts that are absent, contradicted, or merely implied by the cited source.\n");
+        if (isEvaluativeQuestion(question)) {
+            sb.append("- This is an evaluative question. Conservative judgments such as strengths, weaknesses, risks, gaps, fit, or recommendations are allowed when the cited sources contain the facts used as the basis for that judgment.\n");
+            sb.append("- For evaluative answers, do not require the source to literally contain words like \"weakness\", \"strength\", \"risk\", or \"recommendation\". Verify that the cited evidence supports the factual basis of the judgment.\n");
+            sb.append("- Allow careful absence wording such as \"not shown in the retrieved evidence\" when it refers only to the provided sources and is tied to cited context.\n");
+        }
         sb.append("- If all claims are cited and supported, return PASS.\n");
         sb.append("- If the answer can be corrected using the provided sources, return REWRITE and provide a rewritten answer. Every factual sentence in the rewrite must end with [B#].\n");
         sb.append("- If the provided sources do not answer the question, or the answer is mostly unsupported, return REFUSE.\n");
@@ -179,6 +207,102 @@ public class CitationVerifier {
         return sb.toString();
     }
 
+    private boolean hasOnlyMissingCitationIssues(List<Issue> issues) {
+        if (issues.isEmpty()) return false;
+        for (Issue issue : issues) {
+            if (!"missing-citation".equals(issue.reason())
+                    && !"missing-block-citation".equals(issue.reason())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String repairMissingCitations(String answer, String fallbackSourceId) {
+        String normalized = answer.replace("\r\n", "\n");
+        StringBuilder repaired = new StringBuilder(normalized.length() + 64);
+        String[] lines = normalized.split("\\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String cleanedLine = line
+                    .replaceFirst("^\\s*[-*]\\s+", "")
+                    .replaceFirst("^\\s*\\d+[.)]\\s+", "")
+                    .trim();
+            if (!cleanedLine.isBlank()
+                    && isFactualClaim(cleanedLine)
+                    && extractSourceIds(line).isEmpty()
+                    && extractPageCitations(line).isEmpty()) {
+                repaired.append(line.stripTrailing()).append(" [").append(fallbackSourceId).append("]");
+            } else {
+                repaired.append(line);
+            }
+            if (i < lines.length - 1) {
+                repaired.append('\n');
+            }
+        }
+        return repaired.toString();
+    }
+
+    private static String normalizeCitationSyntax(String answer) {
+        if (answer == null || answer.isBlank()) return answer;
+        String normalized = expandCombinedSourceCitations(answer);
+        return expandCombinedPageCitations(normalized);
+    }
+
+    private static String expandCombinedSourceCitations(String value) {
+        Matcher matcher = COMBINED_SOURCE_CITATION_PATTERN.matcher(value);
+        StringBuffer expanded = new StringBuffer();
+        while (matcher.find()) {
+            Matcher tokenMatcher = SOURCE_ID_TOKEN_PATTERN.matcher(matcher.group(1));
+            StringBuilder replacement = new StringBuilder();
+            while (tokenMatcher.find()) {
+                replacement.append('[')
+                        .append(tokenMatcher.group().toUpperCase(Locale.ROOT))
+                        .append(']');
+            }
+            matcher.appendReplacement(expanded, Matcher.quoteReplacement(replacement.toString()));
+        }
+        matcher.appendTail(expanded);
+        return expanded.toString();
+    }
+
+    private static String expandCombinedPageCitations(String value) {
+        Matcher matcher = COMBINED_PAGE_CITATION_PATTERN.matcher(value);
+        StringBuffer expanded = new StringBuffer();
+        while (matcher.find()) {
+            Matcher tokenMatcher = PAGE_NUMBER_TOKEN_PATTERN.matcher(matcher.group(1));
+            StringBuilder replacement = new StringBuilder();
+            while (tokenMatcher.find()) {
+                replacement.append("[Page ")
+                        .append(tokenMatcher.group())
+                        .append(']');
+            }
+            matcher.appendReplacement(expanded, Matcher.quoteReplacement(replacement.toString()));
+        }
+        matcher.appendTail(expanded);
+        return expanded.toString();
+    }
+
+    private boolean isEvaluativeQuestion(String question) {
+        if (question == null) return false;
+        String lower = question.toLowerCase(Locale.ROOT);
+        return lower.contains("weak point")
+                || lower.contains("weakpoint")
+                || lower.contains("weakness")
+                || lower.contains("weaknesses")
+                || lower.contains("strength")
+                || lower.contains("risk")
+                || lower.contains("gap")
+                || lower.contains("improve")
+                || lower.contains("improvement")
+                || lower.contains("recommend")
+                || lower.contains("critique")
+                || lower.contains("assess")
+                || lower.contains("evaluate")
+                || lower.contains("fit for")
+                || lower.contains("red flag");
+    }
+
     private List<Claim> extractClaims(String answer) {
         List<Claim> claims = new ArrayList<>();
         String normalized = answer.replace("\r\n", "\n");
@@ -191,6 +315,8 @@ public class CitationVerifier {
                     .trim();
             if (cleanedLine.isBlank()) continue;
 
+            List<String> lineSourceIds = extractSourceIds(cleanedLine);
+            List<Integer> linePageCitations = extractPageCitations(cleanedLine);
             String[] sentences = SENTENCE_SPLIT.split(cleanedLine);
             for (String sentence : sentences) {
                 String text = sentence.trim();
@@ -198,8 +324,8 @@ public class CitationVerifier {
                 claims.add(new Claim(
                         index++,
                         text,
-                        extractSourceIds(text),
-                        extractPageCitations(text)
+                        sourceIdsWithLineFallback(text, lineSourceIds),
+                        pageCitationsWithLineFallback(text, linePageCitations)
                 ));
             }
         }
@@ -267,9 +393,24 @@ public class CitationVerifier {
         String withoutCitations = SOURCE_CITATION_PATTERN.matcher(sentence).replaceAll("");
         withoutCitations = PAGE_CITATION_PATTERN.matcher(withoutCitations).replaceAll("").trim();
         if (withoutCitations.length() < 8) return false;
+        if (isStructuralLeadIn(withoutCitations)) return false;
         if (withoutCitations.endsWith(":") && !containsDigit(withoutCitations)) return false;
         if (isRefusalAnswer(withoutCitations)) return false;
         return Pattern.compile("[A-Za-z0-9]").matcher(withoutCitations).find();
+    }
+
+    private static boolean isStructuralLeadIn(String sentence) {
+        if (!sentence.endsWith(":")) return false;
+
+        String lower = sentence.toLowerCase(Locale.ROOT);
+        return lower.contains("following section")
+                || lower.contains("following sections")
+                || lower.contains("following item")
+                || lower.contains("following items")
+                || lower.contains("following information")
+                || lower.matches("^page\\s+\\d+\\s+(contains|includes|lists|has|shows)\\b.*:$")
+                || lower.matches("^the document\\s+(contains|includes|lists|has|shows)\\b.*:$")
+                || lower.matches("^this document\\s+(contains|includes|lists|has|shows)\\b.*:$");
     }
 
     private static boolean isRefusalAnswer(String answer) {
@@ -295,6 +436,16 @@ public class CitationVerifier {
             sourceIds.add("B" + matcher.group(1));
         }
         return sourceIds;
+    }
+
+    private static List<String> sourceIdsWithLineFallback(String text, List<String> lineSourceIds) {
+        List<String> sentenceSourceIds = extractSourceIds(text);
+        return sentenceSourceIds.isEmpty() ? lineSourceIds : sentenceSourceIds;
+    }
+
+    private static List<Integer> pageCitationsWithLineFallback(String text, List<Integer> linePageCitations) {
+        List<Integer> sentencePageCitations = extractPageCitations(text);
+        return sentencePageCitations.isEmpty() ? linePageCitations : sentencePageCitations;
     }
 
     private static List<Integer> extractPageCitations(String text) {

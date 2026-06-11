@@ -17,6 +17,13 @@ export interface ChatSession {
   documentId: string;
   title: string | null;
   createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface ChatStarter {
+  prompt: string;
+  icon: string;
 }
 
 export interface ApiBBox {
@@ -28,6 +35,12 @@ export interface ApiBBox {
 
 export interface ApiCitation {
   pageNumber: number;
+  sourceId: string | null;
+  blockId: string | null;
+  documentId: string | null;
+  blockType: string | null;
+  chunkIndex: number | null;
+  evidenceType: string | null;
   /** Excerpt from a text block — usable for PDF text-layer search highlighting. Null when no usable text block exists. */
   textExcerpt: string | null;
   /** Gemini Vision description of the page — shown in the evidence drawer. Null when vision was disabled or failed. */
@@ -58,6 +71,9 @@ export interface ApiChatMessage {
   content: string;
   citations: ApiCitation[] | null;
   createdAt: string;
+  confidence: number | null;
+  groundedness: number | null;
+  reported: boolean;
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -65,6 +81,49 @@ export interface ApiChatMessage {
 export async function getOrCreateSession(documentId: string): Promise<ChatSession> {
   const res = await apiFetch(`/api/v1/chat/sessions/document/${documentId}`);
   if (!res.ok) throw new Error(`Failed to get session: ${res.statusText}`);
+  return res.json();
+}
+
+export async function listChatSessions(documentId: string): Promise<ChatSession[]> {
+  const res = await apiFetch(`/api/v1/chat/sessions/document/${documentId}/all`);
+  if (!res.ok) throw new Error(`Failed to list chat sessions: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createChatSession(documentId: string): Promise<ChatSession> {
+  const res = await apiFetch(`/api/v1/chat/sessions/document/${documentId}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Failed to create chat session: ${res.statusText}`);
+  return res.json();
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/chat/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete chat session: ${res.statusText}`);
+}
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/chat/messages/${messageId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete chat message: ${res.statusText}`);
+}
+
+export async function reportChatMessage(messageId: string, note?: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/chat/messages/${messageId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'report', note }),
+  });
+  if (!res.ok) throw new Error(`Failed to report chat message: ${res.statusText}`);
+}
+
+export async function fetchConversationStarters(documentId: string): Promise<ChatStarter[]> {
+  const res = await apiFetch(`/api/v1/chat/sessions/document/${documentId}/starters`);
+  if (!res.ok) throw new Error(`Failed to fetch conversation starters: ${res.statusText}`);
   return res.json();
 }
 
