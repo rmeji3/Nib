@@ -157,9 +157,6 @@ class RagEvalScorerTest {
                 0,
                 "text",
                 "Evidence text",
-                blockId,
-                null,
-                null,
                 null,
                 null,
                 null

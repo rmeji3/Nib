@@ -186,6 +186,16 @@ public class DocumentService {
         log.info("Soft-deleted document {} for user {}", id, user.getId());
     }
 
+    public void bulkSoftDelete(List<UUID> ids, User user) {
+        List<Document> docs = documentRepository.findAllById(ids).stream()
+                .filter(doc -> doc.getUser().getId().equals(user.getId()) && doc.getDeletedAt() == null)
+                .collect(Collectors.toList());
+        LocalDateTime now = LocalDateTime.now();
+        docs.forEach(doc -> doc.setDeletedAt(now));
+        documentRepository.saveAll(docs);
+        log.info("Soft-deleted {} documents for user {}", docs.size(), user.getId());
+    }
+
     /** Restore a trashed document back to the active library. */
     public DocumentResponse restoreDocument(UUID id, User user) {
         Document doc = documentRepository.findByIdAndUser(id, user)
@@ -195,6 +205,15 @@ public class DocumentService {
         documentRepository.save(doc);
         log.info("Restored document {} for user {}", id, user.getId());
         return toResponse(doc, generateSignedUrlIfPresent(doc));
+    }
+
+    public void bulkRestore(List<UUID> ids, User user) {
+        List<Document> docs = documentRepository.findAllById(ids).stream()
+                .filter(doc -> doc.getUser().getId().equals(user.getId()) && doc.getDeletedAt() != null)
+                .collect(Collectors.toList());
+        docs.forEach(doc -> doc.setDeletedAt(null));
+        documentRepository.saveAll(docs);
+        log.info("Restored {} documents for user {}", docs.size(), user.getId());
     }
 
     /** Permanently delete a document from both the DB and Supabase storage. */
@@ -209,6 +228,23 @@ public class DocumentService {
             log.warn("Could not delete storage object {} — it may have already been removed: {}", path, ex.getMessage());
         }
         log.info("Permanently deleted document {} for user {}", id, user.getId());
+    }
+
+    public void bulkPermanentDelete(List<UUID> ids, User user) {
+        List<Document> docs = documentRepository.findAllById(ids).stream()
+                .filter(doc -> doc.getUser().getId().equals(user.getId()))
+                .collect(Collectors.toList());
+        
+        for (Document doc : docs) {
+            String path = doc.getStoragePath();
+            documentRepository.delete(doc);
+            try {
+                storageService.deleteFile(path);
+            } catch (Exception ex) {
+                log.warn("Could not delete storage object {} — it may have already been removed: {}", path, ex.getMessage());
+            }
+        }
+        log.info("Permanently deleted {} documents for user {}", docs.size(), user.getId());
     }
 
     /**

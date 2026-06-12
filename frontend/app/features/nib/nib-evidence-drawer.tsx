@@ -118,7 +118,7 @@ function EvidenceRow({
 }) {
   const [expanded, setExpanded] = useState(focused);
 
-  const hasVisual = !!citation.visualSummary && citation.visualSummary.length > 0;
+  const hasVisual = false;
   const hasText = !!citation.textExcerpt && citation.textExcerpt.length > 0;
 
   return (
@@ -151,7 +151,7 @@ function EvidenceRow({
       {hasVisual && (
         <EvidenceField
           label="Visual"
-          content={citation.visualSummary!}
+          content={""}
           expanded={expanded}
           onToggle={() => setExpanded((v) => !v)}
         />

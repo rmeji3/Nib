@@ -15,8 +15,7 @@ export interface Citation {
   snippet: string;
   /** Text-block excerpt for the evidence drawer; null when no usable text block. Optional for demo data. */
   textExcerpt?: string | null;
-  /** Vision-block summary for the evidence drawer; null when vision was disabled or failed. Optional for demo data. */
-  visualSummary?: string | null;
+
   /** Bbox on the page (top-left origin, PDF user units); null for legacy blocks. Optional for demo data. */
   bbox?: BBox | null;
   /** Page dimensions in the same units as bbox; null when bbox is null. Optional for demo data. */
