@@ -131,6 +131,33 @@ export async function permanentDeleteDocument(id: string): Promise<void> {
   }
 }
 
+export async function bulkSoftDeleteDocuments(ids: string[]): Promise<void> {
+  const res = await apiFetch('/api/v1/documents/bulk/trash', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  });
+  if (!res.ok) throw new Error(`Bulk delete failed: ${res.statusText}`);
+}
+
+export async function bulkRestoreDocuments(ids: string[]): Promise<void> {
+  const res = await apiFetch('/api/v1/documents/bulk/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  });
+  if (!res.ok) throw new Error(`Bulk restore failed: ${res.statusText}`);
+}
+
+export async function bulkPermanentDeleteDocuments(ids: string[]): Promise<void> {
+  const res = await apiFetch('/api/v1/documents/bulk/permanent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  });
+  if (!res.ok) throw new Error(`Bulk permanent delete failed: ${res.statusText}`);
+}
+
 export async function fetchRecentDocuments(page = 0): Promise<PagedResponse<DocumentResponse>> {
   const res = await apiFetch(`/api/v1/documents/recent?page=${page}`);
   if (!res.ok) throw new Error(`Failed to fetch recent documents: ${res.statusText}`);

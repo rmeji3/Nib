@@ -389,9 +389,6 @@ class ChatServiceTest {
                 0,
                 "text",
                 "Revenue was $42.3M in Q1.",
-                blockId,
-                null,
-                null,
                 null,
                 null,
                 null
@@ -804,10 +801,7 @@ class ChatServiceTest {
         assertThat(citation.blockType()).isEqualTo("text");
         assertThat(citation.chunkIndex()).isZero();
         assertThat(citation.evidenceType()).isEqualTo("text");
-        assertThat(citation.textBlockId()).isEqualTo(textBlockId);
-        assertThat(citation.visualBlockId()).isEqualTo(visualBlockId);
         assertThat(citation.textExcerpt()).contains("grounded citation evidence");
-        assertThat(citation.visualSummary()).contains("Visual summary");
     }
 
     @Test
@@ -835,9 +829,6 @@ class ChatServiceTest {
                 0,
                 "text",
                 "Revenue was $42.3M in Q1.",
-                blockId,
-                null,
-                null,
                 null,
                 null,
                 null

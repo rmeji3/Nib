@@ -82,14 +82,14 @@ function buildMessageContent(
     // `snippet` powers the legacy text-layer search highlight: use the real text
     // excerpt when available, otherwise fall back to the visual description (the
     // search will silently no-op on visual text, which is fine).
-    const snippet = api?.textExcerpt ?? api?.visualSummary ?? '';
+    const snippet = api?.textExcerpt ?? '';
     citations.push({
       page: pageNum - 1,                           // 0-indexed for the PDF viewer
       blockId: api?.blockId ?? `page-${pageNum}`,
       label,
       snippet,
       textExcerpt: api?.textExcerpt ?? null,
-      visualSummary: api?.visualSummary ?? null,
+
       bbox: api?.bbox ?? null,
       pageWidth: api?.pageWidth ?? null,
       pageHeight: api?.pageHeight ?? null,
@@ -408,6 +408,7 @@ export function useNibChat(documentId: string | null) {
 
   const activeSession = sessions.find((session) => session.id === sessionId) ?? null;
   const busy = createSessionMutation.isPending || sendQueryMutation.isPending || deleteSessionMutation.isPending;
+  const isWaitingForResponse = sendQueryMutation.isPending || processingQueuedPromptRef.current;
   const canSubmitPrompt = Boolean(documentId && !deleteSessionMutation.isPending);
   const isLoadingMessages = Boolean(
     sessionId &&
@@ -813,6 +814,7 @@ export function useNibChat(documentId: string | null) {
     starters,
     messages,
     busy,
+    isWaitingForResponse,
     canSubmitPrompt,
     isLoadingMessages,
     deletingSessionId,

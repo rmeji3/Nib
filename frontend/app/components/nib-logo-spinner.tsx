@@ -7,6 +7,8 @@ interface NibLogoSpinnerProps {
   size?: number;
   /** Optional label rendered below the spinner in small caps. */
   label?: string;
+  /** If true, renders without the container box. */
+  transparent?: boolean;
 }
 
 /**
@@ -14,8 +16,23 @@ interface NibLogoSpinnerProps {
  * The spin is driven by the `.nib-spin` CSS class (globals.css) so it works
  * without any JS animation library.
  */
-export function NibLogoSpinner({ size = 26, label }: NibLogoSpinnerProps) {
+export function NibLogoSpinner({ size = 26, label, transparent }: NibLogoSpinnerProps) {
   const container = size * 2;
+
+  if (transparent) {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <span className="nib-spin inline-flex items-center justify-center">
+          <NibLogo size={size} />
+        </span>
+        {label && (
+          <span className="text-[10px] font-semibold tracking-widest text-[var(--text-faint)] uppercase">
+            {label}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-4">

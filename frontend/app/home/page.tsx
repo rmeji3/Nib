@@ -22,6 +22,9 @@ import {
   useRestoreDocument,
   usePermanentDeleteDocument,
   useToggleStarDocument,
+  useBulkSoftDeleteDocuments,
+  useBulkRestoreDocuments,
+  useBulkPermanentDeleteDocuments,
   type DocumentItem,
 } from './hooks/use-documents';
 import { useFormattedMeta } from './hooks/use-formatted-meta';
@@ -40,6 +43,7 @@ import { useAuth } from '../features/auth/hooks/use-auth';
 import { ProtectedRoute } from '../features/auth/components/protected-route';
 import { useUpload } from '../features/upload/upload-context';
 import { UploadDialog } from './components/upload-dialog';
+import { NibLogoSpinner } from '../components/nib-logo-spinner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -239,13 +243,20 @@ interface DocumentCardProps {
   onToggleStar: () => void;
   onRemoveFromCollection?: () => void;
   isDeleting?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
 }
 
-function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting }: DocumentCardProps) {
+function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting, isSelectionMode, isSelected }: DocumentCardProps) {
   const formatMeta = useFormattedMeta();
   const isAvailable = !!doc.storageUrl;
   return (
-    <div className={`group relative rounded-xl border border-white/10 bg-[var(--bg-surface)] transition flex flex-col h-full ${isAvailable ? 'hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg' : 'opacity-75'} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`group relative rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} transition flex flex-col h-full ${isAvailable ? 'hover:-translate-y-0.5 hover:shadow-lg' : 'opacity-75'} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+      {isSelectionMode && (
+        <div className={`absolute top-3 left-3 z-10 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </div>
+      )}
       <button
         type="button"
         onClick={onClick}
@@ -306,14 +317,25 @@ interface TrashCardProps {
   doc: DocumentItem;
   onRestore: () => void;
   onDeleteForever: () => void;
+  onClick?: () => void;
   isRestoring?: boolean;
   isDeleting?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
 }
 
-function TrashCard({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }: TrashCardProps) {
+function TrashCard({ doc, onRestore, onDeleteForever, onClick, isRestoring, isDeleting, isSelectionMode, isSelected }: TrashCardProps) {
   const formatMeta = useFormattedMeta();
   return (
-    <div className={`rounded-xl border border-white/10 bg-[var(--bg-surface)] p-4 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''}`}>
+    <div 
+      className={`relative rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} p-4 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
+      onClick={isSelectionMode ? onClick : undefined}
+    >
+      {isSelectionMode && (
+        <div className={`absolute top-3 left-3 z-10 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </div>
+      )}
       <DocumentPreview documentId={doc.id} />
       <h4 className="font-serif text-lg leading-6 line-clamp-2 text-[var(--text-dim)]">{doc.title}</h4>
       <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
@@ -321,7 +343,7 @@ function TrashCard({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }:
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
           className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)] transition disabled:opacity-50">
           {isRestoring
-            ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+            ? <NibLogoSpinner size={12} transparent />
             : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
           }
           {isRestoring ? 'Restoring...' : 'Restore'}
@@ -329,7 +351,7 @@ function TrashCard({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }:
         <button type="button" onClick={onDeleteForever} disabled={isRestoring || isDeleting}
           className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
           {isDeleting
-            ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+            ? <NibLogoSpinner size={12} transparent />
             : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
           }
           {isDeleting ? 'Deleting...' : 'Delete forever'}
@@ -418,13 +440,19 @@ interface DocumentListRowProps {
   onDelete: () => void;
   onToggleStar: () => void;
   onRemoveFromCollection?: () => void;
-  isDeleting?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
 }
 
-function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting }: DocumentListRowProps) {
+function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting, isSelectionMode, isSelected }: DocumentListRowProps) {
   const formatMeta = useFormattedMeta();
   return (
-    <div className={`group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-4 py-3 transition hover:border-white/20 hover:bg-[var(--bg-elevated)] ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`group flex items-center gap-3 rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} px-4 py-3 transition hover:border-white/20 hover:bg-[var(--bg-elevated)] ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+      {isSelectionMode && (
+        <div className={`shrink-0 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </div>
+      )}
       <div className="shrink-0 flex h-9 w-7 items-center justify-center rounded-[3px] bg-white/5 text-[var(--text-faint)]">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>
@@ -467,10 +495,18 @@ function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemov
 
 // ─── Trash List Row ───────────────────────────────────────────────────────────
 
-function TrashListRow({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }: TrashCardProps) {
+function TrashListRow({ doc, onRestore, onDeleteForever, onClick, isRestoring, isDeleting, isSelectionMode, isSelected }: TrashCardProps) {
   const formatMeta = useFormattedMeta();
   return (
-    <div className={`group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-4 py-3 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''}`}>
+    <div 
+      className={`group flex items-center gap-3 rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} px-4 py-3 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
+      onClick={isSelectionMode ? onClick : undefined}
+    >
+      {isSelectionMode && (
+        <div className={`shrink-0 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </div>
+      )}
       <div className="shrink-0 flex h-9 w-7 items-center justify-center rounded-[3px] bg-white/5 text-[var(--text-faint)]">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>
@@ -483,10 +519,12 @@ function TrashListRow({ doc, onRestore, onDeleteForever, isRestoring, isDeleting
       <div className="shrink-0 flex items-center gap-2">
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)] transition disabled:opacity-50">
+          {isRestoring ? <NibLogoSpinner size={12} transparent /> : null}
           {isRestoring ? 'Restoring…' : 'Restore'}
         </button>
         <button type="button" onClick={onDeleteForever} disabled={isRestoring || isDeleting}
           className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
+          {isDeleting ? <NibLogoSpinner size={12} transparent /> : null}
           {isDeleting ? 'Deleting…' : 'Delete forever'}
         </button>
       </div>
@@ -528,6 +566,11 @@ export default function HomePage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingPermDeleteId, setPendingPermDeleteId] = useState<string | null>(null);
   const [pendingDeleteCollectionId, setPendingDeleteCollectionId] = useState<string | null>(null);
+
+  // Bulk Selection
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedForActionIds, setSelectedForActionIds] = useState<Set<string>>(new Set());
+  const [bulkActionType, setBulkActionType] = useState<'restore' | 'delete' | 'trash' | null>(null);
 
   const [sortBy, setSortBy] = useState<SortOption>('newest');
 
@@ -600,6 +643,9 @@ export default function HomePage() {
   const softDelete = useSoftDeleteDocument();
   const restore = useRestoreDocument();
   const permDelete = usePermanentDeleteDocument();
+  const bulkSoftDelete = useBulkSoftDeleteDocuments();
+  const bulkRestore = useBulkRestoreDocuments();
+  const bulkPermDelete = useBulkPermanentDeleteDocuments();
   const toggleStar = useToggleStarDocument();
   const createCollection = useCreateCollection();
   const deleteCollection = useDeleteCollection();
@@ -611,8 +657,25 @@ export default function HomePage() {
   const router = useRouter();
   const { setDocument } = useUpload();
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedForActionIds(new Set());
+    }
+  }, [isSelectionMode, view]);
+
+  const toggleActionSelection = (id: string) => {
+    setSelectedForActionIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const handleDocumentClick = (doc: DocumentItem) => {
+    if (isSelectionMode) {
+      toggleActionSelection(doc.id);
+      return;
+    }
     if (!doc.storageUrl) return;
     setDocument(null, doc.id, doc.storageUrl, doc.title);
     router.push(`/document/${doc.id}`);
@@ -710,6 +773,22 @@ export default function HomePage() {
     'name-asc': 'A → Z', 'name-desc': 'Z → A',
     'size-desc': 'Largest', 'size-asc': 'Smallest',
   };
+
+  const renderViewControls = () => (
+    <div className="flex items-center gap-4">
+      <button 
+        type="button" 
+        onClick={() => {
+          setIsSelectionMode(!isSelectionMode);
+          if (isSelectionMode) setSelectedForActionIds(new Set());
+        }} 
+        className={`text-[12px] font-medium transition ${isSelectionMode ? 'text-red-400 hover:text-red-300' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}
+      >
+        {isSelectionMode ? 'Cancel select' : 'Select'}
+      </button>
+      <ViewToggle value={viewMode} onChange={setViewMode} />
+    </div>
+  );
 
   interface FilterChip { id: string; label: string; onRemove: () => void; }
 
@@ -1133,11 +1212,11 @@ export default function HomePage() {
                 {/* ── Library grid ── */}
                 <div className="mt-8">
                   {!isSearchActive && (
-                    <SectionHeader label="Library" action={<ViewToggle value={viewMode} onChange={setViewMode} />} />
+                    <SectionHeader label="Library" action={renderViewControls()} />
                   )}
                   {isSearchActive && (
                     <div className="flex justify-end mb-3">
-                      <ViewToggle value={viewMode} onChange={setViewMode} />
+                      {renderViewControls()}
                     </div>
                   )}
                   <div ref={allGridRef} className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'flex flex-col gap-1.5'}>
@@ -1156,12 +1235,16 @@ export default function HomePage() {
                                 onDelete={() => setPendingDeleteId(doc.id)}
                                 onToggleStar={() => toggleStar.mutate(doc.id)}
                                 isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedForActionIds.has(doc.id)}
                               />
                             : <DocumentListRow key={doc.id} doc={doc} search={debouncedSearch}
                                 onClick={() => handleDocumentClick(doc)}
                                 onDelete={() => setPendingDeleteId(doc.id)}
                                 onToggleStar={() => toggleStar.mutate(doc.id)}
                                 isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedForActionIds.has(doc.id)}
                               />
                         ))
                       ) : (
@@ -1195,7 +1278,7 @@ export default function HomePage() {
                     <h1 className="font-serif text-4xl">Recent</h1>
                     <p className="mt-2 text-sm text-[var(--text-dim)]">Documents you&apos;ve opened, most recent first.</p>
                   </div>
-                  <div className="mt-1"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
+                  <div className="mt-1">{renderViewControls()}</div>
                 </div>
                 <div ref={recentGridRef} className={`mt-8 ${viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'flex flex-col gap-1.5'}`}>
                   {recentLoading
@@ -1208,12 +1291,16 @@ export default function HomePage() {
                               onDelete={() => setPendingDeleteId(doc.id)}
                               onToggleStar={() => toggleStar.mutate(doc.id)}
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                           : <DocumentListRow key={doc.id} doc={doc}
                               onClick={() => handleDocumentClick(doc)}
                               onDelete={() => setPendingDeleteId(doc.id)}
                               onToggleStar={() => toggleStar.mutate(doc.id)}
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                       ))
                     ) : (
@@ -1237,7 +1324,7 @@ export default function HomePage() {
                       {collectionTotalDocs} document{collectionTotalDocs === 1 ? '' : 's'} in this collection.
                     </p>
                   </div>
-                  <div className="mt-1"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
+                  <div className="mt-1">{renderViewControls()}</div>
                 </div>
                 <div ref={collectionGridRef} className={`mt-8 ${viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'flex flex-col gap-1.5'}`}>
                   {colDocsLoading
@@ -1257,6 +1344,8 @@ export default function HomePage() {
                                 removeFromCollection.mutate({ collectionId: selectedCollectionId!, documentId: doc.id })
                               }
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                           : <DocumentListRow key={doc.id} doc={doc}
                               onClick={() => handleDocumentClick(doc)}
@@ -1266,6 +1355,8 @@ export default function HomePage() {
                                 removeFromCollection.mutate({ collectionId: selectedCollectionId!, documentId: doc.id })
                               }
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                       ))
                     ) : (
@@ -1291,7 +1382,7 @@ export default function HomePage() {
                     <h1 className="font-serif text-4xl">Starred</h1>
                     <p className="mt-2 text-sm text-[var(--text-dim)]">Important documents you&apos;ve saved for quick access.</p>
                   </div>
-                  <div className="mt-1"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
+                  <div className="mt-1">{renderViewControls()}</div>
                 </div>
                 <div ref={starredGridRef} className={`mt-8 ${viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'flex flex-col gap-1.5'}`}>
                   {starredLoading
@@ -1304,12 +1395,16 @@ export default function HomePage() {
                               onDelete={() => setPendingDeleteId(doc.id)}
                               onToggleStar={() => toggleStar.mutate(doc.id)}
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                           : <DocumentListRow key={doc.id} doc={doc}
                               onClick={() => handleDocumentClick(doc)}
                               onDelete={() => setPendingDeleteId(doc.id)}
                               onToggleStar={() => toggleStar.mutate(doc.id)}
                               isDeleting={softDelete.isPending && softDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                       ))
                     ) : (
@@ -1331,7 +1426,7 @@ export default function HomePage() {
                     <h1 className="font-serif text-4xl">Trash</h1>
                     <p className="mt-2 text-sm text-[var(--text-dim)]">Documents here are permanently deleted after 30 days.</p>
                   </div>
-                  <div className="mt-1"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
+                  <div className="mt-1">{renderViewControls()}</div>
                 </div>
                 <div ref={trashGridRef} className={`mt-8 ${viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'flex flex-col gap-1.5'}`}>
                   {trashLoading
@@ -1340,16 +1435,22 @@ export default function HomePage() {
                       trashedDocs.map(doc => (
                         viewMode === 'grid'
                           ? <TrashCard key={doc.id} doc={doc}
+                              onClick={() => handleDocumentClick(doc)}
                               onRestore={() => restore.mutate(doc.id)}
                               onDeleteForever={() => setPendingPermDeleteId(doc.id)}
                               isRestoring={restore.isPending && restore.variables === doc.id}
                               isDeleting={permDelete.isPending && permDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                           : <TrashListRow key={doc.id} doc={doc}
+                              onClick={() => handleDocumentClick(doc)}
                               onRestore={() => restore.mutate(doc.id)}
                               onDeleteForever={() => setPendingPermDeleteId(doc.id)}
                               isRestoring={restore.isPending && restore.variables === doc.id}
                               isDeleting={permDelete.isPending && permDelete.variables === doc.id}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={selectedForActionIds.has(doc.id)}
                             />
                       ))
                     ) : (
@@ -1377,6 +1478,89 @@ export default function HomePage() {
         )}
 
         {/* ── Dialogs ── */}
+
+        {/* ── Bulk Action Bar ── */}
+        {isSelectionMode && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-full bg-[var(--bg-elevated)] border border-white/10 p-2 shadow-2xl shadow-black/50 animate-in slide-in-from-bottom-10 fade-in duration-200">
+            <div className="flex items-center gap-2 pl-4 pr-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-semibold text-black">
+                {selectedForActionIds.size}
+              </span>
+              <span className="text-sm font-medium text-[var(--text)]">selected</span>
+            </div>
+            
+            <div className="h-6 w-px bg-white/10" />
+
+            <div className="flex items-center gap-2 pr-2">
+              <button 
+                type="button" 
+                onClick={() => { setIsSelectionMode(false); setSelectedForActionIds(new Set()); }}
+                className="rounded-full px-4 py-2 text-sm font-medium text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-white/5 transition"
+                disabled={bulkActionType !== null}
+              >
+                Cancel
+              </button>
+
+              {view === 'trash' ? (
+                <>
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      if (selectedForActionIds.size === 0) return;
+                      setBulkActionType('restore');
+                      try {
+                        await bulkRestore.mutateAsync(Array.from(selectedForActionIds));
+                        setIsSelectionMode(false);
+                      } finally {
+                        setBulkActionType(null);
+                      }
+                    }}
+                    disabled={bulkActionType !== null || selectedForActionIds.size === 0}
+                    className="flex items-center justify-center min-w-[90px] rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-white/5 transition disabled:opacity-50"
+                  >
+                    {bulkActionType === 'restore' ? <NibLogoSpinner size={16} transparent /> : 'Restore'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      if (selectedForActionIds.size === 0) return;
+                      setBulkActionType('delete');
+                      try {
+                        await bulkPermDelete.mutateAsync(Array.from(selectedForActionIds));
+                        setIsSelectionMode(false);
+                      } finally {
+                        setBulkActionType(null);
+                      }
+                    }}
+                    disabled={bulkActionType !== null || selectedForActionIds.size === 0}
+                    className="flex items-center justify-center min-w-[120px] rounded-full bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                  >
+                    {bulkActionType === 'delete' ? <NibLogoSpinner size={16} transparent /> : 'Delete Forever'}
+                  </button>
+                </>
+              ) : (
+                <button 
+                  type="button"
+                  onClick={async () => {
+                    if (selectedForActionIds.size === 0) return;
+                    setBulkActionType('trash');
+                    try {
+                      await bulkSoftDelete.mutateAsync(Array.from(selectedForActionIds));
+                      setIsSelectionMode(false);
+                    } finally {
+                      setBulkActionType(null);
+                    }
+                  }}
+                  disabled={bulkActionType !== null || selectedForActionIds.size === 0}
+                  className="flex items-center justify-center min-w-[120px] rounded-full bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                >
+                  {bulkActionType === 'trash' ? <NibLogoSpinner size={16} transparent /> : 'Move to Trash'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
         {/* Create collection dialog */}

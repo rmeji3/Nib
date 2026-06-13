@@ -132,6 +132,16 @@ public class DocumentController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/bulk/trash")
+    public ResponseEntity<Void> bulkSoftDelete(
+            @RequestBody List<UUID> ids,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Bulk soft-delete request for {} documents from user {}", ids.size(), user.getId());
+        documentService.bulkSoftDelete(ids, user);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Restore a trashed document back to the library. */
     @PostMapping("/{id}/restore")
     public ResponseEntity<DocumentResponse> restore(
@@ -142,6 +152,16 @@ public class DocumentController {
         return ResponseEntity.ok(documentService.restoreDocument(id, user));
     }
 
+    @PostMapping("/bulk/restore")
+    public ResponseEntity<Void> bulkRestore(
+            @RequestBody List<UUID> ids,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Bulk restore request for {} documents from user {}", ids.size(), user.getId());
+        documentService.bulkRestore(ids, user);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Permanently delete a trashed document from DB and storage. */
     @DeleteMapping("/{id}/permanent")
     public ResponseEntity<Void> permanentDelete(
@@ -150,6 +170,16 @@ public class DocumentController {
     ) {
         log.info("Permanent-delete request for document {} from user {}", id, user.getId());
         documentService.permanentDelete(id, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/bulk/permanent")
+    public ResponseEntity<Void> bulkPermanentDelete(
+            @RequestBody List<UUID> ids,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Bulk permanent-delete request for {} documents from user {}", ids.size(), user.getId());
+        documentService.bulkPermanentDelete(ids, user);
         return ResponseEntity.noContent().build();
     }
 
