@@ -6,14 +6,13 @@ import {
   BotIcon,
   CoinsIcon,
   FileTextIcon,
-  GaugeIcon,
   MessageSquareIcon,
   RefreshCwIcon,
   ShieldAlertIcon,
   SparklesIcon,
 } from 'lucide-react';
 import { useCostDashboard } from '../hooks/use-cost-dashboard';
-import type { CostTotals, DailyUsage, RecentCostEvent } from '../../../lib/api/cost';
+import type { CostTotals, DailyUsage } from '../../../lib/api/cost';
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -25,13 +24,6 @@ function formatUsd(value: number) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('en-US').format(value);
-}
-
-function formatEventType(type: string) {
-  return type
-    .split('_')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function MetricCard({
@@ -133,43 +125,6 @@ function UsageBars({ days }: { days: DailyUsage[] }) {
   );
 }
 
-function RecentEvents({ events }: { events: RecentCostEvent[] }) {
-  return (
-    <div className="rounded-lg border border-white/8 bg-[var(--bg-elevated)] p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-[var(--text)]">Recent events</p>
-          <p className="text-xs text-[var(--text-faint)]">Latest metered backend activity</p>
-        </div>
-        <GaugeIcon size={15} className="text-[var(--text-faint)]" />
-      </div>
-
-      {events.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-xs text-[var(--text-faint)]">
-          No recent events
-        </div>
-      ) : (
-        <div className="divide-y divide-white/5">
-          {events.slice(0, 6).map((event, index) => (
-            <div key={`${event.occurredAt}-${event.eventType}-${index}`} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm text-[var(--text-dim)]">{formatEventType(event.eventType)}</p>
-                <p className="text-xs text-[var(--text-faint)]">
-                  {new Date(event.occurredAt).toLocaleString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-xs text-[var(--text)]">{formatNumber(event.quantity)}</p>
-                <p className="text-[11px] text-[var(--text-faint)]">{formatUsd(event.estimatedCostUsd)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TokenBreakdown({ totals }: { totals: CostTotals }) {
   return (
     <div className="rounded-lg border border-white/8 bg-[var(--bg-elevated)] p-4">
@@ -255,13 +210,12 @@ export function CostDashboard() {
 
       <TotalsGrid totals={data.totals} />
 
-      <div className="mt-3 grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-3">
         <UsageBars days={data.dailyUsage} />
-        <TokenBreakdown totals={data.totals} />
       </div>
 
       <div className="mt-3">
-        <RecentEvents events={data.recentEvents} />
+        <TokenBreakdown totals={data.totals} />
       </div>
 
       <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/8 bg-[var(--bg-elevated)] p-3">

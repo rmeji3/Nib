@@ -968,6 +968,58 @@ button:disabled {
   animation: nib-spin 2.5s linear infinite;
 }
 
+/* ── Star button personality ── */
+
+/* Springy pop when a document is starred */
+@keyframes star-pop {
+  0%   { transform: scale(1) rotate(0deg); }
+  35%  { transform: scale(1.45) rotate(-18deg); }
+  60%  { transform: scale(0.85) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.star-pop {
+  animation: star-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Subtle settle when un-starring */
+@keyframes star-pop-off {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.78); }
+  100% { transform: scale(1); }
+}
+.star-pop-off {
+  animation: star-pop-off 0.3s ease-out;
+}
+
+/* Radiating burst ring emitted on star */
+@keyframes star-burst {
+  0%   { transform: scale(0.4); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+.star-burst {
+  animation: star-burst 0.5s ease-out forwards;
+}
+
+/* ── Stacked "pages" behind the featured most-recent doc ──
+   White tints for the default dark theme; dark tints under .light so the
+   stack stays visible against the white card surface. */
+.doc-stack-back {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+.doc-stack-front {
+  background: rgba(255, 255, 255, 0.20);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+}
+.light .doc-stack-back {
+  background: #e5e7eb;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light .doc-stack-front {
+  background: #d1d5db;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
 /* .dark block removed — all vars are dark by default in :root */
 
 @layer base {

@@ -229,6 +229,77 @@ function CollectionCard({ collection, isActive, onClick, onDelete }: CollectionC
   );
 }
 
+// ─── Star Button ──────────────────────────────────────────────────────────────
+
+function StarButton({ starred, onToggle, className, size = 14, label }: {
+  starred: boolean; onToggle: () => void; className?: string; size?: number; label?: string;
+}) {
+  const [pop, setPop] = useState<'on' | 'off' | null>(null);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPop(starred ? 'off' : 'on');
+    onToggle();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      title={starred ? 'Unstar' : 'Star'}
+      aria-pressed={starred}
+      className={className}
+    >
+      <svg
+        onAnimationEnd={() => setPop(null)}
+        className={pop === 'on' ? 'star-pop' : pop === 'off' ? 'star-pop-off' : ''}
+        width={size} height={size} viewBox="0 0 24 24"
+        fill={starred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      >
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+      {label}
+    </button>
+  );
+}
+
+// ─── Delete / Icon Action Button ────────────────────────────────────────────────
+// Same springy pop + radiating burst as the star, for one-shot icon actions
+// (move to trash, remove from collection).
+
+function DeleteButton({ onAction, className, size = 14, title, burstColor = 'bg-red-500/40', children }: {
+  onAction: () => void; className?: string; size?: number; title?: string; burstColor?: string; children: React.ReactNode;
+}) {
+  const [pop, setPop] = useState(false);
+  const [burst, setBurst] = useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPop(true);
+    setBurst(true);
+    onAction();
+  };
+
+  return (
+    <button type="button" onClick={handleClick} title={title} className={className}>
+      <span className="relative inline-flex items-center justify-center">
+        {burst && (
+          <span
+            aria-hidden
+            onAnimationEnd={() => setBurst(false)}
+            className={`star-burst pointer-events-none absolute inset-0 rounded-full ${burstColor}`}
+          />
+        )}
+        <span onAnimationEnd={() => setPop(false)} className={`inline-flex ${pop ? 'star-pop' : ''}`}>
+          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {children}
+          </svg>
+        </span>
+      </span>
+    </button>
+  );
+}
+
 // ─── Document Card ────────────────────────────────────────────────────────────
 
 interface DocumentCardProps {
@@ -266,35 +337,34 @@ function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFr
       </button>
 
       {/* Star */}
-      <button type="button" onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
-        title={doc.isStarred ? 'Unstar' : 'Star'}
-        className={`absolute right-10 top-2.5 flex h-7 w-7 items-center justify-center rounded-md transition-all ${
+      <StarButton
+        starred={doc.isStarred}
+        onToggle={onToggleStar}
+        className={`absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md transition-all duration-150 hover:scale-110 active:scale-90 ${
           doc.isStarred
             ? 'text-yellow-400 opacity-100 hover:bg-white/10'
             : 'text-[var(--text-faint)] opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-[var(--text)]'
-        }`}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill={doc.isStarred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-      </button>
+        }`}
+      />
 
       {/* Remove from collection OR delete */}
       {onRemoveFromCollection ? (
-        <button type="button" onClick={(e) => { e.stopPropagation(); onRemoveFromCollection(); }}
+        <DeleteButton
+          onAction={onRemoveFromCollection}
           title="Remove from collection"
-          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] opacity-0 transition-all group-hover:opacity-100 hover:bg-orange-500/10 hover:text-orange-400">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="9" y1="14" x2="15" y2="14" />
-          </svg>
-        </button>
+          burstColor="bg-orange-400/40"
+          className="absolute right-10 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] opacity-0 transition-all duration-150 group-hover:opacity-100 hover:scale-110 active:scale-90 hover:bg-orange-500/10 hover:text-orange-400"
+        >
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="9" y1="14" x2="15" y2="14" />
+        </DeleteButton>
       ) : (
-        <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        <DeleteButton
+          onAction={onDelete}
           title="Move to trash"
-          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-          </svg>
-        </button>
+          className="absolute right-10 top-2.5 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] opacity-0 transition-all duration-150 group-hover:opacity-100 hover:scale-110 active:scale-90 hover:bg-red-500/10 hover:text-red-400"
+        >
+          <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+        </DeleteButton>
       )}
     </div>
   );
@@ -343,15 +413,15 @@ function TrashCard({ doc, onRestore, onDeleteForever, isRestoring, isDeleting }:
 
 function ViewToggle({ value, onChange }: { value: 'grid' | 'list'; onChange: (v: 'grid' | 'list') => void }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#0a0c10] p-1">
+    <div className="inline-flex items-center rounded-lg border border-[var(--border-faint)] bg-[var(--bg-base)] p-1">
       <button type="button" onClick={() => onChange('grid')} title="Grid view"
-        className={`rounded-md p-1.5 transition-colors ${value === 'grid' ? 'bg-[#1d2129] text-[var(--text)] shadow-sm' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
+        className={`rounded-md p-1.5 transition-colors ${value === 'grid' ? 'bg-[var(--bg-hover)] text-[var(--text)] shadow-sm' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
         </svg>
       </button>
       <button type="button" onClick={() => onChange('list')} title="List view"
-        className={`rounded-md p-1.5 transition-colors ${value === 'list' ? 'bg-[#1d2129] text-[var(--text)] shadow-sm' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
+        className={`rounded-md p-1.5 transition-colors ${value === 'list' ? 'bg-[var(--bg-hover)] text-[var(--text)] shadow-sm' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/>
         </svg>
@@ -436,29 +506,29 @@ function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemov
       </button>
       <span className="shrink-0 hidden sm:inline-flex rounded bg-white/10 px-2 py-1 text-[10px] text-[var(--text-dim)]">{doc.tag}</span>
       <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button type="button" onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
-          title={doc.isStarred ? 'Unstar' : 'Star'}
-          className={`flex h-7 w-7 items-center justify-center rounded-md transition ${doc.isStarred ? 'text-yellow-400 hover:bg-white/10' : 'text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)]'}`}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill={doc.isStarred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </button>
+        <StarButton
+          starred={doc.isStarred}
+          onToggle={onToggleStar}
+          size={13}
+          className={`relative flex h-7 w-7 items-center justify-center rounded-md transition-all duration-150 hover:scale-110 active:scale-90 ${doc.isStarred ? 'text-yellow-400 hover:bg-white/10' : 'text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)]'}`}
+        />
         {onRemoveFromCollection ? (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onRemoveFromCollection(); }}
+          <DeleteButton
+            onAction={onRemoveFromCollection}
             title="Remove from collection"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] hover:bg-orange-500/10 hover:text-orange-400 transition">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" y1="14" x2="15" y2="14"/>
-            </svg>
-          </button>
+            size={13}
+            burstColor="bg-orange-400/40"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] transition-all duration-150 hover:scale-110 active:scale-90 hover:bg-orange-500/10 hover:text-orange-400">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" y1="14" x2="15" y2="14"/>
+          </DeleteButton>
         ) : (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          <DeleteButton
+            onAction={onDelete}
             title="Move to trash"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] hover:bg-red-500/10 hover:text-red-400 transition">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-            </svg>
-          </button>
+            size={13}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] transition-all duration-150 hover:scale-110 active:scale-90 hover:bg-red-500/10 hover:text-red-400">
+            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </DeleteButton>
         )}
       </div>
     </div>
@@ -515,6 +585,7 @@ export default function HomePage() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const { settings } = useSettings();
 
   // Collection dialogs
@@ -1020,8 +1091,8 @@ export default function HomePage() {
                 {!isSearchActive && sortedDocuments.length > 0 && (
                   <div className="mt-7 flex flex-col sm:flex-row gap-6 rounded-2xl border border-white/10 bg-[var(--bg-surface)] p-6 shadow-sm">
                     <div className="relative shrink-0 w-[140px] h-[180px] hidden sm:block mt-1">
-                      <div className="absolute top-2 left-2 w-full h-full bg-white/5 rounded-[4px] transform rotate-3 border border-white/10" />
-                      <div className="absolute top-1 left-1 w-full h-full bg-white/20 rounded-[4px] transform rotate-1 border border-white/20" />
+                      <div className="doc-stack-back absolute top-2 left-2 w-full h-full rounded-[4px] transform rotate-3" />
+                      <div className="doc-stack-front absolute top-1 left-1 w-full h-full rounded-[4px] transform rotate-1" />
                       {sortedDocuments[0].storageUrl ? (
                         <BannerDocumentPreview documentId={sortedDocuments[0].id} />
                       ) : (
@@ -1031,30 +1102,27 @@ export default function HomePage() {
                       )}
                     </div>
                     <div className="flex flex-col flex-1 items-start">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-3 py-1 text-xs text-[var(--text-dim)]">
-                        <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
-                        <span className="font-medium text-[var(--text)]">Most recent</span>
-                      </div>
+                      <span className="text-xs font-medium uppercase tracking-widest text-[var(--text-faint)]">Most recent</span>
                       <h2 className="mt-3 font-serif text-[28px] sm:text-3xl leading-tight text-[var(--text)]">{sortedDocuments[0].title}</h2>
                       <p className="mt-2 text-[13px] text-[var(--text-faint)]">{formatMeta(sortedDocuments[0])}</p>
                       <div className="mt-5 flex flex-wrap gap-3">
                         <button type="button" onClick={() => handleDocumentClick(sortedDocuments[0])}
                           disabled={!sortedDocuments[0].storageUrl}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--text)] px-4 py-2.5 text-sm font-semibold text-[var(--bg-base)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
                           {sortedDocuments[0].storageUrl ? 'Open document' : 'Missing file'}
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                         </button>
-                        <button type="button" onClick={() => toggleStar.mutate(sortedDocuments[0].id)}
-                          className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                        <StarButton
+                          starred={sortedDocuments[0].isStarred}
+                          onToggle={() => toggleStar.mutate(sortedDocuments[0].id)}
+                          size={16}
+                          label={sortedDocuments[0].isStarred ? 'Starred' : 'Star'}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95 ${
                             sortedDocuments[0].isStarred
                               ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
                               : 'border-white/10 bg-transparent text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)]'
-                          }`}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill={sortedDocuments[0].isStarred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                          </svg>
-                          {sortedDocuments[0].isStarred ? 'Starred' : 'Star'}
-                        </button>
+                          }`}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1365,15 +1433,84 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Floating upload button ── */}
+        {/* ── Floating action button (speed dial) ── */}
         {(view === 'all' || view === 'recent' || view === 'starred') && (
-          <button onClick={() => setUploadOpen(true)} type="button"
-            className="fixed bottom-8 right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--text)] text-[var(--bg-base)] shadow-2xl shadow-white/10 transition-transform hover:scale-105 active:scale-95"
-            aria-label="Upload PDF">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
+          <>
+            {/* Backdrop — closes the dial when clicking elsewhere */}
+            <div
+              onClick={() => setFabOpen(false)}
+              aria-hidden
+              className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+                fabOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+            />
+
+            {/* Container is click-through; only the buttons/labels re-enable pointer events
+                so empty column space never blocks the cards underneath. */}
+            <div className="pointer-events-none fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3">
+              {/* New collection */}
+              <div
+                className={`flex items-center gap-3 transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  fabOpen
+                    ? 'pointer-events-auto translate-y-0 scale-100 opacity-100 delay-75'
+                    : 'pointer-events-none translate-y-3 scale-90 opacity-0'
+                }`}
+              >
+                <span className="rounded-md bg-[var(--bg-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--text)] shadow-lg ring-1 ring-white/10">
+                  New collection
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setCreateCollectionOpen(true); setFabOpen(false); }}
+                  aria-label="New collection"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--bg-surface)] text-[var(--text)] shadow-xl ring-1 ring-white/10 transition-transform hover:scale-110 active:scale-95"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* New file */}
+              <div
+                className={`flex items-center gap-3 transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  fabOpen
+                    ? 'pointer-events-auto translate-y-0 scale-100 opacity-100'
+                    : 'pointer-events-none translate-y-3 scale-90 opacity-0'
+                }`}
+              >
+                <span className="rounded-md bg-[var(--bg-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--text)] shadow-lg ring-1 ring-white/10">
+                  New file
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setUploadOpen(true); setFabOpen(false); }}
+                  aria-label="New file"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--bg-surface)] text-[var(--text)] shadow-xl ring-1 ring-white/10 transition-transform hover:scale-110 active:scale-95"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="12" x2="12" y2="18" /><line x1="9" y1="15" x2="15" y2="15" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Main trigger */}
+              <button
+                onClick={() => setFabOpen(o => !o)}
+                type="button"
+                aria-label={fabOpen ? 'Close menu' : 'Create new'}
+                aria-expanded={fabOpen}
+                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--text)] text-[var(--bg-base)] shadow-2xl shadow-white/10 transition-transform hover:scale-105 active:scale-95"
+              >
+                <svg
+                  width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  className={`transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${fabOpen ? 'rotate-[135deg]' : 'rotate-0'}`}
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            </div>
+          </>
         )}
 
         {/* ── Dialogs ── */}
