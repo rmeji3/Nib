@@ -142,6 +142,36 @@ export function usePermanentDeleteDocument() {
 type DocumentPage = { content: DocumentItem[]; [key: string]: unknown };
 type InfiniteDocs = { pages: DocumentPage[]; pageParams: unknown[] };
 
+export function useBulkSoftDeleteDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => import('../../../lib/api/documents').then(m => m.bulkSoftDeleteDocuments(ids)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useBulkRestoreDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => import('../../../lib/api/documents').then(m => m.bulkRestoreDocuments(ids)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useBulkPermanentDeleteDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => import('../../../lib/api/documents').then(m => m.bulkPermanentDeleteDocuments(ids)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
 export function useToggleStarDocument() {
   const queryClient = useQueryClient();
   return useMutation({

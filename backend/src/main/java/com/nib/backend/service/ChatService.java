@@ -1576,24 +1576,42 @@ public class ChatService {
             boolean exactBlockCitation,
             List<VectorSearchService.ChunkMatch> chunks
     ) {
-        Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
-                .filter(c -> c.pageNumber() == pageNumber)
-                .filter(c -> !isVisualBlock(c.blockType()))
-                .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
-                .findFirst();
+        String textExcerpt;
 
-        Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
-                .filter(c -> c.pageNumber() == pageNumber)
-                .filter(c -> isVisualBlock(c.blockType()))
-                .findFirst();
+        if (exactBlockCitation) {
+            if (isVisualBlock(anchor.blockType()) || "document_summary".equals(anchor.blockType())) {
+                Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
+                        .filter(c -> c.pageNumber() == anchor.pageNumber())
+                        .filter(c -> !isVisualBlock(c.blockType()) && !"document_summary".equals(c.blockType()))
+                        .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
+                        .findFirst();
 
-        String textExcerpt = textBlock.map(c -> truncate(c.extractedText(), 280)).orElse(null);
-        String visualSummary = visualBlock.map(c -> truncate(c.extractedText(), 600)).orElse(null);
-        UUID textBlockId = textBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
-        UUID visualBlockId = visualBlock.map(VectorSearchService.ChunkMatch::blockId).orElse(null);
+                textExcerpt = textBlock
+                        .map(c -> truncate(cleanTextExcerpt(c.extractedText(), c.blockType()), 150))
+                        .orElseGet(() -> truncate(cleanTextExcerpt(anchor.extractedText(), anchor.blockType()), 150));
+            } else {
+                textExcerpt = truncate(cleanTextExcerpt(anchor.extractedText(), anchor.blockType()), 150);
+            }
+        } else {
+            Optional<VectorSearchService.ChunkMatch> textBlock = chunks.stream()
+                    .filter(c -> c.pageNumber() == pageNumber)
+                    .filter(c -> !isVisualBlock(c.blockType()))
+                    .filter(c -> c.extractedText() != null && c.extractedText().trim().length() >= 30)
+                    .findFirst();
+
+            Optional<VectorSearchService.ChunkMatch> visualBlock = chunks.stream()
+                    .filter(c -> c.pageNumber() == pageNumber)
+                    .filter(c -> isVisualBlock(c.blockType()))
+                    .findFirst();
+
+            textExcerpt = textBlock
+                    .map(c -> truncate(cleanTextExcerpt(c.extractedText(), c.blockType()), 150))
+                    .orElseGet(() -> visualBlock.map(c -> truncate(cleanTextExcerpt(c.extractedText(), c.blockType()), 150)).orElse(null));
+        }
+
         String evidenceType = exactBlockCitation
                 ? evidenceTypeForBlock(anchor.blockType())
-                : combinedEvidenceType(textBlock, visualBlock);
+                : "text"; // fallback since we no longer track visualSummary separation
 
         return new CitationDto(
                 pageNumber,
@@ -1604,9 +1622,6 @@ public class ChatService {
                 anchor.chunkIndex(),
                 evidenceType,
                 textExcerpt,
-                textBlockId,
-                visualSummary,
-                visualBlockId,
                 anchor.bbox(),
                 anchor.pageWidth(),
                 anchor.pageHeight()
@@ -1642,6 +1657,16 @@ public class ChatService {
     private static String truncate(String s, int max) {
         if (s == null) return null;
         return s.length() > max ? s.substring(0, max) + "..." : s;
+    }
+
+    private static String cleanTextExcerpt(String text, String blockType) {
+        if (text == null) return null;
+        if (isVisualBlock(blockType)) {
+            String cleaned = text.replaceFirst("(?i)^Page\\s+\\d+\\s+.*?visual evidence\\s*", "");
+            cleaned = cleaned.replaceFirst("^(?i)(?:Title|Summary|Chart summary):\\s*", "");
+            return cleaned.trim();
+        }
+        return text;
     }
 
     private String serializeCitations(List<CitationDto> citations) {

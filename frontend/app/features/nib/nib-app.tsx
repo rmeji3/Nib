@@ -47,6 +47,7 @@ export default function NibApp() {
     starters,
     messages,
     busy,
+    isWaitingForResponse,
     canSubmitPrompt,
     isLoadingMessages,
     deletingSessionId,
@@ -188,6 +189,7 @@ export default function NibApp() {
                   onCiteClick={onCiteClick}
                   onEvidenceOpen={openEvidence}
                   busy={busy}
+                  isWaitingForResponse={isWaitingForResponse}
                   onToggleMinimize={() => setChatMinimized(true)}
                   isIndexing={isIndexing}
                   progress={progress}

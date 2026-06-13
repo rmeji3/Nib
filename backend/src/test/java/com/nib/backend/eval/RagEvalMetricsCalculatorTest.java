@@ -29,7 +29,7 @@ class RagEvalMetricsCalculatorTest {
     private static CitationDto citation(int page, String sourceId) {
         return new CitationDto(
                 page, sourceId, UUID.randomUUID(), UUID.randomUUID(), "text", 0,
-                "text", "excerpt", null, null, null, null, null, null
+                "text", "excerpt", null, null, null
         );
     }
 

@@ -27,9 +27,6 @@ public record CitationDto(
         Integer chunkIndex,
         String evidenceType,
         String textExcerpt,
-        UUID textBlockId,
-        String visualSummary,
-        UUID visualBlockId,
         BBox bbox,
         Double pageWidth,
         Double pageHeight

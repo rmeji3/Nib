@@ -17,6 +17,8 @@ import {
   DropdownMenuTrigger,
 } from '../../../components/ui/dropdown-menu';
 import { Icon } from './nib-viewer';
+import { OcrBlockButton } from '../../../components/ui/layout-blocks';
+import type { OcrBlock } from '../../../components/ui/layout-blocks';
 import type {
   AssistantMessage,
   ConversationStarter,
@@ -290,7 +292,7 @@ function answerWithCitationList(msg: AssistantMessage): string {
 
   const sources = msg.citations
     .map((citation, index) => {
-      const evidence = citation.textExcerpt || citation.visualSummary || citation.snippet;
+      const evidence = citation.textExcerpt || citation.snippet;
       return `${index + 1}. ${citation.label}${evidence ? ` - ${evidence}` : ''}`;
     })
     .join('\n');
@@ -695,24 +697,35 @@ function AssistantMessageView({
         </div>
       )}
       {!msg.streaming && answerSettled && msg.citations.length > 0 ? (
-        <div className="cite-cards-wrap answer-after-reveal">
-          {msg.citations.map((citation, index) => (
-            <button
-              key={`${citation.label}-${index}`}
-              type="button"
-              className="cite-card group relative overflow-hidden transition-all hover:border-[var(--citation-line)] hover:[box-shadow:0_0_16px_-4px_var(--citation)]"
-              onClick={() => onEvidenceOpen(msg.citations, citation.blockId)}
-              onMouseEnter={(event) => onCiteHover(citation, event.currentTarget)}
-              onMouseLeave={() => onCiteHover(null)}
-              title="Open evidence"
-            >
-              <span className="cite-card-idx">{index + 1}</span>
-              <span className="cite-card-body">
-                <span className="cite-card-where">{citation.label}</span>
-              </span>
-              <Icon name="arrow-right" />
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 mt-4 answer-after-reveal">
+          {msg.citations.map((citation, index) => {
+            const block: OcrBlock = {
+              id: citation.blockId || String(index),
+              type: "paragraph",
+              text: citation.textExcerpt || citation.snippet || "",
+              page: (citation.page || 0) + 1,
+              pageWidth: citation.pageWidth || 1,
+              pageHeight: citation.pageHeight || 1,
+              confidence: 0.99,
+              boundingBox: citation.bbox ? {
+                left: citation.bbox.x,
+                top: citation.bbox.y,
+                right: citation.bbox.x + citation.bbox.width,
+                bottom: citation.bbox.y + citation.bbox.height
+              } : undefined
+            };
+
+            return (
+              <OcrBlockButton
+                key={`${citation.label}-${index}`}
+                block={block}
+                isActive={false}
+                onFocusBlock={() => onCiteHover(citation, undefined)}
+                onMouseLeave={() => onCiteHover(null)}
+                onClick={() => onCiteClick(citation)}
+              />
+            );
+          })}
         </div>
       ) : null}
       {!msg.streaming && answerSettled && showConfidence ? <ConfidenceBar value={msg.confidence} /> : null}
@@ -1162,6 +1175,7 @@ export function ChatPanel({
   onCiteClick,
   onEvidenceOpen,
   busy,
+  isWaitingForResponse,
   onToggleMinimize,
   isIndexing,
   progress,
@@ -1188,6 +1202,7 @@ export function ChatPanel({
   onCiteClick: (citation: Citation) => void;
   onEvidenceOpen: (citations: Citation[], focusedBlockId: string | null) => void;
   busy: boolean;
+  isWaitingForResponse: boolean;
   onToggleMinimize: () => void;
   isIndexing: boolean;
   progress: number;
@@ -1229,7 +1244,7 @@ export function ChatPanel({
     }),
     [],
   );
-  const isThinking = busy || previewThinking;
+  const isThinking = isWaitingForResponse || previewThinking;
   const displayedMessages: Array<UserMessage | AssistantMessage> = useMemo(
     () =>
       previewThinking && showChatView
@@ -1278,7 +1293,6 @@ export function ChatPanel({
         <div className="chat-header relative z-[1] flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <div className="chat-title flex items-center gap-2 text-[13px] font-semibold">
-              <span className={`chat-title-dot${isThinking ? ' thinking' : isIndexing ? ' thinking' : ''}`} />
               {isIndexing ? 'Indexing…' : 'Ask this document'}
             </div>
             <div className="chat-subtitle mt-0.5 truncate text-[11px] text-[var(--text-faint)]">
@@ -1404,7 +1418,7 @@ export function ChatPanel({
           Select a conversation to continue, or ask in the current chat before starting another.
         </div>
       )}
-      {hover ? <CitePreview data={hover.citation} anchor={hover.anchor} /> : null}
+      {/* hover ? <CitePreview data={hover.citation} anchor={hover.anchor} /> : null */}
     </div>
     </BorderBeam>
   );

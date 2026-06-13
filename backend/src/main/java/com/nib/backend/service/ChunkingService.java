@@ -42,26 +42,14 @@ public class ChunkingService {
         int length = text.length();
 
         while (start < length) {
-            int end = Math.min(start + maxChars, length);
-
-            // Snap to nearest whitespace to avoid mid-word splits
-            if (end < length) {
-                int snap = text.lastIndexOf(' ', end);
-                if (snap > start) end = snap;
-            }
+            int end = findChunkEnd(text, start, Math.min(start + maxChars, length));
 
             String chunk = text.substring(start, end).trim();
             if (!chunk.isEmpty()) chunks.add(chunk);
 
-            // The chunk reaching end-of-text is the last one. Without this stop,
-            // `start = end - overlap` pins behind the text end and the
-            // forward-progress fallback emits one suffix fragment per character
-            // of overlap ("ing.", "ng.", "g.", ...).
             if (end >= length) break;
 
-            // Next chunk starts with overlap
-            int next = end - overlapChars;
-            start = Math.max(next, start + 1); // guarantee forward progress
+            start = findNextChunkStart(text, start, end, overlapChars);
         }
 
         return chunks;
@@ -85,11 +73,7 @@ public class ChunkingService {
         int chunkIndex = 0;
 
         while (start < length) {
-            int end = Math.min(start + maxChars, length);
-            if (end < length) {
-                int snap = text.lastIndexOf(' ', end);
-                if (snap > start) end = snap;
-            }
+            int end = findChunkEnd(text, start, Math.min(start + maxChars, length));
 
             // Find the trimmed range INSIDE [start, end) so the bbox excludes
             // any leading/trailing whitespace.
@@ -105,11 +89,9 @@ public class ChunkingService {
                 chunkIndex++;
             }
 
-            // Same end-of-text stop as chunk() — see comment there.
             if (end >= length) break;
 
-            int next = end - overlapChars;
-            start = Math.max(next, start + 1);
+            start = findNextChunkStart(text, start, end, overlapChars);
         }
 
         return result;
@@ -121,6 +103,42 @@ public class ChunkingService {
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
+
+    private int findChunkEnd(String text, int start, int maxEnd) {
+        if (maxEnd >= text.length()) return text.length();
+
+        int snap = text.lastIndexOf("\n\n", maxEnd);
+        if (snap > start) return snap + 2;
+
+        snap = text.lastIndexOf('\n', maxEnd);
+        if (snap > start) return snap + 1;
+
+        snap = text.lastIndexOf(". ", maxEnd);
+        if (snap > start) return snap + 2;
+
+        snap = text.lastIndexOf(' ', maxEnd);
+        if (snap > start) return snap + 1;
+
+        return maxEnd;
+    }
+
+    private int findNextChunkStart(String text, int currentStart, int currentEnd, int overlapChars) {
+        int target = Math.max(currentStart + 1, currentEnd - overlapChars);
+
+        int snap = text.lastIndexOf("\n\n", target);
+        if (snap > currentStart) return snap + 2;
+
+        snap = text.lastIndexOf('\n', target);
+        if (snap > currentStart) return snap + 1;
+
+        snap = text.lastIndexOf(". ", target);
+        if (snap > currentStart) return snap + 2;
+
+        snap = text.lastIndexOf(' ', target);
+        if (snap > currentStart) return snap + 1;
+
+        return target;
+    }
 
     private static BBox unionBboxForRange(List<PositionedRun> runs, int rangeStart, int rangeEnd) {
         if (runs == null || runs.isEmpty()) return null;
