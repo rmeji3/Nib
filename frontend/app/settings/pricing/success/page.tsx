@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -53,7 +53,7 @@ const AnimatedCheckmark = () => (
 const MAX_POLLS = 12;   // 12 × 2.5 s = 30 s max wait
 const POLL_MS  = 2500;
 
-export default function PricingSuccessPage() {
+function PricingSuccessContent() {
   const searchParams   = useSearchParams();
   const router         = useRouter();
   const { user, refreshSession } = useAuth();
@@ -182,5 +182,13 @@ export default function PricingSuccessPage() {
         <ArrowRight className="w-4 h-4" />
       </Link>
     </div>
+  );
+}
+
+export default function PricingSuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <PricingSuccessContent />
+    </Suspense>
   );
 }
