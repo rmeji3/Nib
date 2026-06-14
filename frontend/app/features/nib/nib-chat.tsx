@@ -20,7 +20,7 @@ import {
 } from '../../../components/ui/dropdown-menu';
 import { Icon } from './nib-viewer';
 import { OcrBlockButton } from '../../../components/ui/layout-blocks';
-import type { OcrBlock } from '../../../components/ui/layout-blocks';
+import type { OcrBlock, OcrBlockType } from '../../../components/ui/layout-blocks';
 import type {
   AssistantMessage,
   ConversationStarter,
@@ -678,7 +678,7 @@ function AssistantMessageView({
           {msg.citations.map((citation, index) => {
             const block: OcrBlock = {
               id: citation.blockId || String(index),
-              type: "paragraph",
+              type: (citation.blockType === 'table' ? 'table' : citation.blockType === 'list' ? 'list' : citation.blockType === 'chart' || citation.blockType === 'figure' || citation.blockType === 'visual_summary' ? 'figure' : 'paragraph') as OcrBlockType,
               text: citation.textExcerpt || citation.snippet || "",
               page: (citation.page || 0) + 1,
               pageWidth: citation.pageWidth || 1,

@@ -23,6 +23,8 @@ export interface Citation {
   /** Page dimensions in the same units as bbox; null when bbox is null. Optional for demo data. */
   pageWidth?: number | null;
   pageHeight?: number | null;
+  /** Optional block type to map visually. */
+  blockType?: string | null;
 }
 
 export type MessageSegment = string | { strong: string } | { cite: number }; // cite is 1-based

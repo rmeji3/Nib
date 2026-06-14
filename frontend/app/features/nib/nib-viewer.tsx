@@ -402,7 +402,7 @@ export function ViewerToolbar({
             const printUrl = async () => {
               if (file) return URL.createObjectURL(file);
               if (documentId) {
-                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { credentials: 'include', headers: getAuthHeaders() });
                 if (!res.ok) throw new Error('Fetch failed');
                 return URL.createObjectURL(await res.blob());
               }
@@ -434,7 +434,7 @@ export function ViewerToolbar({
               let url = '';
               if (file) url = URL.createObjectURL(file);
               else if (documentId) {
-                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { credentials: 'include', headers: getAuthHeaders() });
                 if (!res.ok) throw new Error('Fetch failed');
                 url = URL.createObjectURL(await res.blob());
               }
@@ -482,7 +482,7 @@ export function ViewerToolbar({
                   let url = '';
                   if (file) url = URL.createObjectURL(file);
                   else if (documentId) {
-                    const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() });
+                    const res = await fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { credentials: 'include', headers: getAuthHeaders() });
                     if (!res.ok) throw new Error('Fetch failed');
                     url = URL.createObjectURL(await res.blob());
                   }
@@ -664,7 +664,7 @@ export function Viewer({
       setBlobUrl(undefined);
     });
 
-    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { headers: getAuthHeaders() })
+    fetch(`${API_URL}/api/v1/documents/${documentId}/content`, { credentials: 'include', headers: getAuthHeaders() })
       .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
       .then((blob) => {
         if (cancelled) return;

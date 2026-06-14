@@ -123,6 +123,13 @@ public class ChunkingService {
     }
 
     private int findNextChunkStart(String text, int currentStart, int currentEnd, int overlapChars) {
+        // If the chunk ended cleanly at a paragraph boundary (\n\n), don't overlap into the
+        // previous paragraph. This prevents unrelated sections from bleeding into the next
+        // chunk and messing up citation UI bounding boxes.
+        if (currentEnd >= 2 && text.charAt(currentEnd - 1) == '\n' && text.charAt(currentEnd - 2) == '\n') {
+            return currentEnd;
+        }
+
         int target = Math.max(currentStart + 1, currentEnd - overlapChars);
 
         int snap = text.lastIndexOf("\n\n", target);

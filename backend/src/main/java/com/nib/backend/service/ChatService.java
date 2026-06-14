@@ -74,9 +74,13 @@ public class ChatService {
     private final RerankerService rerankerService;
     private final RagChatTracer ragChatTracer;
     private final ConversationStarterService conversationStarterService;
+    private final SubscriptionQuotaService subscriptionQuotaService;
 
     @Value("${gemini.model:gemini-2.5-flash-lite}")
     private String geminiModel;
+
+    @Value("${gemini.premium-model:gemini-2.5-pro}")
+    private String geminiPremiumModel;
 
     @Value("${ingestion.top-k:5}")
     private int topK;
@@ -396,6 +400,9 @@ public class ChatService {
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, user.getId())
                 .orElseThrow(() -> new ChatSessionNotFoundException(sessionId));
 
+        boolean usePremium = subscriptionQuotaService.consumePremiumQueryIfAvailable(user);
+        String targetModel = usePremium ? geminiPremiumModel : geminiModel;
+
         // Save the user turn
         ChatMessage userMessage = chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(sessionId)
@@ -418,7 +425,7 @@ public class ChatService {
                     .sessionId(sessionId)
                     .role("assistant")
                     .content(LOW_SIGNAL_TEXT)
-                    .modelVersion(geminiModel)
+                    .modelVersion(targetModel)
                     .build());
             saveAnswerAudit(
                     session,
@@ -436,7 +443,7 @@ public class ChatService {
             trace.end("clarification", 0.0, 0.0, LOW_SIGNAL_TEXT);
             return new ChatQueryResponse(
                     clarificationMsg.getId(), sessionId, LOW_SIGNAL_TEXT, List.of(),
-                    geminiModel, clarificationMsg.getCreatedAt().toString(),
+                    targetModel, clarificationMsg.getCreatedAt().toString(),
                     0.0, 0.0, refusedVerification(), true
             );
         }
@@ -445,7 +452,7 @@ public class ChatService {
         // turns, rewrite the question as a standalone query so embeddings match
         // the right chunks. The rewritten query is also used in the final Gemini
         // prompt so the model understands what "those", "it", "that" refer to.
-        String searchQuery = rewriteQueryIfNeeded(sessionId, question);
+        String searchQuery = rewriteQueryIfNeeded(sessionId, question, targetModel);
         trace.recordRewrite(question, searchQuery);
 
         // Compute dynamic topK based on document page count:
@@ -577,10 +584,10 @@ public class ChatService {
         // ── Refusal guard ────────────────────────────────────────────────────
         // If retrieval confidence is below threshold, don't even call Gemini — return a
         // canned response. This kills hallucinations on off-topic queries and
-        // saves API spend. Skipped for aggregation queries and page-reference
-        // queries because those have legitimate intent despite potentially
+        // saves API spend. Skipped for aggregation queries, page-reference
+        // queries, and background concept queries because those have legitimate intent despite potentially
         // weaker per-chunk similarity.
-        if (retrievalConfidence < refusalThreshold && !isAggregationQuery(searchQuery) && referencedPages.isEmpty()) {
+        if (retrievalConfidence < refusalThreshold && !isAggregationQuery(searchQuery) && !isBackgroundConceptQuestion(searchQuery) && referencedPages.isEmpty()) {
             log.info("Refusing query: confidence {} below threshold {} (question='{}')",
                     String.format("%.3f", retrievalConfidence), refusalThreshold, question);
 
@@ -689,7 +696,7 @@ public class ChatService {
         // chat feel dead; persist a visible assistant turn and let the user retry.
         GeminiTextClient.GenerationResult generation;
         try {
-            generation = callGeminiWithMetadata(prompt);
+            generation = callGeminiWithMetadata(prompt, targetModel);
         } catch (RuntimeException ex) {
             log.warn("Gemini answer generation failed for session {}: {}", sessionId, ex.getMessage());
             trace.end("model_unavailable", 0.0, 0.0, MODEL_UNAVAILABLE_TEXT);
@@ -699,12 +706,13 @@ public class ChatService {
                     userMessage,
                     chunks,
                     retrievalConfidence,
-                    elapsedMillis(startedNanos)
+                    elapsedMillis(startedNanos),
+                    targetModel
             );
         }
         String answer = generation.text();
         String effectiveGeminiModel = generation.modelVersion() == null
-                ? geminiModel
+                ? targetModel
                 : generation.modelVersion();
         trace.recordGeneration(prompt, generation.text(), effectiveGeminiModel, generation.tokenUsage());
 
@@ -866,7 +874,7 @@ public class ChatService {
      * The rewritten query is used ONLY for embedding + retrieval. The original
      * user question is still shown in the final prompt and the chat UI.
      */
-    private String rewriteQueryIfNeeded(UUID sessionId, String currentQuestion) {
+    private String rewriteQueryIfNeeded(UUID sessionId, String currentQuestion, String targetModel) {
         List<ChatMessage> recentMessages = loadRecentMessages(sessionId);
 
         // Need at least 2 prior messages (1 prior user + 1 prior assistant)
@@ -900,7 +908,7 @@ public class ChatService {
                 .formatted(history, currentQuestion);
 
         try {
-            String rewritten = callGemini(rewritePrompt);
+            String rewritten = callGemini(rewritePrompt, targetModel);
             if (rewritten != null && !rewritten.isBlank()) {
                 String cleaned = rewritten.trim().replaceAll("^\"|\"$", ""); // strip surrounding quotes
                 // Guard: if the rewrite is way longer than the original, the model
@@ -1558,8 +1566,8 @@ public class ChatService {
         return LocalDate.now(ZoneId.systemDefault()).toString();
     }
 
-    private String callGemini(String prompt) {
-        return geminiTextClient.generate(prompt);
+    private String callGemini(String prompt, String targetModel) {
+        return geminiTextClient.generate(prompt, 2048, 0.1, targetModel);
     }
 
     private float[] embedSearchQuery(String searchQuery) {
@@ -1576,8 +1584,8 @@ public class ChatService {
         return embedding;
     }
 
-    private GeminiTextClient.GenerationResult callGeminiWithMetadata(String prompt) {
-        return geminiTextClient.generateWithMetadata(prompt, 2048, 0.1);
+    private GeminiTextClient.GenerationResult callGeminiWithMetadata(String prompt, String targetModel) {
+        return geminiTextClient.generateWithMetadata(prompt, 2048, 0.1, targetModel);
     }
 
     private ChatQueryResponse persistModelUnavailableResponse(
@@ -1586,14 +1594,15 @@ public class ChatService {
             ChatMessage userMessage,
             List<VectorSearchService.ChunkMatch> chunks,
             double confidence,
-            long latencyMs
+            long latencyMs,
+            String targetModel
     ) {
         ChatMessage assistantMsg = chatMessageRepository.save(ChatMessage.builder()
                 .sessionId(session.getId())
                 .role("assistant")
                 .content(MODEL_UNAVAILABLE_TEXT)
                 .citations("[]")
-                .modelVersion(geminiModel)
+                .modelVersion(targetModel)
                 .build());
         saveAnswerAudit(
                 session,
@@ -1612,7 +1621,7 @@ public class ChatService {
                 session.getId(),
                 MODEL_UNAVAILABLE_TEXT,
                 List.of(),
-                geminiModel,
+                targetModel,
                 assistantMsg.getCreatedAt().toString(),
                 confidence,
                 0.0,

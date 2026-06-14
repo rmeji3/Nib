@@ -41,13 +41,21 @@ This is a live developer guide and project directory index for the Next.js front
 | URL Route | Type | File Path |
 | --- | --- | --- |
 | `/` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/page.tsx) |
+| `/about` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/about/page.tsx) |
+| `/contact` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/contact/page.tsx) |
+| `/data-handling` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/data-handling/page.tsx) |
 | `/document/[id]` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/[id]/page.tsx) |
 | `/document/uploading` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/uploading/page.tsx) |
 | `/file` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/file/page.tsx) |
 | `/home` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/home/page.tsx) |
+| `/privacy` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/privacy/page.tsx) |
+| `/security` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/security/page.tsx) |
 | `/settings` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/page.tsx) |
+| `/settings/pricing` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/pricing/page.tsx) |
+| `/settings/pricing/success` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/pricing/success/page.tsx) |
 | `/signin` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/signin/page.tsx) |
 | `/signup` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/signup/page.tsx) |
+| `/verify` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/verify/page.tsx) |
 
 ### Feature Modules (`frontend/app/features`)
 
@@ -101,6 +109,12 @@ This is a live developer guide and project directory index for the Next.js front
 This section is maintained by AI coding agents to track architectural updates, new dependencies, or pattern adjustments. When adding new capabilities, append an entry to the log below.
 
 ### Log
+- **2026-06-14**: Replaced the simulated Google sign-in with real Google Identity Services. `auth-provider.tsx` now loads `https://accounts.google.com/gsi/client` on demand and runs the GIS popup **auth-code** flow (`google.accounts.oauth2.initCodeClient`, `ux_mode:'popup'`), POSTing the returned `code` to `POST /api/v1/auth/google` which sets the session cookie. Shared `handleAuthSuccess(data, provider)` now backs both credentials and Google sign-in (incl. the `nib_post_auth_intent==='pro'` → checkout redirect). Removed all mock state and the fake consent modal. Requires `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+- **2026-06-14**: Wired the settings Danger-zone "Delete account" to the real `DELETE /api/v1/users/me` endpoint (`PrivacyTab` in `settings/page.tsx`). The confirm dialog now calls the backend (was an alert stub), shows a "Deleting…" state, and on success calls `signOut()` to clear local state and return to the landing page. Copy updated to note the subscription is canceled and all data is erased.
+- **2026-06-14**: Email-verification signup flow + landing "Go Pro" wiring. Landing `Professional` CTA renamed "Start 14-day trial" → **Go Pro** and is now a button (`landing-pricing.tsx`): logged-in → starts Stripe checkout (`create-checkout-session`, redirect); logged-out → stores `nib_post_auth_intent='pro'` and routes to `/signup`. `auth-provider` signup no longer auto-logs in (register returns `{message,email}`); `auth-card.tsx` shows a "Check your email" panel after signup with a Resend action. Sign-in now surfaces the backend error message (e.g. EMAIL_NOT_VERIFIED) and, if `nib_post_auth_intent==='pro'`, resumes checkout after login instead of going home. New `app/verify/page.tsx` confirms the token via `GET /api/v1/auth/verify` then links to `/signin`. Net flow: Go Pro (logged out) → signup → email confirm → sign in → checkout.
+- **2026-06-14**: Added cancel/renew subscription UX. `User` (auth-provider) now carries `subscriptionCancelAtPeriodEnd`, mapped from the API in sign-in/sign-up/`/me`/refresh. `settings/pricing/page.tsx`: a persistent amber notice shows "Your Pro features end on {date}" with a **Renew Pro** button when the subscription is canceled-but-still-active; the Pro card CTA becomes Renew, the Free card shows the scheduled start date, and a new `handleResume` hits `POST /api/stripe/resume-subscription`. `home/page.tsx`: the sidebar button shows **Renew Pro** (instead of being hidden) for canceled-but-still-Pro users. The existing `DowngradeModal` already serves as the cancellation confirmation step.
+- **2026-06-14**: Fixed cookie-based auth on all backend calls and aligned the Pro price. The shared `apiFetch` helpers in `lib/api/{documents,collections,chat,cost}.ts`, `pdf-blob-cache.ts`, and the direct PDF fetches in `nib-viewer.tsx` now send `credentials: 'include'`, so the httpOnly `token` cookie is attached (previously they relied on a nonexistent `localStorage` Bearer token and got 403s after sign-in). `use-cost-dashboard.ts` now gates on `user.id` instead of the removed `user.token`. Pricing: `handleUpgrade` no longer sends a `priceId` (server decides the price); displayed Pro price set to **$12/mo** on `settings/pricing/page.tsx` and `components/landing-pricing.tsx`; removed an unused `CheckCircle2` import that broke `tsc`.
+- **2026-06-14**: Fixed chat citation block type icons. `Citation` interface now includes `blockType`, which `use-nib-chat.ts` pulls from the backend `ApiCitation`, and `nib-chat.tsx` properly maps it to `OcrBlockType` instead of hardcoding all citations as `paragraph`. Table, list, chart, and figure citations now show their correct respective UI icons.
 - **2026-06-13**: Fixed chat citation chip numbering (`cite` is 1-based again) and collapse consecutive duplicate inline chips so repeated `[B2][B2]` no longer renders as `222`.
 - **2026-06-13**: Deduplicated overlapping chat citations when multiple retrieved chunks from the same paragraph are cited separately. `ChatService.extractCitations` and `buildMessageContent` now collapse same-page evidence with matching or overlapping excerpts so the UI shows one citation card per paragraph.
 - **2026-06-13**: Removed the assistant "Reviewed X sources" reasoning dropdown from `nib-chat.tsx`; citation blocks below answers remain the visible source UI.

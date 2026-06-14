@@ -28,6 +28,7 @@ export function AuthCard() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+  const [verificationSentTo, setVerificationSentTo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent, formMode: 'signin' | 'signup') => {
     e.preventDefault();
@@ -50,6 +51,9 @@ export function AuthCard() {
           throw new Error('Passwords do not match.');
         }
         await signUp(email, name, password);
+        // Not logged in yet — they must confirm their email first.
+        setVerificationSentTo(email);
+        setIsLoading(false);
       } else {
         await signIn(email, password);
       }
@@ -57,6 +61,18 @@ export function AuthCard() {
       setError(err.message || 'An error occurred during authentication.');
       setIsLoading(false);
     }
+  };
+
+  const handleResendVerification = async () => {
+    if (!verificationSentTo) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      await fetch(`${apiUrl}/api/v1/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verificationSentTo }),
+      });
+    } catch { /* best effort */ }
   };
 
   const handleGoogleLogin = async () => {
@@ -74,6 +90,7 @@ export function AuthCard() {
   const toggleMode = (e: React.MouseEvent, targetMode: 'signin' | 'signup') => {
     e.preventDefault();
     setError(null);
+    setVerificationSentTo(null);
     setCurrentMode(targetMode);
     window.history.pushState(null, '', targetMode === 'signup' ? '/signup' : '/signin');
   };
@@ -133,8 +150,38 @@ export function AuthCard() {
         className="w-full max-w-[440px] bg-white/[0.01] border border-white/10 rounded-2xl p-8 backdrop-blur-md shadow-2xl transition-all duration-300 hover:border-white/15 overflow-hidden"
         style={cardStyle}
       >
+        {verificationSentTo ? (
+          /* --- CHECK YOUR EMAIL --- */
+          <div className="text-center py-2">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)]">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+            </div>
+            <h2 className="font-serif text-3xl font-medium tracking-tight text-[var(--text)]">Check your email</h2>
+            <p className="mt-3 text-sm leading-relaxed text-[var(--text-dim)]">
+              We sent a confirmation link to{' '}
+              <span className="font-semibold text-[var(--text)]">{verificationSentTo}</span>.
+              Click it to activate your account, then sign in.
+            </p>
+            <a
+              href="/signin"
+              onClick={(e) => toggleMode(e, 'signin')}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-[var(--text)] py-2.5 text-sm font-semibold text-[var(--bg-base)] transition-all hover:opacity-90 active:scale-[0.99]"
+            >
+              Go to sign in
+            </a>
+            <p className="mt-5 text-xs text-[var(--text-faint)]">
+              Didn&apos;t get it?{' '}
+              <button type="button" onClick={handleResendVerification} className="font-semibold text-[var(--text)] hover:underline">
+                Resend email
+              </button>
+            </p>
+          </div>
+        ) : (
         <div className="relative grid" style={{ gridTemplateColumns: '1fr' }}>
-          
+
           {/* --- LOADING OVERLAY --- */}
           <div 
             className={`col-start-1 row-start-1 flex flex-col items-center justify-center transition-all duration-500 z-50 ${
@@ -357,6 +404,7 @@ export function AuthCard() {
           </div>
           </div>
         </div>
+        )}
 
       </div>
     </>

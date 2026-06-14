@@ -9,6 +9,8 @@ import { useDebounce } from '../hooks/use-debounce';
 import dynamic from 'next/dynamic';
 import { SearchFilterPopover, type SortOption } from './components/search-filter-popover';
 import { UserMenu } from './components/user-menu';
+import { BorderBeam } from 'border-beam';
+import Link from 'next/link';
 
 const DocumentPreview = dynamic(() => import('./components/document-preview'), { ssr: false });
 const BannerDocumentPreview = dynamic(() => import('./components/banner-document-preview'), { ssr: false });
@@ -995,6 +997,36 @@ export default function HomePage() {
                 )}
               </div>
             </div>
+
+            {/* Upgrade / Renew Button */}
+            {(() => {
+              const isProUser = user?.subscriptionTier === 'PRO';
+              const isCanceled = isProUser && Boolean(user?.subscriptionCancelAtPeriodEnd);
+              // Show for non-Pro users (upgrade) and for canceled-but-still-Pro users (renew).
+              if (isProUser && !isCanceled) return null;
+              return (
+                <div className="mt-4 pb-4 px-3">
+                  <BorderBeam
+                    active={true}
+                    borderRadius={8}
+                    brightness={1.25}
+                    className="w-full"
+                    colorVariant="ocean"
+                    duration={2.2}
+                    size="sm"
+                    strength={0.75}
+                    theme="dark"
+                  >
+                    <Link
+                      href="/settings/pricing"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                    >
+                      {isCanceled ? 'Renew Pro' : 'Upgrade to Pro'}
+                    </Link>
+                  </BorderBeam>
+                </div>
+              );
+            })()}
           </div>
 
           {/* User panel */}
@@ -1031,7 +1063,7 @@ export default function HomePage() {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : view !== 'recent' ? (
               <div className="flex w-full max-w-3xl flex-col gap-2">
                 {/* Search bar row */}
                 <div className="flex items-center w-full rounded-xl bg-[var(--bg-surface)] shadow-sm transition-all focus-within:ring-1 focus-within:ring-white/10">
@@ -1045,12 +1077,11 @@ export default function HomePage() {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder={
-                        view === 'trash' ? 'Trash — search not available' :
-                        view === 'recent' ? 'Recent — search not available' :
+                        view === 'trash' ? 'Trash - search not available' :
                         view === 'starred' ? 'Search starred documents…' :
                         'Search documents…'
                       }
-                      disabled={view === 'trash' || view === 'recent'}
+                      disabled={view === 'trash'}
                       className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none disabled:opacity-40"
                     />
                     {/* Active filter chips */}
@@ -1131,7 +1162,7 @@ export default function HomePage() {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </header>
 
           {/* Content */}

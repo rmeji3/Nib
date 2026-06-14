@@ -38,6 +38,7 @@ public class DocumentService {
     private final JdbcTemplate jdbcTemplate;
     private final SupabaseStorageService storageService;
     private final IngestionService ingestionService;
+    private final SubscriptionQuotaService subscriptionQuotaService;
 
     public DocumentResponse uploadDocuments(List<MultipartFile> files, String customName, User user) {
         if (files == null || files.isEmpty())
@@ -71,6 +72,8 @@ public class DocumentService {
         }
 
         int pageCount = getPageCount(pdfBytes);
+        subscriptionQuotaService.checkAndRecordIngestionQuota(user, pageCount);
+        
         String storagePath = user.getId() + "/" + UUID.randomUUID() + ".pdf";
         storageService.uploadFile(storagePath, pdfBytes, "application/pdf");
 
@@ -296,12 +299,18 @@ public class DocumentService {
         storageService.uploadFile(storagePath, mergedBytes, "application/pdf");
 
         // ── Update or create document record ─────────────────────────────────
+        int newPageCount = getPageCount(mergedBytes);
+        int pagesToCharge = baseDoc != null ? (newPageCount - baseDoc.getPageCount()) : newPageCount;
+        if (pagesToCharge > 0) {
+            subscriptionQuotaService.checkAndRecordIngestionQuota(user, pagesToCharge);
+        }
+
         Document document;
         if (baseDoc != null) {
             String oldPath = baseDoc.getStoragePath();
             baseDoc.setStoragePath(storagePath);
             baseDoc.setFileSizeBytes((long) mergedBytes.length);
-            baseDoc.setPageCount(getPageCount(mergedBytes));
+            baseDoc.setPageCount(newPageCount);
             baseDoc.setFilename("merged_" + System.currentTimeMillis() + ".pdf");
             document = documentRepository.save(baseDoc);
             try {
@@ -320,7 +329,7 @@ public class DocumentService {
                     .originalFilename(originalFilename)
                     .storagePath(storagePath)
                     .fileSizeBytes((long) mergedBytes.length)
-                    .pageCount(getPageCount(mergedBytes))
+                    .pageCount(newPageCount)
                     .build());
         }
 

@@ -5,6 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 @plugin "tailwindcss-animate";
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
   --bg-base: #0a0c10;
   --bg-surface: #11141a;
@@ -22,13 +26,13 @@
   --text-dim: #a4abb6;
   --text-faint: #6b727e;
   --text-mute: #3f444f;
-  --accent: oklch(0.97 0 0);
-  --accent-soft: oklch(0.74 0.08 240 / 0.14);
-  --accent-line: oklch(0.74 0.08 240 / 0.42);
-  --accent-text: oklch(0.86 0.07 240);
-  --accent-glow-a: oklch(0.74 0.11 250);
-  --accent-glow-b: oklch(0.78 0.10 290);
-  --accent-glow-c: oklch(0.82 0.09 200);
+  --accent: oklch(0.62 0.16 264);
+  --accent-soft: rgba(99, 102, 241, 0.14);
+  --accent-line: rgba(99, 102, 241, 0.42);
+  --accent-text: rgb(165, 180, 252);
+  --accent-glow-a: rgba(99, 102, 241, 0.6);
+  --accent-glow-b: rgba(139, 92, 246, 0.5);
+  --accent-glow-c: rgba(167, 139, 250, 0.4);
   --shimmer-low: color-mix(in oklch, var(--text-dim) 82%, black);
   --shimmer-mid: var(--text);
   --shimmer-hot: #ffffff;
@@ -101,9 +105,9 @@
   --text-faint: #6b7280;
   --text-mute: #9ca3af;
   --accent: oklch(0.2 0 0);
-  --accent-soft: oklch(0.74 0.08 240 / 0.12);
-  --accent-line: oklch(0.74 0.08 240 / 0.3);
-  --accent-text: oklch(0.4 0.07 240);
+  --accent-soft: rgba(99, 102, 241, 0.12);
+  --accent-line: rgba(99, 102, 241, 0.3);
+  --accent-text: rgb(79, 70, 229);
   --shimmer-low: color-mix(in oklch, var(--text-dim) 62%, white);
   --shimmer-mid: oklch(0.38 0.1 260);
   --shimmer-hot: color-mix(in oklch, var(--accent-text) 35%, white);

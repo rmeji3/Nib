@@ -43,11 +43,21 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 <!-- START_AUTO_MAP -->
 ### API Controller & Endpoints Map
 
+#### Controller: [`AdminController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/AdminController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `POST` | `/api/v1/admin/retry-account-deletions` |
+
 #### Controller: [`AuthController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/AuthController.java)
 | Verb | Endpoint Route |
 | --- | --- |
+| `GET` | `/api/v1/auth/verify` |
+| `GET` | `/api/v1/auth/me` |
 | `POST` | `/api/v1/auth/register` |
+| `POST` | `/api/v1/auth/google` |
+| `POST` | `/api/v1/auth/resend-verification` |
 | `POST` | `/api/v1/auth/authenticate` |
+| `POST` | `/api/v1/auth/logout` |
 
 #### Controller: [`ChatController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/ChatController.java)
 | Verb | Endpoint Route |
@@ -100,6 +110,14 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `GET` | `/api/v1/documents/{id}/status` |
 | `POST` | `/api/v1/documents/{id}/ingest` |
 
+#### Controller: [`StripeController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/StripeController.java)
+| Verb | Endpoint Route |
+| --- | --- |
+| `POST` | `/api/stripe/create-checkout-session` |
+| `POST` | `/api/stripe/cancel-subscription` |
+| `POST` | `/api/stripe/resume-subscription` |
+| `POST` | `/api/stripe/webhook` |
+
 #### Controller: [`TestController`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/controller/TestController.java)
 | Verb | Endpoint Route |
 | --- | --- |
@@ -111,6 +129,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | --- | --- |
 | `GET` | `/api/v1/users/me/cost-dashboard` |
 | `PUT` | `/api/v1/users/me/settings` |
+| `DELETE` | `/api/v1/users/me` |
 
 ### Database Entities (`backend/src/.../model`)
 
@@ -124,6 +143,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`Document`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/Document.java)
 - [`IngestionJob`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/IngestionJob.java)
 - [`IngestionStatus`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/IngestionStatus.java)
+- [`ProcessedStripeEvent`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/ProcessedStripeEvent.java)
 - [`User`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/model/User.java)
 
 ### Data Access Repositories (`backend/src/.../repository`)
@@ -137,10 +157,14 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`ContentBlockRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ContentBlockRepository.java)
 - [`DocumentRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/DocumentRepository.java)
 - [`IngestionJobRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/IngestionJobRepository.java)
+- [`ProcessedStripeEventRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/ProcessedStripeEventRepository.java)
 - [`UserRepository`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/repository/UserRepository.java)
 
 ### Business Services (`backend/src/.../service`)
 
+- [`AccountDeletionRunner`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/AccountDeletionRunner.java)
+- [`AccountDeletionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/AccountDeletionService.java)
+- [`AccountDeletionSweep`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/AccountDeletionSweep.java)
 - [`AuthService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/AuthService.java)
 - [`ChatRateLimiter`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChatRateLimiter.java)
 - [`ChatService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ChatService.java)
@@ -150,8 +174,10 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`ConversationStarterService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/ConversationStarterService.java)
 - [`CostTelemetryService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/CostTelemetryService.java)
 - [`DocumentService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/DocumentService.java)
+- [`EmailService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/EmailService.java)
 - [`EmbeddingService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/EmbeddingService.java)
 - [`GeminiTextClient`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/GeminiTextClient.java)
+- [`GoogleOAuthClient`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/GoogleOAuthClient.java)
 - [`IngestionRunner`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/IngestionRunner.java)
 - [`IngestionService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/IngestionService.java)
 - [`JwtService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/JwtService.java)
@@ -161,6 +187,8 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`RerankerService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/RerankerService.java)
 - [`SemanticCacheService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SemanticCacheService.java)
 - [`SlidingWindowRateLimiter`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SlidingWindowRateLimiter.java)
+- [`StripeService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/StripeService.java)
+- [`SubscriptionQuotaService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SubscriptionQuotaService.java)
 - [`SupabaseStorageService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/SupabaseStorageService.java)
 - [`TestIService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TestIService.java)
 - [`TestService`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/service/TestService.java)
@@ -206,6 +234,14 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
+- **2026-06-14**: Added real Google OAuth (replacing the frontend mock). `User` gains `provider` ("credentials"/"google", default grandfathers existing rows) and a unique `googleId`. New `GoogleOAuthClient` exchanges the frontend's GIS popup **auth code** server-to-server at `https://oauth2.googleapis.com/token` (using `google.client-id`/`google.client-secret`, `redirect_uri=postmessage`), decodes the returned `id_token`, and checks the `aud` claim. `AuthService.authenticateWithGoogle(code)` finds-or-creates the user (links Google to a pre-existing email account, marks `emailVerified=true`, assigns a random unusable password so the NOT-NULL password column is untouched) and issues the normal JWT cookie. New endpoint `POST /api/v1/auth/google` (permitAll via `/api/v1/auth/**`). Config: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. No new Maven dependency (uses Jackson + `RestClient`).
+- **2026-06-14**: Made account-deletion purges retryable + admin-triggerable. `User.deletionRequestedAt` durably marks an account whose purge is pending (set in `requestDeletion`, cleared only when the purge deletes the user row). `AccountDeletionRunner.purge` now retries `purgeOnce` up to 3× with linear backoff before giving up. A `@Scheduled` sweep (`AccountDeletionSweep`, every 15 min after 5 min delay; `@EnableScheduling` added to `AsyncConfig`) re-queues any still-marked accounts via `AccountDeletionService.retryPendingDeletions()` (idempotent). New admin endpoint `POST /api/v1/admin/retry-account-deletions` (`AdminController`) does the same on demand, guarded by an `X-Admin-Token` header matching `app.admin-token` (unset ⇒ all admin requests 403; path is permitAll in `SecurityConfig` since the controller enforces the token). Covered by `AccountDeletionServiceTest` (3 tests).
+- **2026-06-14**: Added full account deletion with background data purge. `DELETE /api/v1/users/me` → `AccountDeletionService.requestDeletion` synchronously cancels the Stripe subscription immediately (`StripeService.cancelSubscriptionImmediately`), locks the account (`emailVerified=false` so `isEnabled()` is false), and clears the auth cookie — the user gets instant confirmation. The heavy erase runs on a new `deletionExecutor` thread pool via `AccountDeletionRunner.purge(@Async)`, deleting all rows in FK-safe order (embeddings → answer_cache → content_blocks → ingestion_jobs → collection_documents → answer_audits/chat_message_feedback/chat_messages/chat_sessions/cost_usage_events → collections → documents → users) and then the Supabase storage objects (`SupabaseStorageService.deleteFiles`). Async method lives in a separate component so Spring's proxy applies. (`processed_stripe_events` is not user-scoped and is intentionally left.)
+- **2026-06-14**: Added email verification (Resend) gating login. `User` gains `emailVerified` (+`verificationToken`/`verificationTokenExpiry`); `isEnabled()` now returns `emailVerified`, so `DaoAuthenticationProvider` throws `DisabledException` for unconfirmed accounts. New `EmailService` sends the confirmation email via the Resend HTTP API using `RestClient` (no SDK dep); **fails loudly if `RESEND_API_KEY` is unset** (config: `resend.api-key`, `resend.from-email`, `app.frontend-url`). `AuthService.register` no longer auto-logs in — it creates an unverified user and emails a token; `authenticate` maps `DisabledException`→`EmailNotVerifiedException` (HTTP 403, `EMAIL_NOT_VERIFIED`). New endpoints: `GET /api/v1/auth/verify?token=` and `POST /api/v1/auth/resend-verification`. **Grandfathering:** the `email_verified` column is created with `default true`, so pre-existing rows stay enabled while new signups insert `false`. (Note: `ChatServiceTest` has 5 pre-existing failures unrelated to this change — null Gemini generation mocks.)
+- **2026-06-14**: Added subscription cancel/resume lifecycle state. New `User.subscriptionCancelAtPeriodEnd` boolean (exposed via `AuthResponse` and `/api/v1/auth/me`) distinguishes an active subscription from one that is canceled-but-still-in-grace (PRO until `subscriptionPeriodEnd`, then reverts to Free). `cancelSubscription` sets the flag true; new `StripeService.resumeSubscription` + `POST /api/stripe/resume-subscription` clears it on Stripe (`cancel_at_period_end=false`) to undo a scheduled cancellation. The `customer.subscription.updated` webhook now syncs the flag from `sub.getCancelAtPeriodEnd()`; purchase and deletion reset it. `StripeServiceTest` extended to 8 tests (added cancel-flag sync + resume).
+- **2026-06-14**: Hardened the Stripe payments system for production. (1) **Price is now server-controlled** — `createCheckoutSession` no longer accepts a client-supplied price id; it uses `stripe.price.pro` (Pro = $12/mo) so users can't pay for a cheaper price and still get PRO. (2) **Webhook deserialization fallback** — `handleWebhook` falls back to `deserializeUnsafe()` when Stripe API-version skew makes `getObject()` empty (this was silently dropping `checkout.session.completed`, so purchases never upgraded the user). (3) **Idempotency** — new `ProcessedStripeEvent` entity + `ProcessedStripeEventRepository`; events are recorded after handling and re-deliveries are skipped. (4) **Subscription lifecycle** — added handlers for `customer.subscription.updated` (downgrades on non-entitled status, refreshes period end) and `invoice.payment_failed` (logged; downgrade driven by the subsequent updated/deleted event). (5) `subscriptionPeriodEnd` is now set on purchase. (6) **Quota race fixed** — `UserRepository.findByIdForUpdate` (PESSIMISTIC_WRITE) is used by `SubscriptionQuotaService` so concurrent uploads/queries serialize instead of racing the usage counters. (7) **Tests** — `StripeServiceTest` mocks `Webhook.constructEvent`/`Subscription.retrieve` (Mockito `mockStatic`) and covers: checkout→PRO upgrade with period end, the `deserializeUnsafe()` API-skew fallback, `subscription.updated` downgrade (canceled) and keep-PRO (active), `invoice.payment_failed` not downgrading, and idempotent skip of an already-processed event id.
+- **2026-06-14**: Fixed semantic chunking overlap bleeding across major section boundaries. `ChunkingService.findNextChunkStart` now avoids overlapping into the previous paragraph if the chunk ended cleanly at a paragraph boundary (`\n\n`). This prevents unrelated sections (like previous bullet points) from merging into new chunks and messing up UI citation bounding boxes.
+- **2026-06-14**: Fixed the low-confidence refusal guard blocking definitional queries. `ChatService.java` now correctly bypasses the retrieval confidence threshold check for questions matching `BACKGROUND_QUESTION_PATTERN`, allowing the `rag-v10-background-concept-hybrid` prompt to execute and answer general knowledge questions using Gemini instead of preemptively failing with a canned refusal.
 - **2026-06-13**: Included recent conversation history in grounded chat answer prompts (`rag-v11-conversation-history-prompt`). `ChatService` now passes the last few user/assistant turns into the final Gemini prompt for follow-ups like "simplify that" or "compare those", while still grounding document facts in retrieved sources only. Query rewriting and answer prompting share the same history formatter.
 - **2026-06-13**: Added hybrid background + document answers for definitional chat questions (`what is`, `explain`, `define`, etc.). `ChatService` prompt version `rag-v10-background-concept-hybrid` lets Gemini give brief uncited general-knowledge context, then an `In this document:` section with cited facts; document-specific lookups (totals, dates, page references) stay strictly grounded. `CitationVerifier` ignores uncited background sentences and only verifies the document section. Added regression tests in `ChatServiceTest` and `CitationVerifierTest`.
 - **2026-06-13**: Deduplicated overlapping chat citations when the model cites multiple retrieved chunks from the same paragraph (for example `[B1][B2]` on overlapping text blocks). `ChatService.extractCitations` now collapses same-page citations with matching or overlapping excerpts.

@@ -10,7 +10,7 @@ export function useCostDashboard() {
   return useQuery({
     queryKey: ['cost-dashboard', user?.id],
     queryFn: fetchCostDashboard,
-    enabled: Boolean(user?.token),
+    enabled: Boolean(user?.id),
     staleTime: 30_000,
   });
 }

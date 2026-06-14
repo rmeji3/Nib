@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../features/auth/hooks/use-auth';
+import { fetchWithAuth } from '@/app/lib/fetch-with-auth';
 
 export type AccentColor = 'zinc' | 'blue' | 'purple' | 'teal' | 'amber' | 'rose';
 export type TrashRetention = '7' | '30' | '90' | 'never';
@@ -146,20 +147,14 @@ export function useSettings() {
     if (key === 'accentColor') applyAccent(value as AccentColor);
     if (key === 'theme') applyTheme(value as Theme);
 
-    if (user?.token) {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    if (user) {
       try {
-        await fetch(`${apiUrl}/api/v1/users/me/settings`, {
+        await fetchWithAuth('/api/v1/users/me/settings', {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user.token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ settings: JSON.stringify(next) }),
         });
-        if (updateUserSession) {
-          updateUserSession(JSON.stringify(next));
-        }
+        if (updateUserSession) updateUserSession(JSON.stringify(next));
       } catch (err) {
         console.error('Failed to sync settings to backend', err);
       }
