@@ -145,4 +145,21 @@ public class SupabaseStorageService {
             log.warn("Failed to delete file from storage: {}", storagePath, ex);
         }
     }
+
+    /** Deletes many objects in a single request. Best-effort (used for account purge). */
+    public void deleteFiles(List<String> storagePaths) {
+        if (storagePaths == null || storagePaths.isEmpty()) return;
+        try {
+            restClient.method(HttpMethod.DELETE)
+                    .uri(supabaseUrl + "/storage/v1/object/" + bucket)
+                    .header("Authorization", authHeader())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("prefixes", storagePaths))
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Deleted {} storage object(s)", storagePaths.size());
+        } catch (Exception ex) {
+            log.warn("Failed to bulk-delete {} files from storage", storagePaths.size(), ex);
+        }
+    }
 }

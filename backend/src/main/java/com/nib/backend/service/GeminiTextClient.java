@@ -61,16 +61,24 @@ public class GeminiTextClient {
     }
 
     public String generate(String prompt) {
-        return generate(prompt, 2048, 0.1);
+        return generate(prompt, 2048, 0.1, null);
     }
 
     public String generate(String prompt, int maxOutputTokens, double temperature) {
-        return generateWithMetadata(prompt, maxOutputTokens, temperature).text();
+        return generateWithMetadata(prompt, maxOutputTokens, temperature, null).text();
+    }
+
+    public String generate(String prompt, int maxOutputTokens, double temperature, String overrideModel) {
+        return generateWithMetadata(prompt, maxOutputTokens, temperature, overrideModel).text();
     }
 
     public GenerationResult generateWithMetadata(String prompt, int maxOutputTokens, double temperature) {
+        return generateWithMetadata(prompt, maxOutputTokens, temperature, null);
+    }
+
+    public GenerationResult generateWithMetadata(String prompt, int maxOutputTokens, double temperature, String overrideModel) {
         RuntimeException lastFailure = null;
-        for (String model : candidateModels()) {
+        for (String model : candidateModels(overrideModel)) {
             int attempts = Math.max(1, maxAttemptsPerModel);
             for (int attempt = 1; attempt <= attempts; attempt++) {
                 try {
@@ -124,8 +132,11 @@ public class GeminiTextClient {
         );
     }
 
-    private List<String> candidateModels() {
+    private List<String> candidateModels(String overrideModel) {
         Set<String> models = new LinkedHashSet<>();
+        if (overrideModel != null && !overrideModel.isBlank()) {
+            models.add(overrideModel.trim());
+        }
         if (geminiModel != null && !geminiModel.isBlank()) {
             models.add(geminiModel.trim());
         }

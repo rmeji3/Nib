@@ -37,6 +37,7 @@ export function getAuthHeaders(): Record<string, string> {
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${API_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       ...getAuthHeaders(),
       ...(init?.headers as Record<string, string> | undefined),

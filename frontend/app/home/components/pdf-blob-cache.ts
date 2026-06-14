@@ -38,6 +38,7 @@ export async function fetchBlobUrl(documentId: string): Promise<string> {
   if (inFlight) return inFlight;
 
   const promise = fetch(`${API_URL}/api/v1/documents/${documentId}/content`, {
+    credentials: 'include',
     headers: getAuthHeaders(),
   })
     .then(res => {

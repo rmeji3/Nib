@@ -107,7 +107,6 @@ export function UserMenu({ user, onSignOut, variant = 'sidebar', compact = false
           <DropdownMenuItem onClick={() => router.push('/settings')}>
             <SettingsIcon size={14} />
             Settings
-            <DropdownMenuShortcut>{isMac ? '⌘,' : 'Ctrl+,'}</DropdownMenuShortcut>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

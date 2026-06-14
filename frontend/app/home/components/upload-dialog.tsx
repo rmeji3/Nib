@@ -59,7 +59,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                 New document
               </Dialog.Title>
               <Dialog.Description className="mt-0.5 text-xs text-[var(--text-faint)]">
-                Upload one or more PDFs — multiple files will be merged in order.
+                Upload one or more PDFs - multiple files will be merged in order.
               </Dialog.Description>
             </div>
             <button

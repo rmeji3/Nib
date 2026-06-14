@@ -25,12 +25,14 @@ class DocumentServiceTest {
     private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
     private final SupabaseStorageService storageService = mock(SupabaseStorageService.class);
     private final IngestionService ingestionService = mock(IngestionService.class);
+    private final SubscriptionQuotaService subscriptionQuotaService = mock(SubscriptionQuotaService.class);
     private final DocumentService service = new DocumentService(
             documentRepository,
             contentBlockRepository,
             jdbcTemplate,
             storageService,
-            ingestionService
+            ingestionService,
+            subscriptionQuotaService
     );
 
     @Test

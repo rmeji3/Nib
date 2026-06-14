@@ -10,6 +10,7 @@ export interface CollectionSummary {
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${API_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       ...getAuthHeaders(),
       ...(init?.headers as Record<string, string> | undefined),

@@ -121,6 +121,7 @@ function buildMessageContent(
       bbox: api?.bbox ?? null,
       pageWidth: api?.pageWidth ?? null,
       pageHeight: api?.pageHeight ?? null,
+      blockType: api?.blockType ?? null,
     });
     const displayIndex = citations.length;
     citationIndex.set(key, displayIndex);

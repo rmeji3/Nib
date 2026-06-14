@@ -57,6 +57,8 @@ class ChatServiceTest {
     private final AnswerAuditRepository answerAuditRepository = mock(AnswerAuditRepository.class);
     private final SemanticCacheService semanticCacheService = mock(SemanticCacheService.class);
     private final RerankerService rerankerService = mock(RerankerService.class);
+    private final SubscriptionQuotaService subscriptionQuotaService = mock(SubscriptionQuotaService.class);
+
     // Real tracer instance with no Tracer bean available — exercises the no-op path.
     @SuppressWarnings("unchecked")
     private final RagChatTracer ragChatTracer = new RagChatTracer(
@@ -79,7 +81,8 @@ class ChatServiceTest {
             semanticCacheService,
             rerankerService,
             ragChatTracer,
-            conversationStarterService
+            conversationStarterService,
+            subscriptionQuotaService
     );
 
     @Test

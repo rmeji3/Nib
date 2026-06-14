@@ -7,12 +7,14 @@ import { ProtectedRoute } from '../features/auth/components/protected-route';
 import { NibLogo } from '../components/nib-logo';
 import { useSettings } from './hooks/use-settings';
 import { CostDashboard } from './components/cost-dashboard';
+import { fetchWithAuth } from '../lib/fetch-with-auth';
 import {
   UserIcon, PaletteIcon, BookOpenIcon, MessageSquareIcon,
   ShieldIcon, InfoIcon, ArrowLeftIcon,
   RotateCcwIcon, AlertTriangleIcon,
 } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
+import Link from 'next/link';
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
@@ -153,6 +155,47 @@ function ProfileTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>['us
         <SettingRow label="Email address" description="Used to sign in to your account">
           <p className="text-sm text-[var(--text-faint)]">{user.email}</p>
         </SettingRow>
+      </SettingCard>
+
+      <SectionTitle>Subscription & Usage</SectionTitle>
+      <SettingCard className="mb-6">
+        <SettingRow label="Current Plan" description="Your active subscription tier">
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-bold ${user.subscriptionTier === 'PRO' ? 'thinking-label' : 'text-[var(--text-dim)]'}`}>
+              {/* @ts-ignore - Assuming user model returns tier soon */}
+              {user.subscriptionTier || 'FREE'}
+            </span>
+            <Link
+              href="/settings/pricing"
+              className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs font-medium rounded-lg transition"
+            >
+              {user.subscriptionTier === 'PRO' ? 'Modify' : 'Upgrade'}
+            </Link>
+          </div>
+        </SettingRow>
+
+        {user.subscriptionTier === 'PRO' && user.subscriptionCancelAtPeriodEnd && (
+          <div className="px-4 pb-4 pt-2 flex items-center gap-2.5 text-[13px]" style={{ color: 'rgb(234, 179, 8)' }}>
+            <AlertTriangleIcon className="h-4 w-4 shrink-0" />
+            <span>
+              {user.subscriptionPeriodEnd
+                ? `Your Pro features end on ${new Date(user.subscriptionPeriodEnd).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`
+                : 'Your Pro features will end at the close of the current billing period.'}
+            </span>
+          </div>
+        )}
+
+        <div className="px-4 py-4 border-t border-white/5">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="text-[var(--text)] font-medium">Monthly Pages Ingested</span>
+            {/* @ts-ignore */}
+            <span className="text-[var(--text-faint)]">{user.currentMonthPagesIngested || 0} / {user.subscriptionTier === 'PRO' ? '10,000' : '150'}</span>
+          </div>
+          <div className="w-full bg-white/10 rounded-full h-2">
+            {/* @ts-ignore */}
+            <div className="bg-gradient-to-r from-blue-400 to-emerald-400 h-2 rounded-full" style={{ width: `${Math.min(((user.currentMonthPagesIngested || 0) / (user.subscriptionTier === 'PRO' ? 10000 : 150)) * 100, 100)}%` }}></div>
+          </div>
+        </div>
       </SettingCard>
     </div>
   );
@@ -341,7 +384,27 @@ function AiTab() {
 
 function PrivacyTab() {
   const { settings, update } = useSettings();
+  const { signOut } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetchWithAuth('/api/v1/users/me', { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to delete account.');
+      }
+      // Server cleared the auth cookie; clear local state and return to landing.
+      setDeleteOpen(false);
+      await signOut();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Something went wrong.');
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div>
@@ -406,24 +469,27 @@ function PrivacyTab() {
               Delete account?
             </Dialog.Title>
             <Dialog.Description className="mt-2 text-sm text-[var(--text-dim)]">
-              This action is permanent and cannot be reversed. All your data will be deleted
-              immediately.
+              This action is permanent and cannot be reversed. Your subscription will be
+              canceled and all your documents, collections, chats, and settings will be
+              permanently erased.
             </Dialog.Description>
             <div className="mt-6 flex justify-end gap-2">
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-white/10 px-4 py-2 text-sm font-medium transition hover:bg-white/5"
+                  disabled={isDeleting}
+                  className="inline-flex items-center justify-center rounded-md border border-white/10 px-4 py-2 text-sm font-medium transition hover:bg-white/5 disabled:opacity-50"
                 >
                   Cancel
                 </button>
               </Dialog.Close>
               <button
                 type="button"
-                onClick={() => alert('Account deletion is not available in this preview.')}
-                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60 disabled:cursor-wait"
               >
-                Delete account
+                {isDeleting ? 'Deleting…' : 'Delete account'}
               </button>
             </div>
           </Dialog.Content>
@@ -439,7 +505,7 @@ function AboutTab() {
     <div>
       <SectionTitle>About</SectionTitle>
       <div className="mb-6 flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--text)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--text)] text-[var(--bg-surface)]">
           <NibLogo size={24} />
         </div>
         <div>
@@ -456,7 +522,7 @@ function AboutTab() {
 
       <div className="flex flex-wrap gap-2">
         {[
-          { label: 'Privacy policy', href: '#' },
+          { label: 'Privacy policy', href: '/privacy' },
         ].map(link => (
           <a
             key={link.label}
@@ -493,7 +559,7 @@ function SettingsContent() {
   return (
     <main className="min-h-[100dvh] bg-[var(--bg-base)] text-[var(--text)]">
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-white/8 px-5 py-3 lg:px-8">
+      <header className="flex items-center justify-between px-5 py-3 lg:px-8">
         <button
           type="button"
           onClick={() => router.back()}
@@ -543,7 +609,7 @@ function SettingsContent() {
           <div className="min-w-0 flex-1">
             <div
               key={activeTab}
-              className="rounded-2xl border border-white/8 bg-[var(--bg-surface)] p-6 lg:p-8 animate-in fade-in-0 slide-in-from-bottom-1 duration-150"
+              className="rounded-2xl bg-[var(--bg-surface)] p-6 lg:p-8 animate-in fade-in-0 slide-in-from-bottom-1 duration-150"
             >
               {activeTab === 'profile'    && user && <ProfileTab user={user} />}
               {activeTab === 'appearance' && <AppearanceTab />}
