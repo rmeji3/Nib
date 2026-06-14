@@ -1,10 +1,11 @@
 'use client';
 
-import { use, useEffect } from 'react';
+import { use, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { ProtectedRoute } from '../../features/auth/components/protected-route';
 import { NibLogoSpinner } from '../../components/nib-logo-spinner';
+import { IndexingScreen } from '../../components/indexing-screen';
 import { useUpload } from '../../features/upload/upload-context';
 import { fetchDocument } from '../../../lib/api/documents';
 import { useTrackDocumentOpen } from '../../home/hooks/use-documents';
@@ -16,6 +17,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { documentId, setDocument } = useUpload();
   const trackOpen = useTrackDocumentOpen();
+
+  const [indexingGateActive, setIndexingGateActive] = useState(false);
+  const [indexingDismissed, setIndexingDismissed] = useState(false);
 
   // Only hit the API when this document isn't already in context
   const needsFetch = documentId !== id;
@@ -46,15 +50,33 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isContextReady, id]);
 
-  // ── Ingestion status — hoisted to page level so we can gate the viewer ──────
-  // Polling starts once the document is in context (valid id available).
   const {
     isIndexing,
-    progress,
+    isComplete,
+    isFailed,
     pagesProcessed,
     pagesTotal,
     isLoading: ingestionLoading,
   } = useIngestionStatus(isContextReady ? id : null);
+
+  // Activate the indexing gate once we know indexing is in progress (not on revisit
+  // of already-indexed docs where the first poll returns COMPLETE immediately).
+  useEffect(() => {
+    if (isContextReady && !ingestionLoading && isIndexing) {
+      setIndexingGateActive(true);
+    }
+  }, [isContextReady, ingestionLoading, isIndexing]);
+
+  // Failed indexing should fall through to the viewer error state, not stall the gate.
+  useEffect(() => {
+    if (indexingGateActive && !ingestionLoading && isFailed) {
+      setIndexingDismissed(true);
+      setIndexingGateActive(false);
+    }
+  }, [indexingGateActive, ingestionLoading, isFailed]);
+
+  const showIndexingGate = indexingGateActive && !indexingDismissed;
+  const indexingDone = showIndexingGate && !isIndexing && !isFailed;
 
   // ── Loading states ────────────────────────────────────────────────────────────
   if (isStorageMissing) {
@@ -100,44 +122,21 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  // ── Indexing gate — show preparation screen while PENDING / PROCESSING ────────
-  // Only block when we *know* indexing is active (ingestionLoading = true means we
-  // haven't heard back yet, so don't flash the preparation screen for already-
-  // indexed documents on revisit).
-  if (!ingestionLoading && isIndexing) {
+  if (showIndexingGate) {
     return (
-      <ProtectedRoute>
-        <main className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-[var(--bg-base)] px-6 text-center">
-          {/* Pulsing accent dot */}
-          <span className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--accent)]" />
-          </span>
-
-          <div>
-            <p className="text-[15px] font-semibold text-[var(--text)]">Preparing your document…</p>
-            <p className="mt-1 text-[12.5px] text-[var(--text-faint)]">
-              Indexing pages so the AI can answer questions accurately.
-            </p>
-          </div>
-
-          {/* Progress bar — shown once we know the total page count */}
-          {pagesTotal !== null && pagesTotal > 0 && (
-            <div className="w-56">
-              <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
-                <span>{pagesProcessed} of {pagesTotal} pages</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="h-1 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </main>
-      </ProtectedRoute>
+      <IndexingScreen
+        pagesProcessed={pagesProcessed}
+        pagesTotal={pagesTotal}
+        isComplete={indexingDone && isComplete}
+        onFinished={
+          indexingDone && isComplete
+            ? () => {
+                setIndexingDismissed(true);
+                setIndexingGateActive(false);
+              }
+            : undefined
+        }
+      />
     );
   }
 

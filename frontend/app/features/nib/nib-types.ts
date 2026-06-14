@@ -6,6 +6,8 @@ export interface BBox {
 }
 
 export interface Citation {
+  /** 1-based index shown in inline chips and source cards */
+  number: number;
   /** 0-indexed page */
   page: number;
   blockId: string;
@@ -23,7 +25,7 @@ export interface Citation {
   pageHeight?: number | null;
 }
 
-export type MessageSegment = string | { strong: string } | { cite: number };
+export type MessageSegment = string | { strong: string } | { cite: number }; // cite is 1-based
 
 export interface PromptAnswer {
   reasoning: string[];

@@ -11,6 +11,7 @@ import {
   reportChatMessage,
   sendChatQuery,
 } from '../../../../lib/api/chat';
+import { useIngestionStatus } from './use-ingestion-status';
 import type { ApiChatMessage, ApiCitation, ChatSession } from '../../../../lib/api/chat';
 import type {
   AssistantMessage,
@@ -54,6 +55,20 @@ function normalizeAnswerFormatting(answer: string): string {
     .trim();
 }
 
+function normalizeSnippet(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function snippetsRepresentSameEvidence(left: string, right: string): boolean {
+  const normalizedLeft = normalizeSnippet(left);
+  const normalizedRight = normalizeSnippet(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  if (normalizedLeft === normalizedRight) return true;
+  const minLength = Math.min(normalizedLeft.length, normalizedRight.length);
+  if (minLength < 32) return false;
+  return normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+}
+
 /**
  * Single source of truth for converting an answer string + backend API citations
  * into the { segments, citations } pair the UI needs. The backend now prefers
@@ -79,11 +94,24 @@ function buildMessageContent(
   const addCitation = (key: string, label: string, pageNum: number, api?: ApiCitation) => {
     const existing = citationIndex.get(key);
     if (existing !== undefined) return existing;
-    // `snippet` powers the legacy text-layer search highlight: use the real text
-    // excerpt when available, otherwise fall back to the visual description (the
-    // search will silently no-op on visual text, which is fine).
+
     const snippet = api?.textExcerpt ?? '';
+    const duplicateIndex = citations.findIndex((citation) => {
+      if (api?.blockId && citation.blockId === api.blockId) return true;
+      if (citation.page !== pageNum - 1) return false;
+      return snippetsRepresentSameEvidence(
+        snippet,
+        citation.textExcerpt ?? citation.snippet ?? '',
+      );
+    });
+    if (duplicateIndex >= 0) {
+      const displayIndex = duplicateIndex + 1;
+      citationIndex.set(key, displayIndex);
+      return displayIndex;
+    }
+
     citations.push({
+      number: citations.length + 1,
       page: pageNum - 1,                           // 0-indexed for the PDF viewer
       blockId: api?.blockId ?? `page-${pageNum}`,
       label,
@@ -94,9 +122,9 @@ function buildMessageContent(
       pageWidth: api?.pageWidth ?? null,
       pageHeight: api?.pageHeight ?? null,
     });
-    const nextIndex = citations.length;
-    citationIndex.set(key, nextIndex);
-    return nextIndex;
+    const displayIndex = citations.length;
+    citationIndex.set(key, displayIndex);
+    return displayIndex;
   };
 
   for (const match of normalizedAnswer.matchAll(CITATION_REF_RE)) {
@@ -124,7 +152,19 @@ function buildMessageContent(
     const idx = m[2]
       ? citationIndex.get(`B${m[2]}`)
       : citationIndex.get(`Page ${parseInt(m[3], 10)}`);
-    segments.push(idx !== undefined ? { cite: idx } : m[0]);
+    if (idx !== undefined) {
+      const last = segments[segments.length - 1];
+      const repeatsPreviousChip =
+        typeof last === 'object' &&
+        last !== null &&
+        'cite' in last &&
+        last.cite === idx;
+      if (!repeatsPreviousChip) {
+        segments.push({ cite: idx });
+      }
+    } else {
+      segments.push(m[0]);
+    }
     lastIndex = re.lastIndex;
   }
 
@@ -239,6 +279,7 @@ function clearStoredSessionId(documentId: string) {
 
 export function useNibChat(documentId: string | null) {
   const queryClient = useQueryClient();
+  const { isComplete: isIndexingComplete } = useIngestionStatus(documentId);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [localChatError, setLocalChatError] = useState<string | null>(null);
@@ -259,7 +300,7 @@ export function useNibChat(documentId: string | null) {
   const startersQuery = useQuery({
     queryKey: ['chat-starters', documentId],
     queryFn: () => fetchConversationStarters(documentId!),
-    enabled: Boolean(documentId),
+    enabled: Boolean(documentId) && isIndexingComplete,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -279,10 +320,16 @@ export function useNibChat(documentId: string | null) {
   }, [documentId]);
 
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
-  const starters = useMemo(
-    () => normalizeStarters(startersQuery.data ?? []),
-    [startersQuery.data],
-  );
+  const starters = useMemo(() => {
+    if (!isIndexingComplete) return [];
+    if (startersQuery.isLoading || startersQuery.isFetching) return [];
+    return normalizeStarters(startersQuery.data ?? []);
+  }, [
+    isIndexingComplete,
+    startersQuery.data,
+    startersQuery.isLoading,
+    startersQuery.isFetching,
+  ]);
 
   useEffect(() => {
     if (documentId && sessionId) {
@@ -419,9 +466,10 @@ export function useNibChat(documentId: string | null) {
   const deletingSessionId = deleteSessionMutation.isPending
     ? deleteSessionMutation.variables ?? null
     : null;
-  const hasNoSessions = sessions.length === 0 && sessionId === null;
   const currentChatIsEmpty = messages.length === 0 && (activeSession?.messageCount ?? 0) === 0;
-  const canCreateNewChat = Boolean(documentId && !busy && (sessionId === null || hasNoSessions || !currentChatIsEmpty));
+  // Always allow pressing "New chat" (unless busy). If an empty chat already
+  // exists we just navigate to it rather than stacking another empty session.
+  const canCreateNewChat = Boolean(documentId && !busy);
 
   const selectSession = useCallback(
     (nextSessionId: string) => {
@@ -444,7 +492,15 @@ export function useNibChat(documentId: string | null) {
   );
 
   const createNewChat = useCallback(async () => {
-    if (!documentId || busy || (sessionId !== null && !hasNoSessions && currentChatIsEmpty)) return;
+    if (!documentId || busy) return;
+    // Already in an empty chat — nothing to create, just stay here.
+    if (sessionId !== null && currentChatIsEmpty) return;
+    // Reuse an existing empty session instead of stacking duplicate blank chats.
+    const emptySession = sessions.find((session) => session.messageCount === 0);
+    if (emptySession && emptySession.id !== sessionId) {
+      selectSession(emptySession.id);
+      return;
+    }
     pendingAssistantIdRef.current = null;
     queuedPromptsRef.current = [];
     processingQueuedPromptRef.current = false;
@@ -454,7 +510,7 @@ export function useNibChat(documentId: string | null) {
     setLocalChatError(null);
     setQueueVersion((version) => version + 1);
     await createSessionMutation.mutateAsync(documentId);
-  }, [busy, createSessionMutation, currentChatIsEmpty, documentId, hasNoSessions, sessionId]);
+  }, [busy, createSessionMutation, currentChatIsEmpty, documentId, selectSession, sessionId, sessions]);
 
   const deleteChat = useCallback(
     async (targetSessionId: string) => {

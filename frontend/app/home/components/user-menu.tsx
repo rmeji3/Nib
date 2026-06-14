@@ -12,7 +12,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SettingsIcon, KeyboardIcon, LogOutIcon, ChevronUpIcon } from 'lucide-react';
+import { SettingsIcon, LogOutIcon, ChevronUpIcon } from 'lucide-react';
 import type { User } from '@/app/features/auth/components/auth-provider';
 
 interface UserMenuProps {
@@ -108,11 +108,6 @@ export function UserMenu({ user, onSignOut, variant = 'sidebar', compact = false
             <SettingsIcon size={14} />
             Settings
             <DropdownMenuShortcut>{isMac ? '⌘,' : 'Ctrl+,'}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => router.push('/settings?tab=shortcuts')}>
-            <KeyboardIcon size={14} />
-            Keyboard shortcuts
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

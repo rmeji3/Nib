@@ -155,9 +155,9 @@ function RecentDocCard({ doc, onClick }: { doc: DocumentItem; onClick: () => voi
       type="button"
       disabled={!isAvailable}
       title={isAvailable ? doc.title : 'Storage file missing'}
-      className={`shrink-0 group flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-3 py-3 w-[210px] text-left transition ${
+      className={`shrink-0 group flex items-center gap-3 rounded-xl bg-[var(--bg-surface)] px-3 py-3 w-[210px] text-left transition ${
         isAvailable
-          ? 'hover:border-white/20 hover:bg-[var(--bg-elevated)]'
+          ? 'hover:bg-[var(--bg-elevated)]'
           : 'cursor-not-allowed opacity-60'
       }`}
     >
@@ -202,10 +202,10 @@ function CollectionCard({ collection, isActive, onClick, onDelete }: CollectionC
   return (
     <div
       onClick={onClick}
-      className={`group relative flex flex-col rounded-xl border cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg ${
+      className={`group relative flex flex-col rounded-xl cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg ${
         isActive
-          ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5'
-          : 'border-white/10 bg-[var(--bg-surface)] hover:border-white/20'
+          ? 'bg-[var(--accent)]/5'
+          : 'bg-[var(--bg-surface)]'
       }`}
     >
       <div className="p-4">
@@ -322,7 +322,7 @@ function DocumentCard({ doc, search, onClick, onDelete, onToggleStar, onRemoveFr
   const formatMeta = useFormattedMeta();
   const isAvailable = !!doc.storageUrl;
   return (
-    <div className={`group relative rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} transition flex flex-col h-full ${isAvailable ? 'hover:-translate-y-0.5 hover:shadow-lg' : 'opacity-75'} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`group relative rounded-xl ${isSelected ? 'bg-[var(--accent)]/5' : 'bg-[var(--bg-surface)]'} transition flex flex-col h-full ${isAvailable ? 'hover:-translate-y-0.5 hover:shadow-lg' : 'opacity-75'} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
       {isSelectionMode && (
         <div className={`absolute top-3 left-3 z-10 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -398,7 +398,7 @@ function TrashCard({ doc, onRestore, onDeleteForever, onClick, isRestoring, isDe
   const formatMeta = useFormattedMeta();
   return (
     <div 
-      className={`relative rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} p-4 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
+      className={`relative rounded-xl ${isSelected ? 'bg-[var(--accent)]/5' : 'bg-[var(--bg-surface)]'} p-4 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
       onClick={isSelectionMode ? onClick : undefined}
     >
       {isSelectionMode && (
@@ -411,20 +411,20 @@ function TrashCard({ doc, onRestore, onDeleteForever, onClick, isRestoring, isDe
       <p className="mt-1 text-xs text-[var(--text-faint)] truncate">{formatMeta(doc)}</p>
       <div className="mt-3 flex gap-2">
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)] transition disabled:opacity-50">
+          className="flex-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] transition disabled:opacity-50">
           {isRestoring
             ? <NibLogoSpinner size={12} transparent />
             : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
           }
-          {isRestoring ? 'Restoring...' : 'Restore'}
+          {isRestoring ? 'Restoring…' : 'Restore'}
         </button>
         <button type="button" onClick={onDeleteForever} disabled={isRestoring || isDeleting}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
+          className="flex-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition disabled:opacity-50">
           {isDeleting
             ? <NibLogoSpinner size={12} transparent />
             : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
           }
-          {isDeleting ? 'Deleting...' : 'Delete forever'}
+          {isDeleting ? 'Deleting…' : 'Delete'}
         </button>
       </div>
     </div>
@@ -469,7 +469,7 @@ function SkeletonGrid({ count = 4 }: { count?: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="animate-pulse rounded-xl border border-white/10 bg-[var(--bg-surface)] flex flex-col h-full">
+        <div key={i} className="animate-pulse rounded-xl bg-[var(--bg-surface)] flex flex-col h-full">
           <div className="p-4 flex-1 flex flex-col">
             <div className="mb-4 h-72 w-full rounded-md bg-white/5" />
             <div className="h-5 w-3/4 rounded bg-white/10" />
@@ -488,7 +488,7 @@ function SkeletonList({ count = 6 }: { count?: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="animate-pulse flex items-center gap-4 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-4 py-3">
+        <div key={i} className="animate-pulse flex items-center gap-4 rounded-xl bg-[var(--bg-surface)] px-4 py-3">
           <div className="h-9 w-7 rounded bg-white/5 shrink-0" />
           <div className="flex-1 space-y-1.5 min-w-0">
             <div className="h-4 w-3/4 rounded bg-white/10" />
@@ -518,7 +518,7 @@ interface DocumentListRowProps {
 function DocumentListRow({ doc, search, onClick, onDelete, onToggleStar, onRemoveFromCollection, isDeleting, isSelectionMode, isSelected }: DocumentListRowProps) {
   const formatMeta = useFormattedMeta();
   return (
-    <div className={`group flex items-center gap-3 rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} px-4 py-3 transition hover:border-white/20 hover:bg-[var(--bg-elevated)] ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`group flex items-center gap-3 rounded-xl ${isSelected ? 'bg-[var(--accent)]/5' : 'bg-[var(--bg-surface)]'} px-4 py-3 transition hover:bg-[var(--bg-elevated)] ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
       {isSelectionMode && (
         <div className={`shrink-0 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors ${isSelected ? 'bg-white border-white text-black' : 'border-white/30 bg-black/40 text-transparent'}`}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -570,7 +570,7 @@ function TrashListRow({ doc, onRestore, onDeleteForever, onClick, isRestoring, i
   const formatMeta = useFormattedMeta();
   return (
     <div 
-      className={`group flex items-center gap-3 rounded-xl border ${isSelected ? 'border-[var(--accent)] bg-[var(--accent)]/5' : 'border-white/10 bg-[var(--bg-surface)]'} px-4 py-3 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
+      className={`group flex items-center gap-3 rounded-xl ${isSelected ? 'bg-[var(--accent)]/5' : 'bg-[var(--bg-surface)]'} px-4 py-3 opacity-70 hover:opacity-100 transition-opacity ${isRestoring || isDeleting ? 'pointer-events-none' : ''} ${isSelectionMode ? 'cursor-pointer' : ''}`}
       onClick={isSelectionMode ? onClick : undefined}
     >
       {isSelectionMode && (
@@ -589,14 +589,14 @@ function TrashListRow({ doc, onRestore, onDeleteForever, onClick, isRestoring, i
       </div>
       <div className="shrink-0 flex items-center gap-2">
         <button type="button" onClick={onRestore} disabled={isRestoring || isDeleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)] transition disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] transition disabled:opacity-50">
           {isRestoring ? <NibLogoSpinner size={12} transparent /> : null}
           {isRestoring ? 'Restoring…' : 'Restore'}
         </button>
         <button type="button" onClick={onDeleteForever} disabled={isRestoring || isDeleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 rounded-md bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition disabled:opacity-50">
           {isDeleting ? <NibLogoSpinner size={12} transparent /> : null}
-          {isDeleting ? 'Deleting…' : 'Delete forever'}
+          {isDeleting ? 'Deleting…' : 'Delete'}
         </button>
       </div>
     </div>
@@ -1034,7 +1034,7 @@ export default function HomePage() {
             ) : (
               <div className="flex w-full max-w-3xl flex-col gap-2">
                 {/* Search bar row */}
-                <div className="flex items-center w-full rounded-xl border border-white/10 bg-[var(--bg-surface)] shadow-sm transition-all focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10">
+                <div className="flex items-center w-full rounded-xl bg-[var(--bg-surface)] shadow-sm transition-all focus-within:ring-1 focus-within:ring-white/10">
                   {/* Search input area */}
                   <div className="flex min-w-0 flex-1 items-center gap-3 pl-4 pr-2">
                     <svg className="shrink-0 text-[var(--text-faint)]" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -1159,7 +1159,7 @@ export default function HomePage() {
 
                 {/* Featured most-recent card */}
                 {!isSearchActive && isLoading && (
-                  <div className="mt-7 flex flex-col sm:flex-row gap-6 rounded-2xl border border-white/10 bg-[var(--bg-surface)] p-6 animate-pulse">
+                  <div className="mt-7 flex flex-col sm:flex-row gap-6 rounded-2xl bg-[var(--bg-surface)] p-6 animate-pulse">
                     <div className="relative shrink-0 w-[140px] h-[180px] hidden sm:block bg-white/5 rounded-[4px]" />
                     <div className="flex flex-col flex-1 items-start w-full gap-3">
                       <div className="h-6 w-48 rounded-full bg-white/5" />
@@ -1169,7 +1169,7 @@ export default function HomePage() {
                   </div>
                 )}
                 {!isSearchActive && sortedDocuments.length > 0 && (
-                  <div className="mt-7 flex flex-col sm:flex-row gap-6 rounded-2xl border border-white/10 bg-[var(--bg-surface)] p-6 shadow-sm">
+                  <div className="mt-7 flex flex-col sm:flex-row gap-6 rounded-2xl bg-[var(--bg-surface)] p-6 shadow-sm">
                     <div className="relative shrink-0 w-[140px] h-[180px] hidden sm:block mt-1">
                       <div className="doc-stack-back absolute top-2 left-2 w-full h-full rounded-[4px] transform rotate-3" />
                       <div className="doc-stack-front absolute top-1 left-1 w-full h-full rounded-[4px] transform rotate-1" />
@@ -1197,10 +1197,10 @@ export default function HomePage() {
                           onToggle={() => toggleStar.mutate(sortedDocuments[0].id)}
                           size={16}
                           label={sortedDocuments[0].isStarred ? 'Starred' : 'Star'}
-                          className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95 ${
                             sortedDocuments[0].isStarred
-                              ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
-                              : 'border-white/10 bg-transparent text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)]'
+                              ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
+                              : 'bg-transparent text-[var(--text-dim)] hover:bg-white/5 hover:text-[var(--text)]'
                           }`}
                         />
                       </div>
@@ -1226,7 +1226,7 @@ export default function HomePage() {
                     <div className="flex gap-2.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {recentLoading
                         ? Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="animate-pulse shrink-0 flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-3 py-3 w-[210px]">
+                            <div key={i} className="animate-pulse shrink-0 flex items-center gap-3 rounded-xl bg-[var(--bg-surface)] px-3 py-3 w-[210px]">
                               <div className="h-9 w-7 rounded bg-white/5 shrink-0" />
                               <div className="flex-1 space-y-1.5">
                                 <div className="h-3 w-3/4 rounded bg-white/10" />
@@ -1268,7 +1268,7 @@ export default function HomePage() {
                         />
                       ))}
                       <button type="button" onClick={() => setCreateCollectionOpen(true)}
-                        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 p-4 text-[var(--text-faint)] transition hover:border-white/30 hover:text-[var(--text-dim)] hover:bg-[var(--bg-surface)] min-h-[100px]">
+                        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border-strong)] p-4 text-[var(--text-faint)] transition hover:border-[var(--text-faint)] hover:text-[var(--text-dim)] hover:bg-[var(--bg-surface)] min-h-[100px]">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                         </svg>
@@ -1326,7 +1326,7 @@ export default function HomePage() {
                     }
                     {viewMode === 'grid' && (
                       <button type="button" onClick={() => setUploadOpen(true)}
-                        className="min-h-[220px] rounded-xl border border-dashed border-white/20 bg-transparent p-4 text-center text-sm text-[var(--text-dim)] transition hover:border-white/40 hover:bg-[var(--bg-surface)] flex flex-col items-center justify-center gap-3">
+                        className="min-h-[220px] rounded-xl border border-dashed border-[var(--border-strong)] bg-transparent p-4 text-center text-sm text-[var(--text-dim)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-surface)] flex flex-col items-center justify-center gap-3">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-faint)]">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                         </svg>

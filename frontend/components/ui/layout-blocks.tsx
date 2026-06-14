@@ -8172,12 +8172,15 @@ export function OcrBlockButton({
   onFocusBlock,
   onClick,
   onMouseLeave,
+  sourceNumber,
 }: {
   block: OcrBlock
   isActive: boolean
   onFocusBlock: (block: OcrBlock) => void
   onClick?: () => void
   onMouseLeave?: () => void
+  /** Matches inline citation chip number in chat source cards */
+  sourceNumber?: number
 }) {
   const style = BLOCK_STYLES[block.type] || BLOCK_STYLES["paragraph"]
 
@@ -8189,13 +8192,18 @@ export function OcrBlockButton({
       onMouseLeave={onMouseLeave}
       onClick={onClick}
       className={cn(
-        "w-full rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "w-full rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         isActive && style.ring
       )}
     >
       <div className="min-w-0">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
+            {sourceNumber != null ? (
+              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded px-1 text-[11px] font-semibold leading-none bg-[var(--citation-soft)] text-[var(--citation-text)]">
+                {sourceNumber}
+              </span>
+            ) : null}
             <div
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",

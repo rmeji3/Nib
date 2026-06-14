@@ -62,6 +62,7 @@ This is a live developer guide and project directory index for the Next.js front
 
 #### Feature: `nib`
 - **Hooks**:
+  - [`use-indexing-display-progress.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-indexing-display-progress.ts)
   - [`use-ingestion-status.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-ingestion-status.ts)
   - [`use-merge-pdf.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-merge-pdf.ts)
   - [`use-nib-chat.ts`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/features/nib/hooks/use-nib-chat.ts)
@@ -73,8 +74,23 @@ This is a live developer guide and project directory index for the Next.js front
 
 ### Shared Global Components (`frontend/components`)
 
+- [`blocks/layout-blocks-block.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/blocks/layout-blocks-block.tsx)
+- [`pdf-block-resizable-shell.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/pdf-block-resizable-shell.tsx)
+- [`ui/button.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/button.tsx)
+- [`ui/document-viewer-sidebar.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/document-viewer-sidebar.tsx)
 - [`ui/drawer.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/drawer.tsx)
 - [`ui/dropdown-menu.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/dropdown-menu.tsx)
+- [`ui/file-thumbnail.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/file-thumbnail.tsx)
+- [`ui/input.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/input.tsx)
+- [`ui/layout-blocks.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/layout-blocks.tsx)
+- [`ui/pdf-viewer.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/pdf-viewer.tsx)
+- [`ui/popover.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/popover.tsx)
+- [`ui/resizable.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/resizable.tsx)
+- [`ui/scroll-area.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/scroll-area.tsx)
+- [`ui/select.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/select.tsx)
+- [`ui/separator.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/separator.tsx)
+- [`ui/spinner.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/spinner.tsx)
+- [`ui/tooltip.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/tooltip.tsx)
 
 <!-- END_AUTO_MAP -->
 
@@ -85,7 +101,13 @@ This is a live developer guide and project directory index for the Next.js front
 This section is maintained by AI coding agents to track architectural updates, new dependencies, or pattern adjustments. When adding new capabilities, append an entry to the log below.
 
 ### Log
-- **2026-06-13**: Extended the reactive icon animations. `StarButton` now anchors its burst to the icon and supports an optional `label`, so the featured "Most recent" card's Star/Starred button uses it too; a new shared `DeleteButton` gives the move-to-trash and remove-from-collection icons the same springy pop + burst (red/orange) in both the grid card and list row.
+- **2026-06-13**: Fixed chat citation chip numbering (`cite` is 1-based again) and collapse consecutive duplicate inline chips so repeated `[B2][B2]` no longer renders as `222`.
+- **2026-06-13**: Deduplicated overlapping chat citations when multiple retrieved chunks from the same paragraph are cited separately. `ChatService.extractCitations` and `buildMessageContent` now collapse same-page evidence with matching or overlapping excerpts so the UI shows one citation card per paragraph.
+- **2026-06-13**: Removed the assistant "Reviewed X sources" reasoning dropdown from `nib-chat.tsx`; citation blocks below answers remain the visible source UI.
+- **2026-06-13**: Numbered chat source cards to match inline citation chips: `Citation.number` is set during message parsing, shown on `OcrBlockButton` source cards, hover previews, and the evidence drawer.
+- **2026-06-13**: Restored the minimal full-screen indexing progress bar with chat-style thinking shimmer on the title and percent label; fill uses the same `thinking-shine` gradient in light and dark mode for stronger visibility without the prominent bordered panel.
+- **2026-06-13**: Made the full-screen indexing progress bar more prominent: `IndexingProgressBar` now supports a `prominent` variant (wider track, larger labels, gradient fill with shimmer), and `indexing-screen.tsx` wraps it in an accent-bordered panel.
+- **2026-06-13**: Tailored chat conversation starters to indexed document content. New `ConversationStarterService` generates four document-specific prompts from the ingestion summary via Gemini, stores them on the `document_summary` block's `extraction_metadata`, and falls back to category templates for legacy docs. `IngestionRunner` generates starters at index time; `ChatService.getConversationStarters` delegates to the service. Frontend `use-nib-chat.ts` waits until indexing completes before fetching starters and avoids showing generic defaults while indexing or loading. (`1 of N`, `2 of N`, …) with the bar derived from simulated pages instead of a disconnected percent creep. Added `use-indexing-display-progress.ts` and shared `indexing-progress-bar.tsx` so the bar creeps from a 5% floor and follows real backend progress when higher; wired into `indexing-screen.tsx`, `nib-viewer.tsx`, and `nib-chat.tsx` IndexingBanner. Added shared `app/components/indexing-screen.tsx` with a creeping progress bar that animates to 100% before calling `onFinished`; `/document/uploading` now shows that screen during upload and indexing and only navigates to the viewer after indexing completes and the bar finishes; `/document/[id]` reuses the same component for in-progress indexing so the document no longer flashes the spinner or viewer before the bar completes. `StarButton` now anchors its burst to the icon and supports an optional `label`, so the featured "Most recent" card's Star/Starred button uses it too; a new shared `DeleteButton` gives the move-to-trash and remove-from-collection icons the same springy pop + burst (red/orange) in both the grid card and list row.
 - **2026-06-13**: Made the document star button reactive. `use-documents.ts` `useToggleStarDocument` now does an optimistic flip across all cached `['documents']` lists (with rollback on error) so the icon changes instantly; `app/home/page.tsx` adds a shared `StarButton` component with a springy pop, an un-star settle, a radiating burst ring, and a glow on the active star, used by both the grid card and list row; `globals.css` adds `star-pop`/`star-pop-off`/`star-burst` keyframes.
 - **2026-06-13**: Turned the home-screen floating button into an animated speed-dial. `app/home/page.tsx` now tracks `fabOpen` state; the FAB rotates its `+` into an `×` and springs out two labeled actions ("New file" → upload dialog, "New collection" → create-collection dialog) with a dimming backdrop that closes the dial on outside click.
 - **2026-06-10**: Made queued chat messages visibly distinct in the UI. `nib-chat.tsx` now shows a "Waiting in queue" assistant byline pill plus helper copy for queued prompts, and `globals.css` adds a dashed queued bubble treatment.

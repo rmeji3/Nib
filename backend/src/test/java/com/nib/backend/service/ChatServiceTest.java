@@ -51,6 +51,8 @@ class ChatServiceTest {
     private final VectorSearchService vectorSearchService = mock(VectorSearchService.class);
     private final IngestionJobRepository ingestionJobRepository = mock(IngestionJobRepository.class);
     private final GeminiTextClient geminiTextClient = mock(GeminiTextClient.class);
+    private final ConversationStarterService conversationStarterService =
+            new ConversationStarterService(geminiTextClient, new ObjectMapper());
     private final CitationVerifier citationVerifier = mock(CitationVerifier.class);
     private final AnswerAuditRepository answerAuditRepository = mock(AnswerAuditRepository.class);
     private final SemanticCacheService semanticCacheService = mock(SemanticCacheService.class);
@@ -76,7 +78,8 @@ class ChatServiceTest {
             answerAuditRepository,
             semanticCacheService,
             rerankerService,
-            ragChatTracer
+            ragChatTracer,
+            conversationStarterService
     );
 
     @Test
@@ -397,7 +400,7 @@ class ChatServiceTest {
                 eq(documentId),
                 eq(versionId),
                 any(float[].class),
-                eq("rag-v9-deterministic-evaluative-verifier"),
+                eq("rag-v11-conversation-history-prompt"),
                 eq("gemini-2.5-flash"),
                 eq(0.06)
         )).thenReturn(Optional.of(new SemanticCacheService.AnswerCacheHit(
@@ -805,6 +808,94 @@ class ChatServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void extractCitationsIgnoresDocumentSummaryBlock() {
+        UUID documentId = UUID.randomUUID();
+        UUID summaryBlockId = UUID.randomUUID();
+        UUID textBlockId = UUID.randomUUID();
+
+        VectorSearchService.ChunkMatch summaryBlock = new VectorSearchService.ChunkMatch(
+                summaryBlockId,
+                documentId,
+                1,
+                0,
+                "Synthetic overview of the whole document.",
+                "document_summary",
+                0.05,
+                null,
+                null,
+                null
+        );
+        VectorSearchService.ChunkMatch textBlock = new VectorSearchService.ChunkMatch(
+                textBlockId,
+                documentId,
+                2,
+                0,
+                "The recommended steady-state flow rate is 2.4 L/min.",
+                "text",
+                0.12,
+                new com.nib.backend.dto.BBox(10.0, 20.0, 100.0, 40.0),
+                612.0,
+                792.0
+        );
+
+        List<CitationDto> citations = ReflectionTestUtils.invokeMethod(
+                service,
+                "extractCitations",
+                "The recommended steady-state flow rate is 2.4 L/min [B1].",
+                List.of(summaryBlock, textBlock)
+        );
+
+        assertThat(citations).hasSize(1);
+        assertThat(citations.get(0).blockId()).isEqualTo(textBlockId);
+        assertThat(citations.get(0).blockType()).isEqualTo("text");
+        assertThat(citations.get(0).sourceId()).isEqualTo("B1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void extractCitationsDedupesOverlappingChunksOnSamePage() {
+        UUID documentId = UUID.randomUUID();
+        UUID firstBlockId = UUID.randomUUID();
+        UUID secondBlockId = UUID.randomUUID();
+
+        VectorSearchService.ChunkMatch firstChunk = new VectorSearchService.ChunkMatch(
+                firstBlockId,
+                documentId,
+                4,
+                0,
+                "The recommended steady-state flow rate is 2.4 L/min under sustained training.",
+                "text",
+                0.10,
+                new com.nib.backend.dto.BBox(10.0, 20.0, 100.0, 40.0),
+                612.0,
+                792.0
+        );
+        VectorSearchService.ChunkMatch secondChunk = new VectorSearchService.ChunkMatch(
+                secondBlockId,
+                documentId,
+                4,
+                1,
+                "The recommended steady-state flow rate is 2.4 L/min under sustained training. Pump power rises super-linearly above the knee.",
+                "text",
+                0.11,
+                new com.nib.backend.dto.BBox(12.0, 22.0, 120.0, 44.0),
+                612.0,
+                792.0
+        );
+
+        List<CitationDto> citations = ReflectionTestUtils.invokeMethod(
+                service,
+                "extractCitations",
+                "The steady-state setpoint is 2.4 L/min [B1][B2].",
+                List.of(firstChunk, secondChunk)
+        );
+
+        assertThat(citations).hasSize(1);
+        assertThat(citations.get(0).blockId()).isEqualTo(firstBlockId);
+    }
+
+    @Test
     void verifyGroundingAcceptsMappedBlockCitations() {
         UUID documentId = UUID.randomUUID();
         UUID blockId = UUID.randomUUID();
@@ -839,7 +930,8 @@ class ChatServiceTest {
                 "verifyGrounding",
                 "Revenue was $42.3M in Q1 [B1].",
                 List.of(block),
-                List.of(citation)
+                List.of(citation),
+                "What was revenue?"
         );
 
         assertThat(verification.verified()).isTrue();
@@ -870,7 +962,8 @@ class ChatServiceTest {
                 "verifyGrounding",
                 "Revenue was $42.3M in Q1 [B99]. Profit was higher.",
                 List.of(block),
-                List.of()
+                List.of(),
+                "What was revenue?"
         );
 
         assertThat(verification.verified()).isFalse();
@@ -931,6 +1024,8 @@ class ChatServiceTest {
                 service,
                 "buildPrompt",
                 "What is the invoice total?",
+                "What is the invoice total?",
+                "",
                 List.of(maliciousBlock),
                 null
         );
@@ -965,6 +1060,8 @@ class ChatServiceTest {
                 service,
                 "buildPrompt",
                 "What are the weak points of this resume?",
+                "What are the weak points of this resume?",
+                "",
                 List.of(resumeBlock),
                 "resume"
         );
@@ -981,5 +1078,153 @@ class ChatServiceTest {
         assertThat(prompt).contains("helpful mentor");
         assertThat(prompt).contains("do not write a dry list of missing fields");
         assertThat(prompt).contains("not shown in the retrieved evidence");
+    }
+
+    @Test
+    void isBackgroundConceptQuestionDetectsDefinitionalQueries() {
+        assertThat(ChatService.isBackgroundConceptQuestion("what is react")).isTrue();
+        assertThat(ChatService.isBackgroundConceptQuestion("What is React?")).isTrue();
+        assertThat(ChatService.isBackgroundConceptQuestion("explain kubernetes")).isTrue();
+        assertThat(ChatService.isBackgroundConceptQuestion("what are the weak points of this resume")).isFalse();
+        assertThat(ChatService.isBackgroundConceptQuestion("what is the total revenue")).isFalse();
+        assertThat(ChatService.isBackgroundConceptQuestion("what is on page 3")).isFalse();
+        assertThat(ChatService.isBackgroundConceptQuestion("what was revenue")).isFalse();
+    }
+
+    @Test
+    void buildPromptUsesHybridBackgroundRulesForDefinitionalQuestions() {
+        UUID documentId = UUID.randomUUID();
+        VectorSearchService.ChunkMatch block = new VectorSearchService.ChunkMatch(
+                UUID.randomUUID(),
+                documentId,
+                17,
+                0,
+                "React Router: A library used for navigation between frontend components.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+
+        String prompt = ReflectionTestUtils.invokeMethod(
+                service,
+                "buildPrompt",
+                "what is react",
+                "what is react",
+                "",
+                List.of(block),
+                "technical"
+        );
+
+        assertThat(prompt).contains("BACKGROUND / DEFINITION question");
+        assertThat(prompt).contains("In this document:");
+        assertThat(prompt).contains("Do NOT conflate related but distinct terms");
+        assertThat(prompt).doesNotContain("Answer using ONLY the document content");
+    }
+
+    @Test
+    void buildPromptKeepsStrictGroundingForDocumentSpecificQuestions() {
+        UUID documentId = UUID.randomUUID();
+        VectorSearchService.ChunkMatch block = new VectorSearchService.ChunkMatch(
+                UUID.randomUUID(),
+                documentId,
+                1,
+                0,
+                "Total revenue was $12M.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+
+        String prompt = ReflectionTestUtils.invokeMethod(
+                service,
+                "buildPrompt",
+                "what is the total revenue",
+                "what is the total revenue",
+                "",
+                List.of(block),
+                "financial"
+        );
+
+        assertThat(prompt).contains("Answer using ONLY the document content");
+        assertThat(prompt).doesNotContain("BACKGROUND / DEFINITION question");
+    }
+
+    @Test
+    void computeGroundednessIgnoresUncitedBackgroundSentences() {
+        String answer = """
+                React is a JavaScript library for building user interfaces from reusable components.
+                In this document: React Router is used for navigation between frontend components [B1].
+                """;
+        Double groundedness = ReflectionTestUtils.invokeMethod(
+                service,
+                "computeGroundedness",
+                answer,
+                "what is react"
+        );
+
+        assertThat(groundedness).isNotNull();
+        assertThat(groundedness).isEqualTo(1.0);
+    }
+
+    @Test
+    void buildPromptIncludesRecentConversationForFollowUps() {
+        UUID documentId = UUID.randomUUID();
+        VectorSearchService.ChunkMatch block = new VectorSearchService.ChunkMatch(
+                UUID.randomUUID(),
+                documentId,
+                1,
+                0,
+                "React Router handles navigation between dashboard pages.",
+                "text",
+                0.1,
+                null,
+                null,
+                null
+        );
+        String history = """
+                User: what is react
+                Assistant: React is a JavaScript UI library. In this document: React Router handles navigation [B1].
+                """;
+
+        String prompt = ReflectionTestUtils.invokeMethod(
+                service,
+                "buildPrompt",
+                "explain react router simply",
+                "can you simplify that?",
+                history,
+                List.of(block),
+                "technical"
+        );
+
+        assertThat(prompt).contains("# Recent Conversation (follow-up context only");
+        assertThat(prompt).contains("User: what is react");
+        assertThat(prompt).contains("Question: can you simplify that?");
+        assertThat(prompt).contains("Standalone interpretation for retrieval: explain react router simply");
+        assertThat(prompt).contains("Never cite prior assistant messages");
+    }
+
+    @Test
+    void formatConversationHistoryTruncatesLongAssistantAnswers() {
+        String longAnswer = "A".repeat(600);
+        List<ChatMessage> messages = List.of(
+                ChatMessage.builder().role("user").content("Tell me more").build(),
+                ChatMessage.builder().role("assistant").content(longAnswer).build(),
+                ChatMessage.builder().role("user").content("What is React?").build()
+        );
+
+        String history = ReflectionTestUtils.invokeMethod(
+                service,
+                "formatConversationHistory",
+                messages,
+                true
+        );
+
+        assertThat(history).contains("User: What is React?");
+        assertThat(history).contains("A".repeat(500) + "...");
+        assertThat(history).doesNotContain("Tell me more");
     }
 }

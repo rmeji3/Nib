@@ -87,11 +87,10 @@ export function EvidenceDrawer({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {citations.map((citation, index) => (
+                {citations.map((citation) => (
                   <EvidenceRow
-                    key={`${citation.blockId}-${index}`}
+                    key={`${citation.blockId}-${citation.number}`}
                     citation={citation}
-                    index={index + 1}
                     focused={citation.blockId === focusedBlockId}
                     onJumpTo={onJumpTo}
                   />
@@ -107,12 +106,10 @@ export function EvidenceDrawer({
 
 function EvidenceRow({
   citation,
-  index,
   focused,
   onJumpTo,
 }: {
   citation: Citation;
-  index: number;
   focused: boolean;
   onJumpTo: (citation: Citation) => void;
 }) {
@@ -132,8 +129,8 @@ function EvidenceRow({
     >
       <header className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12px]">
-          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[var(--accent-soft)] px-1.5 font-semibold text-[var(--accent-text)]">
-            {index}
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[var(--citation-soft)] px-1.5 font-semibold text-[var(--citation-text)]">
+            {citation.number}
           </span>
           <span className="font-medium text-[var(--text)]">{citation.label}</span>
         </div>

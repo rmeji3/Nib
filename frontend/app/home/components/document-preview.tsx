@@ -8,7 +8,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 export default function DocumentPreview({
   documentId,
-  className = 'mb-4 h-72 w-full rounded-md bg-gradient-to-b from-[#1d2129] to-[#15181f] flex items-start justify-center overflow-hidden relative',
+  className = 'mb-4 h-72 w-full rounded-md bg-gradient-to-b from-[var(--bg-elevated)] to-[var(--bg-surface)] flex items-start justify-center overflow-hidden relative',
   pageWidth = 200,
   pageClassName = 'shadow-md overflow-hidden rounded-sm border border-white/10 mt-4',
 }: {

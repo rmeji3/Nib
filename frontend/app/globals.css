@@ -10,6 +10,11 @@
   --bg-surface: #11141a;
   --bg-elevated: #181c24;
   --bg-hover: #1f242d;
+  /* Shared indigo used by chat bubbles, selected chats, suggestions, etc. */
+  --chat-accent: rgba(99, 102, 241, 0.22);
+  --chat-accent-hover: rgba(99, 102, 241, 0.3);
+  --chat-accent-line: rgba(99, 102, 241, 0.55);
+  --chat-accent-glow: rgba(99, 102, 241, 0.45);
   --border-faint: rgba(255, 255, 255, 0.06);
   --border: oklch(0.922 0 0);
   --border-strong: rgba(255, 255, 255, 0.18);
@@ -24,6 +29,10 @@
   --accent-glow-a: oklch(0.74 0.11 250);
   --accent-glow-b: oklch(0.78 0.10 290);
   --accent-glow-c: oklch(0.82 0.09 200);
+  --shimmer-low: color-mix(in oklch, var(--text-dim) 82%, black);
+  --shimmer-mid: var(--text);
+  --shimmer-hot: #ffffff;
+  --shimmer-accent: var(--accent-text);
   --citation: oklch(0.83 0.12 80);
   --citation-soft: oklch(0.83 0.12 80 / 0.18);
   --citation-line: oklch(0.83 0.12 80 / 0.55);
@@ -81,6 +90,10 @@
   --bg-surface: #ffffff;
   --bg-elevated: #f3f4f6;
   --bg-hover: #e5e7eb;
+  --chat-accent: rgba(99, 102, 241, 0.12);
+  --chat-accent-hover: rgba(99, 102, 241, 0.18);
+  --chat-accent-line: rgba(99, 102, 241, 0.45);
+  --chat-accent-glow: rgba(99, 102, 241, 0.35);
   --border-faint: rgba(0, 0, 0, 0.05);
   --border-strong: rgba(0, 0, 0, 0.15);
   --text: #111827;
@@ -91,6 +104,10 @@
   --accent-soft: oklch(0.74 0.08 240 / 0.12);
   --accent-line: oklch(0.74 0.08 240 / 0.3);
   --accent-text: oklch(0.4 0.07 240);
+  --shimmer-low: color-mix(in oklch, var(--text-dim) 62%, white);
+  --shimmer-mid: oklch(0.38 0.1 260);
+  --shimmer-hot: color-mix(in oklch, var(--accent-text) 35%, white);
+  --shimmer-accent: oklch(0.42 0.14 260);
   --citation: oklch(0.6 0.12 80);
   --citation-soft: oklch(0.83 0.12 80 / 0.2);
   --citation-line: oklch(0.83 0.12 80 / 0.4);
@@ -206,14 +223,14 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.4));
   border: 3px solid transparent;
   background-clip: padding-box;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.6);
+  background-color: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.6));
 }
 
 ::-webkit-scrollbar-corner {
@@ -222,7 +239,12 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.4)) transparent;
+}
+
+.light {
+  --scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
 }
 
 button,
@@ -511,8 +533,9 @@ button:disabled {
 }
 
 .msg-user .msg-bubble {
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
+  border: none;
+  background: var(--chat-accent);
+  color: var(--text);
 }
 
 .msg-assistant {
@@ -667,71 +690,6 @@ button:disabled {
   background: var(--text-dim);
 }
 
-.reasoning {
-  margin-bottom: 6px;
-  overflow: hidden;
-  border: 1px solid var(--border-faint);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.014);
-}
-
-.reasoning-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  color: var(--text-dim);
-  cursor: pointer;
-  user-select: none;
-}
-
-.reasoning-headline {
-  flex: 1;
-}
-
-.reasoning-body {
-  display: none;
-  padding: 0 10px 10px 28px;
-  color: var(--text-dim);
-  font-size: 11.5px;
-}
-
-.reasoning.open .reasoning-body {
-  display: block;
-}
-
-.reasoning-step {
-  display: flex;
-  gap: 8px;
-}
-
-.reasoning-step .dot {
-  margin-top: 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.reasoning-step.done .dot {
-  background: var(--success);
-}
-
-.reasoning-spin {
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid var(--text-faint);
-  border-top-color: transparent;
-  border-radius: 999px;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .cite-inline {
   display: inline-flex;
   align-items: center;
@@ -740,7 +698,6 @@ button:disabled {
   height: 16px;
   margin: 0 2px;
   padding: 0 4px;
-  border: 1px solid var(--citation-line);
   border-radius: 4px;
   background: var(--citation-soft);
   color: var(--citation-text);
@@ -764,9 +721,27 @@ button:disabled {
 }
 
 .cite-preview-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 4px;
   color: var(--citation-text);
   font-size: 11px;
+}
+
+.cite-preview-number {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--citation-soft);
+  color: var(--citation-text);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .cite-preview-body,
@@ -786,9 +761,8 @@ button:disabled {
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
-  border: 1px solid var(--border-faint);
   border-radius: 8px;
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   padding: 8px 10px;
   text-align: left;
   cursor: pointer;
@@ -832,7 +806,7 @@ button:disabled {
   width: 60px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in oklch, var(--text) 14%, transparent);
   overflow: hidden;
 }
 
@@ -868,37 +842,35 @@ button:disabled {
 }
 
 .thinking-text {
-  --thinking-shimmer-low: color-mix(in oklch, var(--text-dim) 82%, black);
-  --thinking-shimmer-mid: var(--text);
-  --thinking-shimmer-hot: #ffffff;
-  --thinking-shimmer-accent: var(--accent-text);
   display: inline-flex;
   align-items: center;
   gap: 5px;
   width: fit-content;
-  color: var(--thinking-shimmer-accent);
+  color: var(--shimmer-accent);
   filter: drop-shadow(0 0 10px color-mix(in oklch, var(--accent) 50%, transparent));
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0;
 }
 
-.thinking-label {
+.thinking-label,
+.indexing-shimmer-label {
   color: var(--text);
   text-shadow: 0 0 10px color-mix(in oklch, var(--accent) 40%, transparent);
 }
 
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .thinking-label {
+  .thinking-label,
+  .indexing-shimmer-label {
     background: linear-gradient(
       110deg,
-      var(--thinking-shimmer-low) 0%,
-      var(--thinking-shimmer-low) 32%,
-      var(--thinking-shimmer-mid) 44%,
-      var(--thinking-shimmer-hot) 50%,
-      var(--thinking-shimmer-accent) 58%,
-      var(--thinking-shimmer-low) 72%,
-      var(--thinking-shimmer-low) 100%
+      var(--shimmer-low) 0%,
+      var(--shimmer-low) 32%,
+      var(--shimmer-mid) 44%,
+      var(--shimmer-hot) 50%,
+      var(--shimmer-accent) 58%,
+      var(--shimmer-low) 72%,
+      var(--shimmer-low) 100%
     );
     background-size: 260% 100%;
     background-clip: text;
@@ -910,7 +882,8 @@ button:disabled {
   }
 }
 
-.thinking-label::selection {
+.thinking-label::selection,
+.indexing-shimmer-label::selection {
   color: var(--bg-base);
   -webkit-text-fill-color: var(--bg-base);
   background: var(--accent-text);
@@ -926,6 +899,44 @@ button:disabled {
   }
 }
 
+.indexing-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, #6366f1 28%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in oklch, var(--text) 10%, transparent);
+}
+
+.indexing-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    110deg,
+    #6366f1 0%,
+    color-mix(in oklch, #6366f1 60%, white) 35%,
+    #ffffff 50%,
+    color-mix(in oklch, #6366f1 60%, white) 65%,
+    #6366f1 100%
+  );
+  background-size: 260% 100%;
+  animation: thinking-shine 1.75s linear infinite;
+  box-shadow:
+    0 0 12px color-mix(in oklch, #6366f1 55%, transparent),
+    0 0 24px color-mix(in oklch, #6366f1 25%, transparent);
+  transition: width 500ms ease-out;
+}
+
+.light .indexing-progress-track {
+  background: color-mix(in oklch, #6366f1 22%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in oklch, var(--text) 8%, transparent);
+}
+
+.light .indexing-progress-fill {
+  box-shadow:
+    0 0 10px color-mix(in oklch, #6366f1 45%, transparent),
+    0 0 20px color-mix(in oklch, #6366f1 18%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .answer-reveal-block,
   .answer-reveal-item,
@@ -934,7 +945,13 @@ button:disabled {
     animation: none;
   }
 
-  .thinking-label {
+  .thinking-label,
+  .indexing-shimmer-label {
+    animation: none;
+    background-position: 50% 0;
+  }
+
+  .indexing-progress-fill {
     animation: none;
     background-position: 50% 0;
   }
@@ -1001,23 +1018,18 @@ button:disabled {
 }
 
 /* ── Stacked "pages" behind the featured most-recent doc ──
-   White tints for the default dark theme; dark tints under .light so the
-   stack stays visible against the white card surface. */
+   Solid (non-translucent) borderless paper layers, theme-aware. */
 .doc-stack-back {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: #262b34;
 }
 .doc-stack-front {
-  background: rgba(255, 255, 255, 0.20);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: #333945;
 }
 .light .doc-stack-back {
   background: #e5e7eb;
-  border-color: rgba(0, 0, 0, 0.12);
 }
 .light .doc-stack-front {
   background: #d1d5db;
-  border-color: rgba(0, 0, 0, 0.18);
 }
 
 /* .dark block removed — all vars are dark by default in :root */
