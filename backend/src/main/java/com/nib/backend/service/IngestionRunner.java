@@ -69,6 +69,7 @@ public class IngestionRunner {
     private final ObjectMapper objectMapper;
     private final SemanticCacheService semanticCacheService;
     private final CostTelemetryService costTelemetryService;
+    private final ConversationStarterService conversationStarterService;
 
     private static final String EMBED_MODEL = "mistral-embed";
     private static final String BLOCK_TEXT = "text";
@@ -321,16 +322,6 @@ public class IngestionRunner {
 
                 String summary = visionService.generateDocumentSummary(firstPageImage, combined);
                 if (summary != null && !summary.isBlank()) {
-                    pending.add(new PendingBlock(
-                            1,                  // anchored to page 1 for citation purposes
-                            0,
-                            summary,
-                            BLOCK_DOC_SUMMARY,
-                            null, null, null,    // no bbox — this is a synthetic block
-                            null, null, null, null, null, null, null, null, null
-                    ));
-                    log.info("Added document_summary block for document {} — summary:\n{}", documentId, summary);
-
                     // Phase 4 — extract document type from the summary's TYPE: line
                     // and persist it on the document for type-aware prompting.
                     String docType = extractDocType(summary);
@@ -342,6 +333,39 @@ public class IngestionRunner {
                         documentRepository.save(doc);
                         log.info("Document type classified as '{}' for document {}", docType, documentId);
                     }
+
+                    String summaryMetadata = null;
+                    try {
+                        var signals = conversationStarterService.signalsFromBlockTypes(
+                                pending.stream().map(PendingBlock::blockType).toList()
+                        );
+                        var tailoredStarters = conversationStarterService.generateTailoredStarters(
+                                summary,
+                                doc.getDocType(),
+                                doc.getPageCount(),
+                                doc.getOriginalFilename(),
+                                signals
+                        );
+                        if (!tailoredStarters.isEmpty()) {
+                            summaryMetadata = conversationStarterService.toExtractionMetadata(tailoredStarters);
+                            log.info("Generated {} tailored conversation starter(s) for document {}",
+                                    tailoredStarters.size(), documentId);
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Conversation starter generation failed for document {}: {}",
+                                documentId, ex.getMessage());
+                    }
+
+                    pending.add(new PendingBlock(
+                            1,                  // anchored to page 1 for citation purposes
+                            0,
+                            summary,
+                            BLOCK_DOC_SUMMARY,
+                            null, null, null,    // no bbox — this is a synthetic block
+                            null, null, null, null, null, null, null, null,
+                            summaryMetadata
+                    ));
+                    log.info("Added document_summary block for document {} — summary:\n{}", documentId, summary);
                 } else {
                     warnings.add("Document summary generation failed; overview questions may be less reliable");
                 }

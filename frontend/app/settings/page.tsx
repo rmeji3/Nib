@@ -5,28 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../features/auth/hooks/use-auth';
 import { ProtectedRoute } from '../features/auth/components/protected-route';
 import { NibLogo } from '../components/nib-logo';
-import { useSettings, ACCENT_PRESETS, type AccentColor } from './hooks/use-settings';
+import { useSettings } from './hooks/use-settings';
 import { CostDashboard } from './components/cost-dashboard';
 import {
   UserIcon, PaletteIcon, BookOpenIcon, MessageSquareIcon,
-  ShieldIcon, KeyboardIcon, InfoIcon, ArrowLeftIcon, CheckIcon,
+  ShieldIcon, InfoIcon, ArrowLeftIcon,
   RotateCcwIcon, AlertTriangleIcon,
 } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 
-// ─── OS detection (SSR-safe) ──────────────────────────────────────────────────
-
-function useIsMac() {
-  const [isMac, setIsMac] = useState(false);
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad|iPod/i.test(navigator.platform));
-  }, []);
-  return isMac;
-}
-
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-type TabId = 'profile' | 'appearance' | 'reader' | 'ai' | 'privacy' | 'shortcuts' | 'about';
+type TabId = 'profile' | 'appearance' | 'reader' | 'ai' | 'privacy' | 'about';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',    label: 'Profile',        icon: <UserIcon size={15} /> },
@@ -34,26 +24,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'reader',     label: 'PDF Reader',     icon: <BookOpenIcon size={15} /> },
   { id: 'ai',         label: 'AI & Chat',      icon: <MessageSquareIcon size={15} /> },
   { id: 'privacy',    label: 'Privacy & Data', icon: <ShieldIcon size={15} /> },
-  { id: 'shortcuts',  label: 'Shortcuts',      icon: <KeyboardIcon size={15} /> },
   { id: 'about',      label: 'About',          icon: <InfoIcon size={15} /> },
-];
-
-// ─── Shortcuts data ───────────────────────────────────────────────────────────
-
-type OsKeys = { mac: string[]; win: string[] };
-
-const SHORTCUTS: Array<{ keys: OsKeys; action: string }> = [
-  { keys: { mac: ['⌘', 'K'],   win: ['Ctrl', 'K']   }, action: 'Open command palette'      },
-  { keys: { mac: ['⌘', ','],   win: ['Ctrl', ',']   }, action: 'Open settings'             },
-  { keys: { mac: ['⌘', 'U'],   win: ['Ctrl', 'U']   }, action: 'Upload a PDF'              },
-  { keys: { mac: ['⌘', '/'],   win: ['Ctrl', '/']   }, action: 'Focus AI chat input'       },
-  { keys: { mac: ['⌘', '↑/↓'], win: ['Ctrl', '↑/↓'] }, action: 'Navigate between pages'   },
-  { keys: { mac: ['⌘', '+'],   win: ['Ctrl', '+']   }, action: 'Zoom in'                   },
-  { keys: { mac: ['⌘', '−'],   win: ['Ctrl', '−']   }, action: 'Zoom out'                  },
-  { keys: { mac: ['⌘', '0'],   win: ['Ctrl', '0']   }, action: 'Reset zoom'                },
-  { keys: { mac: ['⌥', '←'],   win: ['Alt', '←']    }, action: 'Back to library'           },
-  { keys: { mac: ['Esc'],      win: ['Esc']          }, action: 'Close modal / panel'       },
-  { keys: { mac: ['?'],        win: ['?']            }, action: 'Show keyboard shortcuts'   },
 ];
 
 // ─── Reusable primitives ───────────────────────────────────────────────────────
@@ -142,14 +113,6 @@ function Select<T extends string>({
   );
 }
 
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="inline-flex min-w-[1.6rem] items-center justify-center rounded-md border border-white/10 bg-[var(--bg-surface)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-dim)] shadow-sm">
-      {children}
-    </kbd>
-  );
-}
-
 // ─── Tab content ──────────────────────────────────────────────────────────────
 
 function ProfileTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
@@ -180,24 +143,6 @@ function ProfileTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>['us
         <div>
           <p className="text-base font-semibold text-[var(--text)]">{user.name}</p>
           <p className="text-sm text-[var(--text-faint)]">{user.email}</p>
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-dim)]">
-            {user.provider === 'google' ? (
-              <>
-                <svg width="10" height="10" viewBox="0 0 24 24" className="text-blue-400">
-                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Google account
-              </>
-            ) : (
-              <>
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                Email &amp; password
-              </>
-            )}
-          </span>
         </div>
       </div>
 
@@ -208,16 +153,7 @@ function ProfileTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>['us
         <SettingRow label="Email address" description="Used to sign in to your account">
           <p className="text-sm text-[var(--text-faint)]">{user.email}</p>
         </SettingRow>
-        <SettingRow label="User ID" description="Your unique account identifier">
-          <p className="max-w-[160px] truncate font-mono text-xs text-[var(--text-faint)]">
-            {user.id}
-          </p>
-        </SettingRow>
       </SettingCard>
-
-      <p className="text-xs text-[var(--text-faint)]">
-        Profile editing is coming soon. Name and avatar changes will be available in a future release.
-      </p>
     </div>
   );
 }
@@ -228,36 +164,6 @@ function AppearanceTab() {
     <div>
       <SectionTitle>Appearance</SectionTitle>
       <SettingCard className="mb-6">
-        <SettingRow
-          label="Accent color"
-          description="Applied to highlights, chat glows, and active states"
-        >
-          <div className="flex items-center gap-2">
-            {(Object.keys(ACCENT_PRESETS) as AccentColor[]).map(color => {
-              const preset = ACCENT_PRESETS[color];
-              const active = settings.accentColor === color;
-              return (
-                <button
-                  key={color}
-                  type="button"
-                  title={preset.label}
-                  onClick={() => update('accentColor', color)}
-                  className={`relative h-6 w-6 rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 ${
-                    active ? 'scale-110 ring-2 ring-white/50 ring-offset-1 ring-offset-[var(--bg-elevated)]' : ''
-                  }`}
-                  style={{ background: preset.hex }}
-                >
-                  {active && (
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <CheckIcon size={10} className="text-white drop-shadow" />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </SettingRow>
-
         <SettingRow
           label="Compact sidebar"
           description="Reduce vertical spacing in the navigation sidebar"
@@ -527,60 +433,6 @@ function PrivacyTab() {
   );
 }
 
-function ShortcutsTab() {
-  const isMac = useIsMac();
-
-  return (
-    <div>
-      <SectionTitle>Keyboard Shortcuts</SectionTitle>
-
-      {/* OS badge */}
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-xs text-[var(--text-faint)]">Showing shortcuts for</span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-[var(--bg-elevated)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-dim)]">
-          {isMac ? (
-            <>
-              <svg width="10" height="12" viewBox="0 0 814 1000" fill="currentColor" className="opacity-70">
-                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-42.2-150.8-109.2c-43-63.1-82.8-160.6-82.8-253.6 0-167.7 109.5-256.7 217-256.7 63.6 0 116.4 41.8 155.7 41.8 37.6 0 96.8-43.7 164-43.7 26 0 108 2.6 163.3 95.3zm-202.6-158.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/>
-              </svg>
-              macOS
-            </>
-          ) : (
-            <>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="opacity-70">
-                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.801"/>
-              </svg>
-              Windows / Linux
-            </>
-          )}
-        </span>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-white/8 bg-[var(--bg-elevated)]">
-        {SHORTCUTS.map(({ keys, action }, i) => {
-          const activeKeys = isMac ? keys.mac : keys.win;
-          return (
-            <div
-              key={i}
-              className="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-0"
-            >
-              <span className="text-sm text-[var(--text-dim)]">{action}</span>
-              <div className="flex items-center gap-1">
-                {activeKeys.map((key, j) => (
-                  <Kbd key={j}>{key}</Kbd>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="mt-4 text-xs text-[var(--text-faint)]">
-        Full keyboard shortcut customization is coming in a future release.
-      </p>
-    </div>
-  );
-}
 
 function AboutTab() {
   return (
@@ -600,21 +452,10 @@ function AboutTab() {
         <SettingRow label="Version">
           <span className="font-mono text-xs text-[var(--text-faint)]">0.1.0-alpha</span>
         </SettingRow>
-        <SettingRow label="Frontend">
-          <span className="text-xs text-[var(--text-faint)]">Next.js 15 · TypeScript · TailwindCSS v4</span>
-        </SettingRow>
-        <SettingRow label="Backend">
-          <span className="text-xs text-[var(--text-faint)]">Spring Boot 3 · Java 17 · Supabase</span>
-        </SettingRow>
-        <SettingRow label="AI">
-          <span className="text-xs text-[var(--text-faint)]">Claude (multimodal) · pgvector RAG</span>
-        </SettingRow>
       </SettingCard>
 
       <div className="flex flex-wrap gap-2">
         {[
-          { label: 'Report a bug', href: '#' },
-          { label: 'Changelog',    href: '#' },
           { label: 'Privacy policy', href: '#' },
         ].map(link => (
           <a
@@ -709,7 +550,6 @@ function SettingsContent() {
               {activeTab === 'reader'     && <ReaderTab />}
               {activeTab === 'ai'         && <AiTab />}
               {activeTab === 'privacy'    && <PrivacyTab />}
-              {activeTab === 'shortcuts'  && <ShortcutsTab />}
               {activeTab === 'about'      && <AboutTab />}
             </div>
           </div>

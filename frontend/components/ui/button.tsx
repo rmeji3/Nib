@@ -46,12 +46,16 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  render,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /** Render as a custom element, merging button props onto it (Base UI style). */
+    render?: React.ReactElement
   }) {
-  const Comp = asChild ? Slot.Root : "button"
+  const Comp = asChild || render ? Slot.Root : "button"
 
   return (
     <Comp
@@ -60,7 +64,9 @@ function Button({
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {render ?? children}
+    </Comp>
   )
 }
 

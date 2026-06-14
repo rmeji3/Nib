@@ -246,6 +246,23 @@ class CitationVerifierTest {
                 .contains("verifier-failed");
     }
 
+    @Test
+    void backgroundQuestionsSkipUncitedGeneralKnowledge() {
+        CitationVerifier.VerificationResult result = verifier.verify(
+                "what is react",
+                """
+                React is a JavaScript library for building user interfaces from reusable components.
+                In this document: React Router is used for navigation between frontend components such as dashboard pages and client views [B1].
+                """,
+                List.of(chunk("React Router: A library used for navigation between frontend components, such as dashboard pages and client views."))
+        );
+
+        assertThat(result.verified()).isTrue();
+        assertThat(result.refused()).isFalse();
+        assertThat(result.issues()).isEmpty();
+        verifyNoInteractions(geminiTextClient);
+    }
+
     private static VectorSearchService.ChunkMatch chunk(String text) {
         return new VectorSearchService.ChunkMatch(
                 UUID.randomUUID(),

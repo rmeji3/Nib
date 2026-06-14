@@ -8,6 +8,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useSettings } from '../../settings/hooks/use-settings';
 import { LogoLoader } from '../../components/logo-loader';
+import { IndexingProgressBar } from '../../components/indexing-progress-bar';
+import { useIndexingDisplay } from './hooks/use-indexing-display-progress';
 import { NibLogo } from '../../components/nib-logo';
 import {
   DropdownMenu,
@@ -54,8 +56,8 @@ export const PROMPT_LIBRARY: PromptLibraryEntry[] = [
         '.',
       ],
       citations: [
-        { page: 3, blockId: 'p4-table1', label: 'Table 1', snippet: 'R6 · 8 × B200 · Peak 62.4 kW (commissioned Feb 28, 9-day window).' },
-        { page: 3, blockId: 'p4-discussion', label: '§3, p.4', snippet: 'R6 exceeds the original 32 kW per-rack design budget by 95%...' },
+        { number: 1, page: 3, blockId: 'p4-table1', label: 'Table 1', snippet: 'R6 · 8 × B200 · Peak 62.4 kW (commissioned Feb 28, 9-day window).' },
+        { number: 2, page: 3, blockId: 'p4-discussion', label: '§3, p.4', snippet: 'R6 exceeds the original 32 kW per-rack design budget by 95%...' },
       ],
       confidence: 0.92,
     },
@@ -81,8 +83,8 @@ export const PROMPT_LIBRARY: PromptLibraryEntry[] = [
         '.',
       ],
       citations: [
-        { page: 4, blockId: 'p5-figure3', label: 'Figure 3, p.5', snippet: 'Sustained training throughput as a function of secondary coolant flow rate. Knee at 2.4 L/min...' },
-        { page: 4, blockId: 'p5-recommendation', label: '§4, p.5', snippet: 'We adopt 2.4 L/min as the nominal setpoint for steady-state operation...' },
+        { number: 1, page: 4, blockId: 'p5-figure3', label: 'Figure 3, p.5', snippet: 'Sustained training throughput as a function of secondary coolant flow rate. Knee at 2.4 L/min...' },
+        { number: 2, page: 4, blockId: 'p5-recommendation', label: '§4, p.5', snippet: 'We adopt 2.4 L/min as the nominal setpoint for steady-state operation...' },
       ],
       confidence: 0.95,
     },
@@ -110,9 +112,9 @@ export const PROMPT_LIBRARY: PromptLibraryEntry[] = [
         '.',
       ],
       citations: [
-        { page: 2, blockId: 'p3-arch', label: '§2, p.3', snippet: 'Primary facility loop carries water at 18–22 °C from rooftop dry coolers...' },
-        { page: 2, blockId: 'p3-figure1', label: 'Figure 1, p.3', snippet: 'Two-stage cooling loop. Facility water is isolated from the treated technology coolant at the CDU...' },
-        { page: 2, blockId: 'p3-splits', label: '§2.1, p.3', snippet: 'Under typical training workloads, 68–74% of total rack heat is removed via D2C...' },
+        { number: 1, page: 2, blockId: 'p3-arch', label: '§2, p.3', snippet: 'Primary facility loop carries water at 18–22 °C from rooftop dry coolers...' },
+        { number: 2, page: 2, blockId: 'p3-figure1', label: 'Figure 1, p.3', snippet: 'Two-stage cooling loop. Facility water is isolated from the treated technology coolant at the CDU...' },
+        { number: 3, page: 2, blockId: 'p3-splits', label: '§2.1, p.3', snippet: 'Under typical training workloads, 68–74% of total rack heat is removed via D2C...' },
       ],
       confidence: 0.91,
     },
@@ -138,6 +140,7 @@ export const PROMPT_LIBRARY: PromptLibraryEntry[] = [
       ],
       citations: [
         {
+          number: 1,
           page: 4,
           blockId: 'p5-recommendation',
           label: '§4, p.5',
@@ -291,9 +294,9 @@ function answerWithCitationList(msg: AssistantMessage): string {
   if (msg.citations.length === 0) return answer;
 
   const sources = msg.citations
-    .map((citation, index) => {
+    .map((citation) => {
       const evidence = citation.textExcerpt || citation.snippet;
-      return `${index + 1}. ${citation.label}${evidence ? ` - ${evidence}` : ''}`;
+      return `${citation.number}. ${citation.label}${evidence ? ` - ${evidence}` : ''}`;
     })
     .join('\n');
 
@@ -538,38 +541,13 @@ function CitePreview({ data, anchor }: { data: Citation; anchor: HTMLElement }) 
 
   return createPortal(
     <div className="cite-preview" style={{ top, left }}>
-      <div className="cite-preview-label">{data.label} · click to jump</div>
+      <div className="cite-preview-label">
+        <span className="cite-preview-number">{data.number}</span>
+        {data.label} · click to jump
+      </div>
       <div className="cite-preview-body">{data.snippet}</div>
     </div>,
     document.body,
-  );
-}
-
-function ReasoningPanel({ steps, done }: { steps: string[]; done: boolean }) {
-  const [open, setOpen] = useState(false);
-
-  if (steps.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className={`reasoning${open ? ' open' : ''}`}>
-      <div className="reasoning-header" onClick={() => setOpen((value) => !value)}>
-        {done ? <Icon name="chevron-right" /> : <div className="reasoning-spin" />}
-        <span className="reasoning-headline">
-          {done ? `Reviewed ${steps.length} sources · ${(0.4 + steps.length * 0.3).toFixed(1)}s` : steps[steps.length - 1] || 'Searching document...'}
-        </span>
-        {done ? <span className="reasoning-toggle">{open ? 'hide' : 'show'}</span> : null}
-      </div>
-      <div className="reasoning-body">
-        {steps.map((step, index) => (
-          <div key={`${step}-${index}`} className={`reasoning-step${done || index < steps.length - 1 ? ' done' : ''}`}>
-            <span className="dot" />
-            <span>{step}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -677,7 +655,6 @@ function AssistantMessageView({
         Nib Assistant
         {msg.queued ? <span className="queued-pill">Waiting in queue</span> : null}
       </div>
-      {!msg.streaming && answerSettled ? <ReasoningPanel steps={msg.reasoningShown} done={msg.streamDone} /> : null}
       {msg.streaming ? (
         <div className="msg-bubble">
           <ThinkingText label={msg.queued ? 'Queued' : 'Thinking'} />
@@ -719,6 +696,7 @@ function AssistantMessageView({
               <OcrBlockButton
                 key={`${citation.label}-${index}`}
                 block={block}
+                sourceNumber={citation.number}
                 isActive={false}
                 onFocusBlock={() => onCiteHover(citation, undefined)}
                 onMouseLeave={() => onCiteHover(null)}
@@ -831,8 +809,8 @@ function Suggestions({
     <div className="suggestions flex flex-col gap-2">
       <div className="suggestions-label text-xs text-[var(--text-faint)]">Try asking</div>
       {prompts.map((prompt) => (
-        <button key={prompt.q} type="button" className="suggestion-card group relative flex items-center gap-2.5 overflow-hidden rounded-lg border border-white/10 px-3 py-2.5 text-left text-[13px] text-[var(--text)] transition hover:border-[var(--accent-line)] hover:bg-[var(--accent-soft)]" onClick={() => onPick(prompt)}>
-          <div className="absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100" style={{ boxShadow: 'inset 0 0 0 1px var(--accent-line), 0 0 16px -4px var(--accent)' }} />
+        <button key={prompt.q} type="button" className="suggestion-card group relative flex items-center gap-2.5 overflow-hidden rounded-lg bg-[var(--bg-elevated)] px-3 py-2.5 text-left text-[13px] text-[var(--text)] transition hover:bg-[var(--chat-accent)]" onClick={() => onPick(prompt)}>
+          <div className="absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100" style={{ boxShadow: '0 0 16px -4px var(--chat-accent-glow)' }} />
           <span className="suggestion-icon inline-flex h-[22px] w-[22px] items-center justify-center rounded-md bg-[var(--bg-elevated)] text-[var(--text-dim)] group-hover:text-[var(--accent-text)]"><Icon name={prompt.icon} /></span>
           <span>{prompt.q}</span>
         </button>
@@ -875,6 +853,9 @@ function ChatSessionsView({
   const [sessionToDelete, setSessionToDelete] = useState<ChatSession | null>(null);
   const deletePending = sessionToDelete?.id === deletingSessionId;
 
+  // Empty (unsent) chats are hidden from history until they have a message.
+  const visibleSessions = sessions.filter((session) => session.messageCount > 0);
+
   const confirmDelete = async () => {
     if (!sessionToDelete || deletePending) return;
     try {
@@ -891,19 +872,19 @@ function ChatSessionsView({
         <div>
           <div className="text-[13px] font-semibold text-[var(--text)]">Conversations</div>
           <div className="mt-0.5 text-[11px] text-[var(--text-faint)]">
-            {sessions.length === 0
+            {visibleSessions.length === 0
               ? 'No chats for this document yet'
-              : sessions.length === 1
+              : visibleSessions.length === 1
                 ? '1 chat for this document'
-                : `${sessions.length} chats for this document`}
+                : `${visibleSessions.length} chats for this document`}
           </div>
         </div>
         <button
           type="button"
           disabled={!canCreateNewChat}
           onClick={onNewChat}
-          title={canCreateNewChat ? 'Start a new chat' : 'Ask something in this chat before starting another'}
-          className="inline-flex h-8 items-center gap-2 rounded-md border border-white/10 px-2.5 text-[12px] font-medium text-[var(--text-dim)] transition hover:border-[var(--accent-line)] hover:bg-[var(--accent-soft)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/10 disabled:hover:bg-transparent disabled:hover:text-[var(--text-dim)]"
+          title={canCreateNewChat ? 'Start a new chat' : 'Please wait…'}
+          className="inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-[12px] font-medium text-[var(--text-dim)] transition hover:bg-[var(--chat-accent)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-dim)]"
         >
           <Icon name="new-chat" />
           <span>New</span>
@@ -911,8 +892,8 @@ function ChatSessionsView({
       </div>
 
       <div className="flex flex-col gap-2">
-        {sessions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-white/12 bg-[var(--bg-base)] px-3 py-6 text-center">
+        {visibleSessions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/12 px-3 py-6 text-center">
             <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-elevated)] text-[var(--text-dim)]">
               <Icon name="new-chat" />
             </div>
@@ -924,7 +905,7 @@ function ChatSessionsView({
         ) : null}
 
         <AnimatePresence initial={false}>
-          {sessions.map((session) => {
+          {visibleSessions.map((session) => {
             const active = session.id === activeSessionId;
             const deleting = session.id === deletingSessionId;
             const label = session.title?.trim() || 'New chat';
@@ -941,7 +922,7 @@ function ChatSessionsView({
                 transition={{ duration: 0.18, ease: 'easeOut' }}
                 className={`group flex items-center gap-2 overflow-hidden rounded-lg border px-2.5 py-2.5 transition ${
                   active
-                    ? 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--text)]'
+                    ? 'border-transparent bg-[var(--chat-accent)] text-[var(--text)]'
                     : 'border-white/10 bg-[var(--bg-base)] text-[var(--text-dim)] hover:border-white/20 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
                 } ${deleting ? 'pointer-events-none opacity-65' : ''}`}
               >
@@ -961,7 +942,7 @@ function ChatSessionsView({
                   type="button"
                   onClick={() => setSessionToDelete(session)}
                   disabled={deleting}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-red-500/10 hover:text-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/50 disabled:cursor-wait"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-red-500/10 hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/50 disabled:cursor-wait"
                   title={`Delete ${label}`}
                   aria-label={`Delete ${label}`}
                 >
@@ -1002,7 +983,7 @@ function ChatSessionsView({
                   void confirmDelete();
                 }}
                 disabled={deletePending}
-                className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md border border-red-300/20 bg-red-500/15 px-3 text-[12px] font-semibold text-red-50 transition hover:bg-red-500/25 disabled:cursor-wait disabled:opacity-80"
+                className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md bg-red-600 px-3 text-[12px] font-semibold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-80"
               >
                 {deletePending ? <NibLogo size={15} className="animate-spin text-white" /> : <Icon name="trash" />}
                 <span>{deletePending ? 'Deleting' : 'Delete'}</span>
@@ -1053,7 +1034,7 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-white/10 bg-[linear-gradient(180deg,rgba(17,20,26,0.7)_0%,var(--bg-surface)_60%)] px-3.5 pb-3.5 pt-3">
+    <div className="border-t border-[var(--border-faint)] bg-[linear-gradient(180deg,var(--bg-elevated)_0%,var(--bg-surface)_60%)] px-3.5 pb-3.5 pt-3">
       <div className="composer-inner group">
         <BorderBeam
           active={thinking}
@@ -1066,7 +1047,7 @@ function Composer({
           strength={thinking ? 0.9 : 0}
           theme="dark"
         >
-          <div className="composer-input-box relative rounded-xl border border-white/15 bg-[var(--bg-base)] transition-all focus-within:border-[var(--accent-line)] focus-within:[box-shadow:0_0_0_3px_var(--accent-soft),0_0_24px_-4px_var(--accent)]">
+          <div className="composer-input-box relative rounded-xl border border-[var(--border-strong)] bg-[var(--bg-base)] transition-all focus-within:border-[var(--chat-accent-line)] focus-within:[box-shadow:0_0_0_3px_var(--chat-accent),0_0_24px_-4px_var(--chat-accent-glow)]">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1088,7 +1069,7 @@ function Composer({
             <button
               className={`send-btn absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-lg transition ${
                 canSend
-                  ? 'bg-white text-[#0a1220] shadow-[0_0_18px_-6px_rgba(255,255,255,0.85)] hover:bg-white/90'
+                  ? 'bg-[var(--text)] text-[var(--bg-base)] shadow-sm hover:opacity-90'
                   : 'bg-[var(--bg-elevated)] text-[var(--text-faint)]'
               }`}
               type="button"
@@ -1102,9 +1083,9 @@ function Composer({
         </BorderBeam>
         <div className="composer-bar px-2.5 pt-1.5">
           <div className="composer-hint flex items-center gap-1 text-[11px] text-[var(--text-faint)]">
-            <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono text-[10px]">↵</kbd>
+            <kbd className="rounded border border-[var(--border-faint)] bg-[var(--bg-elevated)] px-1 font-mono text-[10px]">↵</kbd>
             <span>send ·</span>
-            <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono text-[10px]">⇧↵</kbd>
+            <kbd className="rounded border border-[var(--border-faint)] bg-[var(--bg-elevated)] px-1 font-mono text-[10px]">⇧↵</kbd>
             <span>newline · answers cite document</span>
           </div>
         </div>
@@ -1114,14 +1095,18 @@ function Composer({
 }
 
 function IndexingBanner({
-  progress,
   pagesProcessed,
   pagesTotal,
 }: {
-  progress: number;
   pagesProcessed: number;
   pagesTotal: number | null;
 }) {
+  const { percent, pagesProcessed: displayPages } = useIndexingDisplay(
+    pagesProcessed,
+    pagesTotal,
+    false,
+  );
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
       <div className="flex items-center gap-2.5">
@@ -1132,20 +1117,14 @@ function IndexingBanner({
         <span className="text-[13.5px] font-semibold text-[var(--text)]">Indexing document…</span>
       </div>
 
-      {pagesTotal !== null && pagesTotal > 0 && (
-        <div className="w-52">
-          <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
-            <span>{pagesProcessed} of {pagesTotal} pages</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
+      {pagesTotal !== null && pagesTotal > 0 ? (
+        <IndexingProgressBar
+          display={percent}
+          pagesProcessed={displayPages}
+          pagesTotal={pagesTotal}
+          className="w-52"
+        />
+      ) : null}
 
       <p className="max-w-[220px] text-[12px] leading-relaxed text-[var(--text-faint)]">
         Embedding text into pgvector so you can ask questions. This usually takes under a minute.
@@ -1211,16 +1190,11 @@ export function ChatPanel({
 }) {
   const { settings } = useSettings();
   const [hover, setHover] = useState<{ citation: Citation; anchor: HTMLElement } | null>(null);
-  const [activeView, setActiveView] = useState<'chat' | 'sessions'>('sessions');
+  // Open straight into a (new, empty) chat when a document is opened.
+  const [activeView, setActiveView] = useState<'chat' | 'sessions'>('chat');
   const previewThinking = useThinkingPreviewEnabled();
   const bodyRef = useRef<HTMLDivElement>(null);
   const showChatView = activeView === 'chat';
-
-  useEffect(() => {
-    if (activeSessionId === null) {
-      queueMicrotask(() => setActiveView('sessions'));
-    }
-  }, [activeSessionId]);
 
   const subtitle = isIndexing
     ? `Indexing… ${pagesProcessed}${pagesTotal !== null ? `/${pagesTotal}` : ''} pages`
@@ -1300,7 +1274,7 @@ export function ChatPanel({
             </div>
           </div>
           <div className="chat-header-actions flex shrink-0 items-center gap-1">
-            <div className="flex rounded-lg border border-white/10 bg-[var(--bg-base)] p-1" role="tablist" aria-label="Chat views">
+            <div className="flex rounded-lg bg-[var(--bg-base)] p-1" role="tablist" aria-label="Chat views">
               <button
                 type="button"
                 role="tab"
@@ -1329,9 +1303,9 @@ export function ChatPanel({
               </button>
             </div>
             <button
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--text-dim)]"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--chat-accent)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--text-dim)]"
               type="button"
-              title={canCreateNewChat ? 'New conversation' : 'Ask something in this chat before starting another'}
+              title={canCreateNewChat ? 'New conversation' : 'Please wait…'}
               onClick={handleNewChat}
               disabled={!canCreateNewChat}
             >
@@ -1360,7 +1334,6 @@ export function ChatPanel({
           />
         ) : isIndexing ? (
           <IndexingBanner
-            progress={progress}
             pagesProcessed={pagesProcessed}
             pagesTotal={pagesTotal}
           />

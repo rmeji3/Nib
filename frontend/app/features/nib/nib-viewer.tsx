@@ -9,6 +9,8 @@ import { BorderBeam } from 'border-beam';
 import { NibLogo as NibLogoBase } from '../../components/nib-logo';
 export { NibLogoBase as NibLogo };
 import { NibLogoSpinner } from '../../components/nib-logo-spinner';
+import { IndexingProgressBar } from '../../components/indexing-progress-bar';
+import { useIndexingDisplay } from './hooks/use-indexing-display-progress';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -512,10 +514,10 @@ export function ViewerToolbar({
           theme="dark"
         >
           <button
-            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[12.5px] font-medium transition ${
+            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition ${
               chatMinimized
-                ? 'border-transparent text-[var(--text-dim)] hover:border-white/10 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-                : 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
+                ? 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                : 'bg-[var(--chat-accent)] text-[var(--text)]'
             }`}
             type="button"
             title={chatMinimized ? 'Open chat' : 'Close chat'}
@@ -529,6 +531,29 @@ export function ViewerToolbar({
         {user && <UserMenu user={user} onSignOut={signOut} variant="toolbar" />}
       </div>
     </div>
+  );
+}
+
+function ViewerIndexingProgress({
+  pagesProcessed,
+  pagesTotal,
+}: {
+  pagesProcessed: number;
+  pagesTotal: number | null;
+}) {
+  const { percent, pagesProcessed: displayPages } = useIndexingDisplay(
+    pagesProcessed,
+    pagesTotal,
+    false,
+  );
+
+  return (
+    <IndexingProgressBar
+      display={percent}
+      pagesProcessed={displayPages}
+      pagesTotal={pagesTotal}
+      className="w-full max-w-[260px]"
+    />
   );
 }
 
@@ -782,22 +807,10 @@ export function Viewer({
           ) : (
             <>
               <NibLogoSpinner size={30} label="Preparing document" />
-              <div className="w-full max-w-[260px]">
-                <div className="mb-2 flex justify-between text-[11px] text-[var(--text-faint)]">
-                  <span>
-                    {indexingPagesTotal !== null && indexingPagesTotal > 0
-                      ? `${indexingPagesProcessed} of ${indexingPagesTotal} pages`
-                      : 'Indexing document'}
-                  </span>
-                  <span>{indexingProgress}%</span>
-                </div>
-                <div className="h-1 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
-                    style={{ width: `${indexingProgress}%` }}
-                  />
-                </div>
-              </div>
+              <ViewerIndexingProgress
+                pagesProcessed={indexingPagesProcessed}
+                pagesTotal={indexingPagesTotal}
+              />
               <p className="max-w-[280px] text-[12px] leading-relaxed text-[var(--text-faint)]">
                 Nib is indexing the PDF before showing it, so citations and chat are ready with the document.
               </p>
