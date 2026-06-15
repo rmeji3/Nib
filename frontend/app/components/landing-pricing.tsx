@@ -47,8 +47,8 @@ export function LandingPricing() {
   return (
     <>
       {/* -- Pricing -- */}
-      <section id="pricing" className="w-full py-[100px]">
-        <div className="px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
+      <section id="pricing" className="w-full py-16 md:py-[100px]">
+        <div className="px-4 sm:px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
           <div className="max-w-[720px] mx-auto mb-14 text-center">
             <div className="text-[12.5px] font-medium tracking-[0.06em] uppercase mb-4" style={{ color: 'var(--accent-text)' }}>Pricing</div>
             <h2 className="font-medium tracking-[-0.02em] m-0 mb-[18px]" style={{ fontFamily: 'var(--font-doc)', fontSize: 'clamp(30px,4vw,48px)', lineHeight: 1.1, textWrap: 'balance' } as React.CSSProperties}>
@@ -56,7 +56,7 @@ export function LandingPricing() {
             </h2>
             <p className="text-[17px] leading-[1.55] m-0" style={{ color: 'var(--text-dim)' }}>Start free. Move up only when you need it.</p>
           </div>
-          <div className="grid gap-4 justify-center" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 360px))' }}>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 max-w-[740px] mx-auto">
             {[
               { name: 'Reader',       price: '$0',  period: '/month',           tag: 'For curious individuals.',  featured: false, cta: 'Start free' },
               { name: 'Professional', price: '$12', period: '/month',           tag: 'For working researchers.',  featured: true,  cta: 'Go Pro' },

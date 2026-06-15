@@ -9,9 +9,9 @@ export function LandingCTA() {
   return (
     <>
       {/* -- CTA -- */}
-      <section className="relative text-center w-full py-[120px]">
+      <section className="relative text-center w-full py-16 md:py-[120px]">
         <div className="absolute inset-0 pointer-events-none -z-[1]" style={{ background: 'radial-gradient(circle at 30% 50%,var(--accent-glow-a),transparent 55%),radial-gradient(circle at 70% 50%,var(--accent-glow-b),transparent 55%)', filter: 'blur(80px)', opacity: 0.18 }} />
-        <div className="px-8" style={{ maxWidth: 880, margin: '0 auto' }}>
+        <div className="px-4 sm:px-8" style={{ maxWidth: 880, margin: '0 auto' }}>
           <h2 className="font-medium tracking-[-0.025em] m-0 mb-[18px]" style={{ fontFamily: 'var(--font-doc)', fontSize: 'clamp(36px,5vw,58px)', lineHeight: 1.05, textWrap: 'balance' } as React.CSSProperties}>
             Read the dense&nbsp;stuff.<br />Trust the&nbsp;answer.
           </h2>

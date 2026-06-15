@@ -43,7 +43,7 @@ function VerifyInner() {
   }, [searchParams]);
 
   return (
-    <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-8 text-center backdrop-blur-md">
+    <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-5 sm:p-8 text-center backdrop-blur-md">
       {status === 'loading' && (
         <>
           <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />

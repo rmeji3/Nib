@@ -7,7 +7,7 @@ import { Viewer, ViewerToolbar } from './nib-viewer';
 import { useNibState } from './hooks/use-nib-state';
 import { useNibChat } from './hooks/use-nib-chat';
 import { usePdfSearch } from './hooks/use-pdf-search';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useIngestionStatus } from './hooks/use-ingestion-status';
 import { useUpload } from '../upload/upload-context';
 
@@ -96,12 +96,31 @@ export default function NibApp() {
 
   const chatWidthPct = 100 - splitRatio;
 
+  // Mobile: detect small screens to switch to tab-based layout
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // On mobile, chat takes 100% width when open (full-screen tab)
+  const effectiveChatWidth = isMobile && !chatMinimized ? 100 : chatWidthPct;
+
   return (
-    <div className="grid h-full grid-rows-[48px_1fr] overflow-hidden">
+    <div className={`grid h-full overflow-hidden ${isMobile ? 'grid-rows-[48px_1fr_48px]' : 'grid-rows-[48px_1fr]'}`}>
       <ViewerToolbar
         currentPage={currentPage}
         totalPages={totalPages}
-        onJumpPage={scrollToPage}
+        onJumpPage={(page) => {
+          // On mobile, switch to PDF view so the user can see the page change
+          if (isMobile && !chatMinimized) setChatMinimized(true);
+          // Update toolbar display immediately without waiting for scroll event
+          setCurrentPage(page);
+          scrollToPage(page);
+        }}
         zoom={zoom}
         setZoom={setZoom}
         chatMinimized={chatMinimized}
@@ -116,11 +135,11 @@ export default function NibApp() {
       />
 
       {/* Main content row */}
-      <div className="relative flex h-full min-h-0 overflow-hidden">
+      <div className={`relative flex h-full min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
         {/* Viewer — always rendered, shrinks via margin-right transition */}
         <div
           className="h-full min-h-0 flex-1 overflow-hidden transition-[margin-right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{ marginRight: chatMinimized ? 0 : `${chatWidthPct}%` }}
+          style={{ marginRight: chatMinimized ? 0 : `${effectiveChatWidth}%` }}
         >
           <Viewer
             currentPage={currentPage}
@@ -152,11 +171,11 @@ export default function NibApp() {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 36, mass: 0.8 }}
               className="absolute bottom-0 right-0 top-0 flex select-text"
-              style={{ width: `${chatWidthPct}%` }}
+              style={{ width: `${effectiveChatWidth}%` }}
             >
-              {/* Resize handle */}
+              {/* Resize handle — hidden on mobile where drag-resize makes no sense */}
               <div
-                className="divider group relative flex w-4 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 transition-colors hover:bg-[var(--accent-soft)]"
+                className="divider group relative hidden sm:flex w-4 shrink-0 cursor-col-resize items-center justify-center border-x border-white/10 transition-colors hover:bg-[var(--accent-soft)]"
                 onPointerDown={onDividerPointerDown}
                 onPointerMove={onDividerPointerMove}
                 onPointerUp={onDividerPointerUp}
@@ -210,6 +229,41 @@ export default function NibApp() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Mobile PDF/Chat tab bar */}
+      {isMobile && (
+        <div className="flex h-12 shrink-0 items-stretch border-t border-white/10 bg-[var(--bg-base)]">
+          <button
+            type="button"
+            onClick={() => setChatMinimized(true)}
+            className={`flex flex-1 items-center justify-center gap-2 text-[13px] font-medium transition-colors ${
+              chatMinimized
+                ? 'text-[var(--text)] bg-white/5'
+                : 'text-[var(--text-faint)] hover:text-[var(--text-dim)]'
+            }`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" />
+            </svg>
+            PDF
+          </button>
+          <div className="w-px bg-white/10" />
+          <button
+            type="button"
+            onClick={() => setChatMinimized(false)}
+            className={`flex flex-1 items-center justify-center gap-2 text-[13px] font-medium transition-colors ${
+              !chatMinimized
+                ? 'text-[var(--text)] bg-white/5'
+                : 'text-[var(--text-faint)] hover:text-[var(--text-dim)]'
+            }`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Chat
+          </button>
+        </div>
+      )}
     </div>
   );
 }

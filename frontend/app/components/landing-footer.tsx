@@ -3,9 +3,9 @@ import { NibMark } from './landing-nav';
 
 export function LandingFooter() {
   return (
-    <footer className="px-8 pt-[60px] pb-8" style={{ borderTop: '1px solid var(--border-faint)', background: 'rgba(255,255,255,0.012)' }}>
-      <div className="grid gap-10 mb-10" style={{ maxWidth: 'var(--maxw)', margin: '0 auto 40px', gridTemplateColumns: '1.6fr 1fr 1fr 1fr' }}>
-        <div>
+    <footer className="px-4 sm:px-8 pt-[60px] pb-8" style={{ borderTop: '1px solid var(--border-faint)', background: 'rgba(255,255,255,0.012)' }}>
+      <div className="grid gap-8 mb-10 grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr]" style={{ maxWidth: 'var(--maxw)', margin: '0 auto 40px' }}>
+        <div className="col-span-2 lg:col-span-1">
           <Link href="/" className="inline-flex items-center gap-2 no-underline" style={{ color: 'inherit' }}>
             <NibMark />
             <span className="text-[17px] font-semibold tracking-[-0.02em]">Nib</span>
@@ -25,7 +25,7 @@ export function LandingFooter() {
           </div>
         ))}
       </div>
-      <div className="flex justify-between pt-6 text-[12.5px]" style={{ maxWidth: 'var(--maxw)', margin: '0 auto', borderTop: '1px solid var(--border-faint)', color: 'var(--text-faint)' }}>
+      <div className="flex flex-col sm:flex-row justify-between gap-2 pt-6 text-[12.5px]" style={{ maxWidth: 'var(--maxw)', margin: '0 auto', borderTop: '1px solid var(--border-faint)', color: 'var(--text-faint)' }}>
         <span>© 2026 Nib Reader, Inc.</span>
         <span>Made with care in Chicago.</span>
       </div>

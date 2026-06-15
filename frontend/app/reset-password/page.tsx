@@ -54,7 +54,7 @@ function ResetPasswordInner() {
 
   if (done) {
     return (
-      <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-8 text-center backdrop-blur-md shadow-2xl">
+      <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-5 sm:p-8 text-center backdrop-blur-md shadow-2xl">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)]">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6 9 17l-5-5" />
@@ -74,7 +74,7 @@ function ResetPasswordInner() {
 
   if (!token) {
     return (
-      <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-8 text-center backdrop-blur-md shadow-2xl">
+      <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-5 sm:p-8 text-center backdrop-blur-md shadow-2xl">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--danger)]/10">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6 6 18M6 6l12 12" />
@@ -93,7 +93,7 @@ function ResetPasswordInner() {
   }
 
   return (
-    <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-8 backdrop-blur-md shadow-2xl">
+    <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-5 sm:p-8 backdrop-blur-md shadow-2xl">
       <div className="mb-6 text-center">
         <h1 className="font-serif text-3xl font-medium tracking-tight text-[var(--text)]">Choose a new password</h1>
         <p className="mt-2 text-sm text-[var(--text-dim)]">Enter and confirm your new password below.</p>

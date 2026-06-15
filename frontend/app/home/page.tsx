@@ -627,6 +627,7 @@ export default function HomePage() {
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { settings } = useSettings();
 
   // Collection dialogs
@@ -674,6 +675,7 @@ export default function HomePage() {
     }
     setView(nextView);
     if (nextCollectionId !== undefined) setSelectedCollectionId(nextCollectionId);
+    setSidebarOpen(false);
   }, [viewKey]);
 
   // Restore saved position whenever the active view key changes.
@@ -918,16 +920,43 @@ export default function HomePage() {
 
   return (
     <ProtectedRoute>
-      <main className={`grid min-h-[100dvh] grid-cols-1 bg-[var(--bg-base)] overflow-hidden transition-[grid-template-columns] duration-300 ${settings.compactSidebar ? 'lg:grid-cols-[68px_1fr]' : 'lg:grid-cols-[256px_1fr]'}`}>
+      <main className={`relative grid min-h-[100dvh] grid-cols-1 bg-[var(--bg-base)] overflow-hidden transition-[grid-template-columns] duration-300 ${settings.compactSidebar ? 'lg:grid-cols-[68px_1fr]' : 'lg:grid-cols-[256px_1fr]'}`}>
+
+        {/* ── Mobile sidebar backdrop ── */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden
+          />
+        )}
 
         {/* ── Sidebar ── */}
-        <aside className="flex flex-col border-b border-white/10 bg-[var(--bg-surface)] p-4 lg:border-b-0 lg:border-r lg:h-full justify-between animate-in fade-in slide-in-from-left-8 duration-[1000ms] ease-[cubic-bezier(0.23,1,0.32,1)] fill-mode-both overflow-y-auto">
+        <aside className={`
+          fixed inset-y-0 left-0 z-40 flex flex-col bg-[var(--bg-surface)] p-4 border-r border-white/10
+          transform transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${settings.compactSidebar ? 'w-[68px]' : 'w-[256px]'}
+          lg:relative lg:inset-auto lg:translate-x-0 lg:z-auto lg:h-full
+          justify-between overflow-y-auto animate-in fade-in duration-[1000ms] fill-mode-both
+        `}>
           <div className="flex flex-col flex-1 min-h-0">
             <div className={`flex items-center pb-4 ${settings.compactSidebar ? 'justify-center' : 'gap-2 px-2'}`}>
               <div className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--text)] text-[var(--bg-base)]">
                 <NibLogo size={15} />
               </div>
               {!settings.compactSidebar && <span className="text-base font-semibold">Nib</span>}
+              {/* Mobile close button */}
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="ml-auto lg:hidden inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] transition-colors"
+                aria-label="Close sidebar"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             <button onClick={() => setUploadOpen(true)} type="button"
@@ -1047,6 +1076,36 @@ export default function HomePage() {
 
         {/* ── Main content ── */}
         <section ref={mainRef} className="min-h-0 overflow-y-auto animate-in fade-in slide-in-from-bottom-12 duration-[1000ms] ease-[cubic-bezier(0.23,1,0.32,1)] fill-mode-both delay-150">
+
+          {/* Mobile top bar */}
+          <div className="flex lg:hidden items-center gap-3 border-b border-white/10 bg-[var(--bg-surface)] px-4 py-3 sticky top-0 z-20">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-dim)] hover:bg-white/10 hover:text-[var(--text)] transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--text)] text-[var(--bg-base)]">
+                <NibLogo size={15} />
+              </div>
+              <span className="text-base font-semibold">Nib</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              aria-label="Upload PDF"
+              className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--text)] text-[var(--bg-base)] transition hover:opacity-90"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </button>
+          </div>
 
           {/* Search header */}
           <header className="flex flex-wrap items-center gap-3 border-b border-white/10 px-5 py-4 lg:px-8">
