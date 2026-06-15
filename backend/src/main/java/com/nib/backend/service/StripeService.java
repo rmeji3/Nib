@@ -63,6 +63,7 @@ public class StripeService {
                 .setCancelUrl(frontendUrl + "/settings/pricing")
                 .setCustomerEmail(user.getEmail()) // Pre-fill email
                 .setClientReferenceId(user.getId().toString()) // Tie session back to our User ID
+                .setAllowPromotionCodes(true) // Let users (and us, for testing) apply Stripe promo codes
                 .addLineItem(
                         SessionCreateParams.LineItem.builder()
                                 .setPrice(proPriceId)
