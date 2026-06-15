@@ -1,5 +1,7 @@
 # Nib Product Plan
 
+Nib is a multimodal PDF reading and Q&A platform. Users upload PDF documents and ask questions about their content, including plain text, tables, images, charts, and figures. Unlike conventional PDF chat tools that rely solely on extracted text, Nib processes visual content through OCR and vision models to deliver grounded, citation-backed answers. The result is a split-pane reading experience where every response is tied to a specific page and content block, dramatically reducing hallucinations on visually rich documents.
+
 ## 1) Product Vision
 
 Build a production-grade PDF reading experience where users can ask reliable questions about:
