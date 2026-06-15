@@ -93,7 +93,7 @@ function DowngradeModal({
             disabled={isLoading}
             className="flex-1 rounded-[9px] py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
             style={{
-              background: "rgba(255,255,255,0.05)",
+              background: "var(--bg-hover)",
               color: "var(--text)",
             }}
           >
@@ -190,7 +190,7 @@ function RenewModal({
             disabled={isLoading}
             className="flex-1 rounded-[9px] py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
             style={{
-              background: "rgba(255,255,255,0.05)",
+              background: "var(--bg-hover)",
               color: "var(--text)",
             }}
           >
@@ -366,8 +366,8 @@ export default function PricingPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-12 relative">
         <button
-          onClick={() => router.back()}
-          className="absolute top-12 left-4 md:left-8 flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+          onClick={() => router.push("/settings")}
+          className="absolute top-12 left-4 md:left-8 flex items-center gap-2 text-sm font-medium text-[color:var(--text-dim)] hover:text-[color:var(--text)] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
@@ -481,7 +481,7 @@ export default function PricingPage() {
                     height="14"
                     viewBox="0 0 14 14"
                     fill="none"
-                    stroke="#86b8d0"
+                    stroke="var(--accent-text)"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -499,7 +499,7 @@ export default function PricingPage() {
                 disabled
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[9px] py-2.5 text-sm font-medium transition-colors mt-auto cursor-not-allowed opacity-60"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--bg-elevated)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
                 }}
@@ -525,7 +525,7 @@ export default function PricingPage() {
                 disabled
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[9px] py-2.5 text-sm font-medium transition-colors mt-auto cursor-not-allowed opacity-50"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--bg-elevated)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
                 }}
@@ -587,7 +587,7 @@ export default function PricingPage() {
                     height="14"
                     viewBox="0 0 14 14"
                     fill="none"
-                    stroke="#86b8d0"
+                    stroke="var(--accent-text)"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -614,7 +614,7 @@ export default function PricingPage() {
                 disabled
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[9px] py-2.5 text-sm font-medium transition-colors mt-auto cursor-not-allowed opacity-50"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--bg-elevated)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
                 }}
