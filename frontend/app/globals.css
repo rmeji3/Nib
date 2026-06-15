@@ -9,6 +9,13 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Offset anchor targets so they clear the sticky landing nav */
+#product,
+#how,
+#pricing {
+  scroll-margin-top: 84px;
+}
+
 :root {
   --bg-base: #0a0c10;
   --bg-surface: #11141a;
@@ -33,6 +40,12 @@ html {
   --accent-glow-a: rgba(99, 102, 241, 0.6);
   --accent-glow-b: rgba(139, 92, 246, 0.5);
   --accent-glow-c: rgba(167, 139, 250, 0.4);
+  --accent-glow-d: rgba(56, 189, 248, 0.55);
+  --accent-glow-e: rgba(236, 72, 153, 0.5);
+  --accent-glow-f: rgba(45, 212, 191, 0.45);
+  --accent-glow-g: rgba(251, 146, 60, 0.5);
+  --accent-glow-h: rgba(132, 204, 22, 0.45);
+  --accent-glow-i: rgba(250, 204, 21, 0.45);
   --shimmer-low: color-mix(in oklch, var(--text-dim) 82%, black);
   --shimmer-mid: var(--text);
   --shimmer-hot: #ffffff;
@@ -50,6 +63,9 @@ html {
   --ink-faint: #9a9182;
   --shadow-page: 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 40px -20px rgba(0, 0, 0, 0.5), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
   --shadow-pop: 0 10px 30px -8px rgba(0, 0, 0, 0.5), 0 4px 10px -2px rgba(0, 0, 0, 0.4);
+  /* Elevated floating windows (product previews) and cards — theme-aware */
+  --shadow-window: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 50px 100px -40px rgba(0, 0, 0, 0.7), 0 24px 60px -24px rgba(120, 130, 200, 0.18);
+  --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
   --font-ui: "Switzer", var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-doc: "Source Serif 4", var(--font-source-serif), Georgia, serif;
@@ -125,6 +141,8 @@ html {
   --ink-faint: #6b7280;
   --shadow-page: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-pop: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-window: 0 0 0 1px rgba(15, 23, 42, 0.05), 0 40px 80px -36px rgba(15, 23, 42, 0.22), 0 16px 36px -18px rgba(99, 102, 241, 0.14);
+  --shadow-card: 0 18px 40px -20px rgba(15, 23, 42, 0.18), 0 6px 16px -8px rgba(15, 23, 42, 0.1);
   /* shadcn light tokens */
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
@@ -941,7 +959,41 @@ button:disabled {
     0 0 20px color-mix(in oklch, #6366f1 18%, transparent);
 }
 
+/* --- Landing hero breathing glow (mirrors the chat beam's living pulse) --- */
+.hero-glow-blob {
+  will-change: opacity, transform;
+  animation: hero-glow-drift var(--hero-glow-dur, 18s) ease-in-out infinite;
+  animation-delay: var(--hero-glow-delay, 0s);
+}
+
+@keyframes hero-glow-drift {
+  0% {
+    opacity: var(--hero-glow-min, 0.3);
+    transform: translate(0, 0) scale(0.85);
+  }
+  25% {
+    opacity: var(--hero-glow-max, 0.6);
+    transform: translate(var(--hero-drift-x, 120px), var(--hero-drift-y, -80px)) scale(1.12);
+  }
+  50% {
+    opacity: var(--hero-glow-min, 0.3);
+    transform: translate(calc(var(--hero-drift-x, 120px) * 0.4), var(--hero-drift-y2, 100px)) scale(1.18);
+  }
+  75% {
+    opacity: var(--hero-glow-max, 0.6);
+    transform: translate(calc(var(--hero-drift-x, 120px) * -0.7), calc(var(--hero-drift-y, -80px) * 0.5)) scale(0.95);
+  }
+  100% {
+    opacity: var(--hero-glow-min, 0.3);
+    transform: translate(0, 0) scale(0.85);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .hero-glow-blob {
+    animation: none;
+  }
+
   .answer-reveal-block,
   .answer-reveal-item,
   .answer-after-reveal,

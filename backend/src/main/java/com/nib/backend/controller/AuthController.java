@@ -2,7 +2,9 @@ package com.nib.backend.controller;
 
 import com.nib.backend.dto.AuthRequest;
 import com.nib.backend.dto.AuthResponse;
+import com.nib.backend.dto.ForgotPasswordRequest;
 import com.nib.backend.dto.RegisterRequest;
+import com.nib.backend.dto.ResetPasswordRequest;
 import com.nib.backend.service.AuthService;
 import com.nib.backend.service.AuthService.AuthServiceResult;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,6 +68,24 @@ public class AuthController {
         }
         // Always 200 — don't reveal whether the email exists / is already verified.
         return ResponseEntity.ok(Map.of("message", "If that account needs confirmation, a new email is on its way."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request
+    ) {
+        authService.requestPasswordReset(request.email());
+        // Always 200 — don't reveal whether the email is registered.
+        return ResponseEntity.ok(Map.of(
+                "message", "If an account exists for that email, a reset link is on its way."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request.token(), request.password());
+        return ResponseEntity.ok(Map.of("message", "Password updated. You can now sign in."));
     }
 
     @PostMapping("/authenticate")

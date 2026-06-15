@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { NibLogo } from './nib-logo';
 import { useAuth } from '../features/auth/hooks/use-auth';
+import { AnimatedThemeToggle } from '@/components/ui/animated-theme-toggle';
 
 export const NibMark = () => (
   <div className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[7px] bg-[var(--text)] text-[var(--bg-base)]">
@@ -12,6 +13,15 @@ export const NibMark = () => (
 
 export function LandingNav() {
   const { user } = useAuth();
+
+  const handleSectionClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    const target = document.getElementById(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+      history.replaceState(null, '', `#${id}`);
+    }
+  };
 
   return (
     <nav
@@ -34,9 +44,12 @@ export function LandingNav() {
           <span className="text-[17px] font-semibold tracking-[-0.02em]">Nib</span>
         </Link>
         <div className="hidden md:flex gap-7 justify-center text-sm text-[var(--text-dim)]">
-          {['Product', 'Citations', 'Pricing'].map((l, i) => (
-            <Link key={l} href={`/#${['product', 'how', 'pricing'][i]}`} className="hover:text-[var(--text)] transition-colors no-underline" style={{ color: 'inherit' }}>{l}</Link>
-          ))}
+          {['Product', 'Citations', 'Pricing'].map((l, i) => {
+            const id = ['product', 'how', 'pricing'][i];
+            return (
+              <a key={l} href={`#${id}`} onClick={(e) => handleSectionClick(e, id)} className="hover:text-[var(--text)] transition-colors no-underline" style={{ color: 'inherit' }}>{l}</a>
+            );
+          })}
         </div>
         <div className="flex items-center gap-3.5">
           {user ? (
@@ -61,6 +74,7 @@ export function LandingNav() {
               </Link>
             </>
           )}
+          <AnimatedThemeToggle />
         </div>
       </div>
     </nav>

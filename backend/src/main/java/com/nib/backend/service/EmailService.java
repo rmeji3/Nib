@@ -58,6 +58,29 @@ public class EmailService {
         send(toEmail, "Confirm your Nib account", html);
     }
 
+    /**
+     * Sends the password-reset email. The link points at the frontend /reset-password page,
+     * which posts the token + new password back to the backend.
+     *
+     * @throws IllegalStateException if Resend isn't configured (fail loudly)
+     */
+    public void sendPasswordResetEmail(String toEmail, String name, String token) {
+        String resetUrl = frontendUrl + "/reset-password?token=" + token;
+        String html = """
+                <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a">
+                  <h2 style="margin:0 0 12px">Reset your password</h2>
+                  <p style="margin:0 0 16px;line-height:1.5">Hi %s, we received a request to reset your Nib password. Click the button below to choose a new one. If you didn't request this, you can safely ignore this email.</p>
+                  <p style="margin:0 0 24px">
+                    <a href="%s" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600">Reset password</a>
+                  </p>
+                  <p style="margin:0;color:#666;font-size:13px;line-height:1.5">Or paste this link into your browser:<br><a href="%s">%s</a></p>
+                  <p style="margin:16px 0 0;color:#999;font-size:12px">This link expires in 1 hour.</p>
+                </div>
+                """.formatted(escape(name), resetUrl, resetUrl, resetUrl);
+
+        send(toEmail, "Reset your Nib password", html);
+    }
+
     private void send(String toEmail, String subject, String html) {
         if (!StringUtils.hasText(apiKey)) {
             throw new IllegalStateException(

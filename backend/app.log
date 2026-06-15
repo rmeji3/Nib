@@ -2213,3 +2213,301 @@ The URHealth application is designed to support users' mental health by providin
 2026-06-14T03:23:06.606-05:00  INFO 58032 --- [backend] [http-nio-8080-exec-4] [6e5e632fe94effe4e26fcf026dafc875-276f884249e19f62] c.n.backend.service.VectorSearchService  : Hybrid search: 80 vector + 0 text candidates → 40 merged results (topK=40)
 2026-06-14T03:23:06.924-05:00  INFO 58032 --- [backend] [http-nio-8080-exec-4] [6e5e632fe94effe4e26fcf026dafc875-276f884249e19f62] c.nib.backend.service.RerankerService    : Cross-encoder found no relevant candidate (best=0.044 < floor=0.100) — keeping bi-encoder ranking instead
 2026-06-14T03:23:13.108-05:00  INFO 58032 --- [backend] [http-nio-8080-exec-4] [6e5e632fe94effe4e26fcf026dafc875-276f884249e19f62] com.nib.backend.service.ChatService      : Treating uncited no-information answer as refusal for session afb9b3f6-589f-4240-9ff3-e9ece4fedd21
+2026-06-14T18:20:37.250-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Starting BackendApplication using Java 21.0.11 with PID 63087 (/Users/rmeji/Desktop/Coding/Nib/backend/target/classes started by rmeji in /Users/rmeji/Desktop/Coding/Nib/backend)
+2026-06-14T18:20:37.252-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : The following 1 profile is active: "dev"
+2026-06-14T18:20:39.016-05:00  INFO 63087 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-06-14T18:20:39.021-05:00  INFO 63087 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-14T18:20:39.253-05:00  INFO 63087 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 208 ms. Found 11 JPA repository interfaces.
+2026-06-14T18:20:40.162-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-06-14T18:20:40.180-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-14T18:20:40.180-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.21]
+2026-06-14T18:20:40.279-05:00  INFO 63087 --- [backend] [main] [                                                 ] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 2989 ms
+2026-06-14T18:20:40.395-05:00  INFO 63087 --- [backend] [main] [                                                 ] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-06-14T18:20:40.448-05:00  INFO 63087 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.2.12.Final
+2026-06-14T18:20:40.875-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-14T18:20:40.928-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-14T18:20:43.358-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@19d0d1ab
+2026-06-14T18:20:43.359-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-14T18:20:44.557-05:00  INFO 63087 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-14T18:20:44.559-05:00  INFO 63087 --- [backend] [main] [                                                 ] org.hibernate.orm.jdbc.batch             : HHH100501: Automatic JDBC statement batching enabled (maximum batch size 50)
+2026-06-14T18:20:46.111-05:00  INFO 63087 --- [backend] [main] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T18:20:46.236-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-06-14T18:20:47.037-05:00 ERROR 63087 --- [backend] [main] [                                                 ] i.n.r.d.DnsServerAddressStreamProviders  : Unable to load io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'. Use DEBUG level to see the full stack: java.lang.UnsatisfiedLinkError: failed to load the required native library
+2026-06-14T18:20:47.863-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.boot.web.servlet.RegistrationBean    : Filter apiRateLimitFilterRegistration was not registered (disabled)
+2026-06-14T18:20:48.080-05:00  INFO 63087 --- [backend] [main] [                                                 ] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-06-14T18:20:50.329-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 4 endpoints beneath base path '/actuator'
+2026-06-14T18:20:50.507-05:00  INFO 63087 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-06-14T18:20:50.524-05:00  INFO 63087 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Started BackendApplication in 13.552 seconds (process running for 13.802)
+2026-06-14T18:20:50.655-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Running idempotent database migrations...
+2026-06-14T18:20:51.768-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : tsvector column, GIN index, and auto-populate trigger verified on content_blocks
+2026-06-14T18:20:51.964-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Partial-ingestion warning columns verified on ingestion_jobs
+2026-06-14T18:20:52.079-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Structured visual evidence columns verified on content_blocks
+2026-06-14T18:20:52.207-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Answer audit table verified
+2026-06-14T18:20:52.339-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Chat message feedback table verified
+2026-06-14T18:20:52.536-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Semantic cache tables verified
+2026-06-14T18:20:52.660-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Cost usage telemetry table verified
+2026-06-14T18:20:52.661-05:00  INFO 63087 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Database migrations complete.
+2026-06-14T18:55:25.618-05:00  INFO 63087 --- [backend] [SpringApplicationShutdownHook] [                                                 ] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-06-14T18:55:25.637-05:00  INFO 63087 --- [backend] [tomcat-shutdown] [                                                 ] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-06-14T18:55:25.708-05:00  INFO 63087 --- [backend] [SpringApplicationShutdownHook] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T18:55:25.724-05:00  INFO 63087 --- [backend] [SpringApplicationShutdownHook] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-14T18:55:26.263-05:00  INFO 63087 --- [backend] [SpringApplicationShutdownHook] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-14T18:55:32.495-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Starting BackendApplication using Java 21.0.11 with PID 67047 (/Users/rmeji/Desktop/Coding/Nib/backend/target/classes started by rmeji in /Users/rmeji/Desktop/Coding/Nib/backend)
+2026-06-14T18:55:32.496-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : The following 1 profile is active: "dev"
+2026-06-14T18:55:33.146-05:00  INFO 67047 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-06-14T18:55:33.147-05:00  INFO 67047 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-14T18:55:33.280-05:00  INFO 67047 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 127 ms. Found 11 JPA repository interfaces.
+2026-06-14T18:55:33.686-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-06-14T18:55:33.695-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-14T18:55:33.696-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.21]
+2026-06-14T18:55:33.730-05:00  INFO 67047 --- [backend] [main] [                                                 ] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1211 ms
+2026-06-14T18:55:33.807-05:00  INFO 67047 --- [backend] [main] [                                                 ] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-06-14T18:55:33.839-05:00  INFO 67047 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.2.12.Final
+2026-06-14T18:55:34.072-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-14T18:55:34.089-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-14T18:55:35.047-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3b95fce9
+2026-06-14T18:55:35.048-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-14T18:55:35.939-05:00  INFO 67047 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-14T18:55:35.941-05:00  INFO 67047 --- [backend] [main] [                                                 ] org.hibernate.orm.jdbc.batch             : HHH100501: Automatic JDBC statement batching enabled (maximum batch size 50)
+2026-06-14T18:55:36.930-05:00  INFO 67047 --- [backend] [main] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T18:55:36.986-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-06-14T18:55:37.396-05:00 ERROR 67047 --- [backend] [main] [                                                 ] i.n.r.d.DnsServerAddressStreamProviders  : Unable to load io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'. Use DEBUG level to see the full stack: java.lang.UnsatisfiedLinkError: failed to load the required native library
+2026-06-14T18:55:37.837-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.boot.web.servlet.RegistrationBean    : Filter apiRateLimitFilterRegistration was not registered (disabled)
+2026-06-14T18:55:37.965-05:00  INFO 67047 --- [backend] [main] [                                                 ] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-06-14T18:55:39.006-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 4 endpoints beneath base path '/actuator'
+2026-06-14T18:55:39.063-05:00  INFO 67047 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-06-14T18:55:39.073-05:00  INFO 67047 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Started BackendApplication in 6.792 seconds (process running for 7.025)
+2026-06-14T18:55:39.114-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Running idempotent database migrations...
+2026-06-14T18:55:39.837-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : tsvector column, GIN index, and auto-populate trigger verified on content_blocks
+2026-06-14T18:55:40.030-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Partial-ingestion warning columns verified on ingestion_jobs
+2026-06-14T18:55:40.119-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Structured visual evidence columns verified on content_blocks
+2026-06-14T18:55:40.235-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Answer audit table verified
+2026-06-14T18:55:40.353-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Chat message feedback table verified
+2026-06-14T18:55:40.553-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Semantic cache tables verified
+2026-06-14T18:55:40.673-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Cost usage telemetry table verified
+2026-06-14T18:55:40.673-05:00  INFO 67047 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Database migrations complete.
+2026-06-14T18:56:23.315-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-06-14T18:56:23.316-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-06-14T18:56:23.326-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Completed initialization in 10 ms
+2026-06-14T19:16:33.073-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-4] [510071b96d44fd4d882192457fd9d00f-a3e6359f6f688b98] com.nib.backend.service.StripeService    : Immediately canceled Stripe subscription sub_1Ti9ApRvatHdxYAo4bnXT83M
+2026-06-14T19:16:33.264-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-4] [510071b96d44fd4d882192457fd9d00f-a3e6359f6f688b98] c.n.b.service.AccountDeletionService     : Account deletion scheduled for user a20a30d8-56b0-4f4a-9dd9-734f554a2fa2
+2026-06-14T19:16:33.265-05:00  INFO 67047 --- [backend] [account-deletion-1] [                                                 ] c.n.b.service.AccountDeletionRunner      : Starting data purge for user a20a30d8-56b0-4f4a-9dd9-734f554a2fa2
+2026-06-14T19:16:33.482-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-5] [eab7ed6aa7341b9b5d105156067f2a77-c470abc5040ddb11] com.nib.backend.service.StripeService    : Downgraded user a20a30d8-56b0-4f4a-9dd9-734f554a2fa2 to FREE tier after subscription deletion
+2026-06-14T19:16:34.499-05:00  INFO 67047 --- [backend] [account-deletion-1] [                                                 ] c.n.b.service.SupabaseStorageService     : Deleted 1 storage object(s)
+2026-06-14T19:16:34.500-05:00  INFO 67047 --- [backend] [account-deletion-1] [                                                 ] c.n.b.service.AccountDeletionRunner      : Completed data purge for user a20a30d8-56b0-4f4a-9dd9-734f554a2fa2 (1 file(s))
+2026-06-14T19:20:09.938-05:00  INFO 67047 --- [backend] [http-nio-8080-exec-7] [161e0efd1780e6eade3bb25f30cb1ac2-66d8b2c5a5053bfa] com.nib.backend.service.EmailService     : Sent 'Confirm your Nib account' email to rafamej12@gmail.com
+2026-06-14T19:22:17.024-05:00  INFO 67047 --- [backend] [SpringApplicationShutdownHook] [                                                 ] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-06-14T19:22:17.030-05:00  INFO 67047 --- [backend] [tomcat-shutdown] [                                                 ] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-06-14T19:22:17.071-05:00  INFO 67047 --- [backend] [SpringApplicationShutdownHook] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T19:22:17.075-05:00  INFO 67047 --- [backend] [SpringApplicationShutdownHook] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-14T19:22:17.582-05:00  INFO 67047 --- [backend] [SpringApplicationShutdownHook] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-14T19:22:21.535-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Starting BackendApplication using Java 21.0.11 with PID 68884 (/Users/rmeji/Desktop/Coding/Nib/backend/target/classes started by rmeji in /Users/rmeji/Desktop/Coding/Nib/backend)
+2026-06-14T19:22:21.537-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : The following 1 profile is active: "dev"
+2026-06-14T19:22:22.322-05:00  INFO 68884 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-06-14T19:22:22.323-05:00  INFO 68884 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-14T19:22:22.465-05:00  INFO 68884 --- [backend] [main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 137 ms. Found 11 JPA repository interfaces.
+2026-06-14T19:22:22.844-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-06-14T19:22:22.852-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-14T19:22:22.852-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.21]
+2026-06-14T19:22:22.884-05:00  INFO 68884 --- [backend] [main] [                                                 ] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1326 ms
+2026-06-14T19:22:22.953-05:00  INFO 68884 --- [backend] [main] [                                                 ] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-06-14T19:22:22.987-05:00  INFO 68884 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.2.12.Final
+2026-06-14T19:22:23.225-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-14T19:22:23.241-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-14T19:22:23.871-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3b95fce9
+2026-06-14T19:22:23.872-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-14T19:22:24.812-05:00  INFO 68884 --- [backend] [main] [                                                 ] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-14T19:22:24.814-05:00  INFO 68884 --- [backend] [main] [                                                 ] org.hibernate.orm.jdbc.batch             : HHH100501: Automatic JDBC statement batching enabled (maximum batch size 50)
+2026-06-14T19:22:25.686-05:00  INFO 68884 --- [backend] [main] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T19:22:25.750-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-06-14T19:22:26.148-05:00 ERROR 68884 --- [backend] [main] [                                                 ] i.n.r.d.DnsServerAddressStreamProviders  : Unable to load io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'. Use DEBUG level to see the full stack: java.lang.UnsatisfiedLinkError: failed to load the required native library
+2026-06-14T19:22:26.698-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.boot.web.servlet.RegistrationBean    : Filter apiRateLimitFilterRegistration was not registered (disabled)
+2026-06-14T19:22:26.855-05:00  INFO 68884 --- [backend] [main] [                                                 ] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-06-14T19:22:28.276-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 4 endpoints beneath base path '/actuator'
+2026-06-14T19:22:28.346-05:00  INFO 68884 --- [backend] [main] [                                                 ] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-06-14T19:22:28.356-05:00  INFO 68884 --- [backend] [main] [                                                 ] com.nib.backend.BackendApplication       : Started BackendApplication in 7.044 seconds (process running for 7.242)
+2026-06-14T19:22:28.401-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Running idempotent database migrations...
+2026-06-14T19:22:29.255-05:00  INFO 68884 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-06-14T19:22:29.255-05:00  INFO 68884 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-06-14T19:22:29.259-05:00  INFO 68884 --- [backend] [http-nio-8080-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Completed initialization in 3 ms
+2026-06-14T19:22:29.679-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : tsvector column, GIN index, and auto-populate trigger verified on content_blocks
+2026-06-14T19:22:29.884-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Partial-ingestion warning columns verified on ingestion_jobs
+2026-06-14T19:22:29.967-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Structured visual evidence columns verified on content_blocks
+2026-06-14T19:22:30.077-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Answer audit table verified
+2026-06-14T19:22:30.202-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Chat message feedback table verified
+2026-06-14T19:22:30.419-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Semantic cache tables verified
+2026-06-14T19:22:30.542-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Cost usage telemetry table verified
+2026-06-14T19:22:30.543-05:00  INFO 68884 --- [backend] [main] [                                                 ] c.n.b.config.DatabaseMigrationRunner     : Database migrations complete.
+2026-06-14T19:22:47.969-05:00  INFO 68884 --- [backend] [account-deletion-1] [                                                 ] c.n.b.service.AccountDeletionRunner      : Starting data purge for user 65ab6b8c-e544-42bb-82d2-54eb7ab900ff
+2026-06-14T19:22:47.969-05:00  INFO 68884 --- [backend] [http-nio-8080-exec-10] [300212cb7b17796deba284fd7d8c104b-ba5ce25b2f2f30ca] c.n.b.service.AccountDeletionService     : Account deletion scheduled for user 65ab6b8c-e544-42bb-82d2-54eb7ab900ff
+2026-06-14T19:22:48.538-05:00  INFO 68884 --- [backend] [account-deletion-1] [                                                 ] c.n.b.service.AccountDeletionRunner      : Completed data purge for user 65ab6b8c-e544-42bb-82d2-54eb7ab900ff (0 file(s))
+2026-06-14T19:22:59.747-05:00 ERROR 68884 --- [backend] [http-nio-8080-exec-3] [5f4ef5a27ec6a2665dc5245ede979462-80467f4128e70e4b] com.nib.backend.service.EmailService     : Failed to send email to rafamej12@gmail.com via Resend: 403 Forbidden: "{"statusCode":403,"message":"The readnib.com domain is not verified. Please, add and verify your domain on https://resend.com/domains","name":"validation_error"}"
+2026-06-14T19:22:59.788-05:00 ERROR 68884 --- [backend] [http-nio-8080-exec-3] [5f4ef5a27ec6a2665dc5245ede979462-80467f4128e70e4b] c.n.b.exception.GlobalExceptionHandler   : Unhandled runtime exception
+
+java.lang.IllegalStateException: Failed to send email. Please try again later.
+	at com.nib.backend.service.EmailService.send(EmailService.java:106) ~[classes/:na]
+	at com.nib.backend.service.EmailService.sendVerificationEmail(EmailService.java:58) ~[classes/:na]
+	at com.nib.backend.service.AuthService.register(AuthService.java:61) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359) ~[spring-aop-7.0.7.jar:7.0.7]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190) ~[spring-aop-7.0.7.jar:7.0.7]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158) ~[spring-aop-7.0.7.jar:7.0.7]
+	at org.springframework.transaction.interceptor.TransactionInterceptor$1.proceedWithInvocation(TransactionInterceptor.java:133) ~[spring-tx-7.0.7.jar:7.0.7]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:371) ~[spring-tx-7.0.7.jar:7.0.7]
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130) ~[spring-tx-7.0.7.jar:7.0.7]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.7.jar:7.0.7]
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719) ~[spring-aop-7.0.7.jar:7.0.7]
+	at com.nib.backend.service.AuthService$$SpringCGLIB$$0.register(<generated>) ~[classes/:na]
+	at com.nib.backend.controller.AuthController.register(AuthController.java:36) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:252) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:184) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:853) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:86) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:903) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:649) ~[tomcat-embed-core-11.0.21.jar:6.1]
+	at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874) ~[spring-webmvc-7.0.7.jar:7.0.7]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710) ~[tomcat-embed-core-11.0.21.jar:6.1]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:128) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:53) ~[tomcat-embed-websocket-11.0.21.jar:11.0.21]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:110) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at com.nib.backend.config.MdcLoggingFilter.doFilterInternal(MdcLoggingFilter.java:57) ~[classes/:na]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:235) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:493) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:354) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:86) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:132) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:101) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:132) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:86) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:181) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at com.nib.backend.config.ApiRateLimitFilter.doFilterInternal(ApiRateLimitFilter.java:43) ~[classes/:na]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at com.nib.backend.config.JwtAuthFilter.doFilterInternal(JwtAuthFilter.java:38) ~[classes/:na]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:110) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:96) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:231) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:244) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:337) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:228) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:141) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:237) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:195) ~[spring-security-web-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:317) ~[spring-security-config-7.0.5.jar:7.0.5]
+	at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:355) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:272) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:110) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:199) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:77) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:492) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:113) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:83) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:341) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:397) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:903) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1801) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:946) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:480) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:57) ~[tomcat-embed-core-11.0.21.jar:11.0.21]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: org.springframework.web.client.HttpClientErrorException$Forbidden: 403 Forbidden: "{"statusCode":403,"message":"The readnib.com domain is not verified. Please, add and verify your domain on https://resend.com/domains","name":"validation_error"}"
+	at org.springframework.web.client.HttpClientErrorException.create(HttpClientErrorException.java:112) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.StatusHandler.createException(StatusHandler.java:132) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.StatusHandler.lambda$createDefaultStatusHandler$1(StatusHandler.java:107) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.StatusHandler.handle(StatusHandler.java:75) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.applyStatusHandlers(DefaultRestClient.java:943) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.lambda$toBodilessEntity$0(DefaultRestClient.java:890) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultRequestBodyUriSpec.exchangeInternal(DefaultRestClient.java:617) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultRequestBodyUriSpec.exchange(DefaultRestClient.java:572) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.RestClient$RequestHeadersSpec.exchange(RestClient.java:747) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.executeAndExtract(DefaultRestClient.java:924) ~[spring-web-7.0.7.jar:7.0.7]
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.toBodilessEntity(DefaultRestClient.java:888) ~[spring-web-7.0.7.jar:7.0.7]
+	at com.nib.backend.service.EmailService.send(EmailService.java:102) ~[classes/:na]
+	... 149 common frames omitted
+
+2026-06-14T19:25:23.686-05:00  INFO 68884 --- [backend] [http-nio-8080-exec-10] [924796f786c2e97706cd8cc8dbdcb22c-31e63adc71a4e726] com.nib.backend.service.EmailService     : Sent 'Confirm your Nib account' email to rafamej12@gmail.com

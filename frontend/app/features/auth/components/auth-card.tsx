@@ -1,10 +1,81 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../hooks/use-auth';
 import { OAuthButton } from './oauth-button';
 import { NibLogoSpinner } from '../../../components/nib-logo-spinner';
+
+function PasswordToggle({ show, onToggle, tabIndex }: { show: boolean; onToggle: () => void; tabIndex?: number }) {
+  const duration = 0.2;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      tabIndex={tabIndex}
+      aria-label={show ? 'Hide password' : 'Show password'}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)] transition-colors hover:text-[var(--text)]"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Open eye — always rendered; the iris gently shrinks when slashed */}
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <motion.circle
+          cx="12"
+          cy="12"
+          r="3"
+          animate={{ scale: show ? 0.55 : 1, opacity: show ? 0.55 : 1 }}
+          transition={{ duration }}
+          style={{ transformOrigin: 'center' }}
+        />
+        {/* Diagonal slash draws in when the password is visible */}
+        <motion.line
+          x1="2"
+          y1="2"
+          x2="22"
+          y2="22"
+          initial={false}
+          animate={{ pathLength: show ? 1 : 0, opacity: show ? 1 : 0 }}
+          transition={{ duration }}
+        />
+      </svg>
+    </button>
+  );
+}
+
+const PASSWORD_RULES: { label: string; test: (pw: string) => boolean }[] = [
+  { label: 'At least 8 characters', test: (pw) => pw.length >= 8 },
+  { label: 'One uppercase letter', test: (pw) => /[A-Z]/.test(pw) },
+  { label: 'One lowercase letter', test: (pw) => /[a-z]/.test(pw) },
+  { label: 'One number', test: (pw) => /\d/.test(pw) },
+];
+
+function PasswordRequirements({ password }: { password: string }) {
+  return (
+    <ul className="mt-2.5 space-y-1.5">
+      {PASSWORD_RULES.map((rule) => {
+        const met = rule.test(password);
+        return (
+          <li
+            key={rule.label}
+            className={`flex items-center gap-2 text-xs transition-colors ${met ? 'text-[var(--accent-text)]' : 'text-[var(--text-faint)]'}`}
+          >
+            {met ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            )}
+            <span>{rule.label}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function AuthCard() {
   const { signIn, signUp, signInWithGoogle } = useAuth();
@@ -23,8 +94,9 @@ export function AuthCard() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   
+  const [showPassword, setShowPassword] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOAuthLoading, setIsOAuthLoading] = useState(false);
@@ -44,11 +116,8 @@ export function AuthCard() {
         if (!name) {
           throw new Error('Please enter your name.');
         }
-        if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters.');
-        }
-        if (password !== confirmPassword) {
-          throw new Error('Passwords do not match.');
+        if (!PASSWORD_RULES.every((rule) => rule.test(password))) {
+          throw new Error('Please meet all the password requirements.');
         }
         await signUp(email, name, password);
         // Not logged in yet — they must confirm their email first.
@@ -96,7 +165,7 @@ export function AuthCard() {
   };
 
   const cardStyle = {
-    boxShadow: '0 0 0 1px rgba(255,255,255,0.02), 0 30px 60px -15px rgba(0,0,0,0.6), 0 0 50px rgba(120,130,200,0.06)',
+    boxShadow: 'var(--shadow-window)',
   };
 
   const isSignIn = currentMode === 'signin';
@@ -219,12 +288,15 @@ export function AuthCard() {
               </label>
               <input
                 type="email"
+                id="signin-email"
+                name="email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 tabIndex={isSignIn ? 0 : -1}
                 disabled={!isSignIn || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
+                className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none transition focus:border-[var(--border-strong)] focus:ring-1 focus:ring-[var(--border)]"
                 placeholder="you@domain.com"
               />
             </div>
@@ -234,20 +306,26 @@ export function AuthCard() {
                 <label className="block text-xs font-medium uppercase tracking-wider text-[var(--text-faint)]">
                   Password
                 </label>
-                <a href="#" tabIndex={isSignIn ? 0 : -1} className="text-xs text-[var(--text-dim)] hover:text-[var(--text)] transition-colors">
+                <a href="/forgot-password" tabIndex={isSignIn ? 0 : -1} className="text-xs text-[var(--text-dim)] hover:text-[var(--text)] transition-colors">
                   Forgot password?
                 </a>
               </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                tabIndex={isSignIn ? 0 : -1}
-                disabled={!isSignIn || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
-                placeholder="••••••••"
-              />
+              <div className="relative mt-1.5">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="signin-password"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  tabIndex={isSignIn ? 0 : -1}
+                  disabled={!isSignIn || isLoading || isOAuthLoading}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3.5 py-2.5 pr-11 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none transition focus:border-[var(--border-strong)] focus:ring-1 focus:ring-[var(--border)]"
+                  placeholder="••••••••"
+                />
+                <PasswordToggle show={showPassword} onToggle={() => setShowPassword((v) => !v)} tabIndex={isSignIn ? 0 : -1} />
+              </div>
             </div>
 
             <button
@@ -265,7 +343,7 @@ export function AuthCard() {
               <div className="w-full border-t border-white/5" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[var(--bg-base)] px-2 text-[var(--text-faint)]">or</span>
+              <span className="px-2 text-[var(--text-faint)]">or</span>
             </div>
           </div>
 
@@ -312,12 +390,15 @@ export function AuthCard() {
               </label>
               <input
                 type="text"
+                id="signup-name"
+                name="name"
+                autoComplete="name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 tabIndex={isSignUp ? 0 : -1}
                 disabled={!isSignUp || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
+                className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none transition focus:border-[var(--border-strong)] focus:ring-1 focus:ring-[var(--border)]"
                 placeholder="First Last"
               />
             </div>
@@ -328,12 +409,15 @@ export function AuthCard() {
               </label>
               <input
                 type="email"
+                id="signup-email"
+                name="email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 tabIndex={isSignUp ? 0 : -1}
                 disabled={!isSignUp || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
+                className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none transition focus:border-[var(--border-strong)] focus:ring-1 focus:ring-[var(--border)]"
                 placeholder="you@domain.com"
               />
             </div>
@@ -342,32 +426,23 @@ export function AuthCard() {
               <label className="block text-xs font-medium uppercase tracking-wider text-[var(--text-faint)]">
                 Password
               </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                tabIndex={isSignUp ? 0 : -1}
-                disabled={!isSignUp || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-[var(--text-faint)]">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                tabIndex={isSignUp ? 0 : -1}
-                disabled={!isSignUp || isLoading || isOAuthLoading}
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder-white/20 outline-none transition focus:border-white/20 focus:ring-1 focus:ring-white/10"
-                placeholder="••••••••"
-              />
+              <div className="relative mt-1.5">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="signup-password"
+                  name="password"
+                  autoComplete="new-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  tabIndex={isSignUp ? 0 : -1}
+                  disabled={!isSignUp || isLoading || isOAuthLoading}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3.5 py-2.5 pr-11 text-sm text-[var(--text)] placeholder-[var(--text-faint)] outline-none transition focus:border-[var(--border-strong)] focus:ring-1 focus:ring-[var(--border)]"
+                  placeholder="••••••••"
+                />
+                <PasswordToggle show={showPassword} onToggle={() => setShowPassword((v) => !v)} tabIndex={isSignUp ? 0 : -1} />
+              </div>
+              <PasswordRequirements password={password} />
             </div>
 
             <button
@@ -385,7 +460,7 @@ export function AuthCard() {
               <div className="w-full border-t border-white/5" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[var(--bg-base)] px-2 text-[var(--text-faint)]">or</span>
+              <span className="px-2 text-[var(--text-faint)]">or</span>
             </div>
           </div>
 

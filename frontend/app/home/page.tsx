@@ -1004,6 +1004,14 @@ export default function HomePage() {
               const isCanceled = isProUser && Boolean(user?.subscriptionCancelAtPeriodEnd);
               // Show for non-Pro users (upgrade) and for canceled-but-still-Pro users (renew).
               if (isProUser && !isCanceled) return null;
+              // Resolve the active theme so the beam's glow is tuned for the current background.
+              const resolvedTheme =
+                settings.theme === 'system'
+                  ? typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+                    ? 'dark'
+                    : 'light'
+                  : settings.theme;
+              const beamTheme: 'dark' | 'light' = resolvedTheme === 'light' ? 'light' : 'dark';
               return (
                 <div className="mt-4 pb-4 px-3">
                   <BorderBeam
@@ -1015,11 +1023,11 @@ export default function HomePage() {
                     duration={2.2}
                     size="sm"
                     strength={0.75}
-                    theme="dark"
+                    theme={beamTheme}
                   >
                     <Link
                       href="/settings/pricing"
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--bg-elevated)] px-3 py-2.5 text-sm font-semibold text-[var(--text)] transition hover:opacity-90"
                     >
                       {isCanceled ? 'Renew Pro' : 'Upgrade to Pro'}
                     </Link>
