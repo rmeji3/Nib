@@ -69,8 +69,8 @@ export function LandingNav() {
           ))}
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center gap-2 sm:gap-3.5">
+        {/* Right side — always pinned to the 3rd grid column */}
+        <div className="flex items-center gap-2 sm:gap-3.5" style={{ gridColumn: 3 }}>
           {user ? (
             <Link
               href="/home"
