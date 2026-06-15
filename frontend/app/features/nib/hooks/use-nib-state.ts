@@ -28,7 +28,14 @@ export type TextHighlight =
 export function useNibState() {
   const { settings, loaded } = useSettings();
   const [splitRatio, setSplitRatio] = useState(60);
-  const [zoom, setZoom] = useState(settings.defaultZoom / 100);
+  const [zoom, setZoom] = useState<number>(() => {
+    // On mobile, auto-fit the PDF page to the viewport width at init time.
+    // 24px horizontal padding on each side inside the scroll container.
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      return Number(((window.innerWidth - 48) / 620).toFixed(2));
+    }
+    return settings.defaultZoom / 100;
+  });
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(6);
   const [chatMinimized, setChatMinimized] = useState(false);
@@ -38,8 +45,13 @@ export function useNibState() {
   const prevLoaded = useRef(false);
   useEffect(() => {
     if (loaded && !prevLoaded.current) {
-      setZoom(settings.defaultZoom / 100);
       prevLoaded.current = true;
+      // Don't override the auto-fit zoom already set on mobile
+      const isMobileViewport =
+        typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+      if (!isMobileViewport) {
+        setZoom(settings.defaultZoom / 100);
+      }
     }
   }, [loaded, settings.defaultZoom]);
 

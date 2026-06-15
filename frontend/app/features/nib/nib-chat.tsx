@@ -1263,7 +1263,7 @@ export function ChatPanel({
       strength={isThinking ? 0.95 : 0}
       theme="dark"
     >
-      <div className={`chat relative grid h-full min-h-0 grid-rows-[auto_1fr_auto] overflow-hidden border-l border-white/10 bg-[var(--bg-surface)]${isThinking ? ' is-thinking' : ''}`}>
+      <div className={`chat relative grid h-full min-h-0 grid-cols-1 grid-rows-[auto_1fr_auto] overflow-hidden border-l border-white/10 bg-[var(--bg-surface)]${isThinking ? ' is-thinking' : ''}`}>
         <div className="chat-header relative z-[1] flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <div className="chat-title flex items-center gap-2 text-[13px] font-semibold">
@@ -1315,7 +1315,7 @@ export function ChatPanel({
           </div>
         </div>
 
-      <div className="chat-body relative z-[1] flex flex-col gap-[18px] overflow-y-auto p-4" ref={bodyRef}>
+      <div className="chat-body relative z-[1] flex flex-col gap-[18px] overflow-x-hidden overflow-y-auto p-4" ref={bodyRef}>
         {chatError ? (
           <div className="rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-red-100">
             {chatError}

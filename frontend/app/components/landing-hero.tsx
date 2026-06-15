@@ -24,7 +24,7 @@ export function LandingHero() {
           <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 580, height: 580, filter: 'blur(120px)', background: 'radial-gradient(circle,var(--accent-glow-i),transparent 60%)', top: -160, right: '34%', '--hero-glow-min': 0.16, '--hero-glow-max': 0.4, '--hero-glow-dur': '31s', '--hero-glow-delay': '-7s', '--hero-drift-x': '-360px', '--hero-drift-y': '320px', '--hero-drift-y2': '-200px' } as React.CSSProperties} />
         </div>
 
-        <div className="px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
+        <div className="px-4 sm:px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
           {/* Inner */}
           <div className="relative z-[1] max-w-[880px] mx-auto text-center pt-10 pb-7">
             <h1 className="m-0 mb-[22px] font-medium tracking-[-0.025em]" style={{ fontFamily: 'var(--font-doc)', fontSize: 'clamp(40px,6vw,76px)', lineHeight: 1.05, textWrap: 'balance' } as React.CSSProperties}>
@@ -52,7 +52,7 @@ export function LandingHero() {
           </div>
 
           {/* Product preview window */}
-          <div className="relative z-[1] mt-8 mx-auto" style={{ maxWidth: 1080, perspective: 1600 }}>
+          <div className="relative z-[1] mt-8 mx-auto hidden sm:block" style={{ maxWidth: 1080, perspective: 1600 }}>
             <div
               className="overflow-hidden rounded-[14px]"
               style={{
@@ -75,7 +75,7 @@ export function LandingHero() {
               </div>
 
               {/* Two-pane body */}
-              <div className="grid" style={{ gridTemplateColumns: '1.4fr 1fr', minHeight: 480 }}>
+              <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr]" style={{ minHeight: 380 }}>
                 {/* Paper side */}
                 <div className="p-9 relative" style={{ background: 'var(--paper)', color: 'var(--ink)', fontFamily: 'var(--font-doc)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
                   <div className="text-[22px] font-semibold tracking-[-0.01em] m-0">Adaptive Liquid Cooling</div>
@@ -108,7 +108,7 @@ export function LandingHero() {
                 </div>
 
                 {/* Chat side */}
-                <div className="flex flex-col gap-3 p-[18px] pb-3.5" style={{ background: 'var(--bg-surface)' }}>
+                <div className="hidden md:flex flex-col gap-3 p-[18px] pb-3.5" style={{ background: 'var(--bg-surface)' }}>
                   <div className="flex items-center gap-2 text-[13px] font-semibold mb-1">
                     Ask this document
                   </div>

@@ -215,8 +215,8 @@ export function AuthCard() {
         />
       </div>
 
-      <div 
-        className="w-full max-w-[440px] bg-white/[0.01] border border-white/10 rounded-2xl p-8 backdrop-blur-md shadow-2xl transition-all duration-300 hover:border-white/15 overflow-hidden"
+      <div
+        className="w-full max-w-[440px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 sm:p-8 backdrop-blur-md shadow-2xl transition-all duration-300 hover:border-white/15 overflow-hidden"
         style={cardStyle}
       >
         {verificationSentTo ? (

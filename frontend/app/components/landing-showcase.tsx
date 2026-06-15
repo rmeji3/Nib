@@ -30,7 +30,7 @@ export function LandingShowcase() {
           }
         `}} />
 
-        <div className="px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
+        <div className="px-4 sm:px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
           
           {/* Section Header */}
           <div className="max-w-[720px] mx-auto mb-20 text-center">

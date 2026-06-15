@@ -237,19 +237,20 @@ export function ViewerToolbar({
 
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/10 bg-[var(--bg-base)] px-3.5">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        {/* Nib logo — hidden on mobile to save space */}
         <button
           type="button"
           onClick={() => router.push('/home')}
           title="Go home"
-          className="-ml-1 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[13.5px] font-semibold text-[var(--text)] transition hover:bg-white/5"
+          className="-ml-1 hidden sm:inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[13.5px] font-semibold text-[var(--text)] transition hover:bg-white/5"
         >
           <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[var(--text)] text-[var(--bg-base)]">
             <NibLogoBase size={13} />
           </span>
           Nib
         </button>
-        <div className="mx-1 h-4 w-px bg-white/15" />
+        <div className="hidden sm:block mx-1 h-4 w-px bg-white/15" />
         <button
           className={iconButtonClass}
           type="button"
@@ -262,14 +263,14 @@ export function ViewerToolbar({
           <Icon name="chevron-left" />
         </button>
         <button
-          className={iconButtonClass}
+          className={`hidden sm:inline-flex ${iconButtonClass.replace('inline-flex ', '')}`}
           type="button"
           title="Toggle thumbnails"
           onClick={() => window.dispatchEvent(new CustomEvent('nib:toggle-thumbs'))}
         >
           <Icon name="thumbs" />
         </button>
-        <div className="mx-1 h-4 w-px bg-white/15" />
+        <div className="hidden sm:block mx-1 h-4 w-px bg-white/15" />
         {isEditing ? (
           <input
             type="text"
@@ -288,7 +289,7 @@ export function ViewerToolbar({
           />
         ) : (
           <button
-            className="max-w-[200px] truncate rounded px-2 py-1 text-left text-sm font-semibold text-[var(--text)] hover:bg-white/5"
+            className="max-w-[100px] sm:max-w-[200px] truncate rounded px-2 py-1 text-left text-sm font-semibold text-[var(--text)] hover:bg-white/5"
             onClick={() => {
               if (documentId) {
                 setTitleInput(documentName || '');
@@ -301,7 +302,7 @@ export function ViewerToolbar({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-1.5 flex-1">
+      <div className="flex min-w-0 items-center justify-center gap-1 sm:gap-1.5">
         <div className="inline-flex h-7 items-center rounded-md border border-white/10 bg-[var(--bg-surface)] px-1 text-xs text-[var(--text-dim)]">
           <div className="flex">
             <button className="inline-flex h-[22px] w-[22px] items-center justify-center rounded text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]" type="button" title="Previous page" onClick={() => onJumpPage(Math.max(0, currentPage - 1))}>
@@ -337,13 +338,13 @@ export function ViewerToolbar({
           <button className="inline-flex h-full w-[26px] items-center justify-center text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]" type="button" title="Zoom out" onClick={() => setZoom(Math.max(0.5, Number((zoom - 0.1).toFixed(2))))}>
             <Icon name="minus" />
           </button>
-          <span className="w-11 text-center text-xs text-[var(--text-dim)]">{Math.round(zoom * 100)}%</span>
+          <span className="hidden sm:inline-block w-11 text-center text-xs text-[var(--text-dim)]">{Math.round(zoom * 100)}%</span>
           <button className="inline-flex h-full w-[26px] items-center justify-center text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]" type="button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}>
             <Icon name="plus" />
           </button>
         </div>
 
-        <button className={iconButtonClass} type="button" title="Fit to width" onClick={() => setZoom(1)}>
+        <button className={`hidden sm:inline-flex ${iconButtonClass.replace('inline-flex ', '')}`} type="button" title="Fit to width" onClick={() => setZoom(1)}>
           <Icon name="fit" />
         </button>
         
@@ -393,10 +394,10 @@ export function ViewerToolbar({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-1.5">
-        <button 
-          className={iconButtonClass} 
-          type="button" 
+      <div className="flex min-w-0 items-center justify-end gap-1.5">
+        <button
+          className={`hidden sm:inline-flex ${iconButtonClass.replace('inline-flex ', '')}`}
+          type="button"
           title="Print"
           onClick={async () => {
             const printUrl = async () => {
@@ -425,9 +426,9 @@ export function ViewerToolbar({
         >
           <Icon name="print" />
         </button>
-        <button 
-          className={iconButtonClass} 
-          type="button" 
+        <button
+          className={`hidden sm:inline-flex ${iconButtonClass.replace('inline-flex ', '')}`}
+          type="button"
           title="Download"
           onClick={async () => {
             try {
@@ -501,7 +502,9 @@ export function ViewerToolbar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="mx-1 h-4 w-px bg-white/15" />
+        {/* Chat toggle */}
+        <div className="hidden sm:block mx-1 h-4 w-px bg-white/15" />
+
         <BorderBeam
           active={chatMinimized}
           borderRadius={6}
@@ -514,7 +517,7 @@ export function ViewerToolbar({
           theme="dark"
         >
           <button
-            className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition ${
+            className={`inline-flex h-7 w-7 sm:w-auto items-center justify-center gap-1.5 rounded-md p-[3px] sm:px-2.5 sm:py-0 text-[12.5px] font-medium transition ${
               chatMinimized
                 ? 'text-[var(--text-dim)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
                 : 'bg-[var(--chat-accent)] text-[var(--text)]'
@@ -523,12 +526,12 @@ export function ViewerToolbar({
             title={chatMinimized ? 'Open chat' : 'Close chat'}
             onClick={onToggleChat}
           >
-            <NibLogoBase size={13} />
-            Chat
+            <NibLogoBase size={14} />
+            <span className="hidden sm:inline">Chat</span>
           </button>
         </BorderBeam>
-        <div className="mx-1 h-4 w-px bg-white/15" />
-        {user && <UserMenu user={user} onSignOut={signOut} variant="toolbar" />}
+        <div className="hidden sm:block mx-1 h-4 w-px bg-white/15" />
+        {user && <span className="hidden sm:contents"><UserMenu user={user} onSignOut={signOut} variant="toolbar" /></span>}
       </div>
     </div>
   );
@@ -593,7 +596,10 @@ export function Viewer({
   indexingPagesTotal: number | null;
 }) {
   const { settings } = useSettings();
-  const [showThumbs, setShowThumbs] = useState(true);
+  // Default thumbnails closed on small screens
+  const [showThumbs, setShowThumbs] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 640,
+  );
   const { file, documentId, documentUrl } = useUpload();
   const mergeMutation = useMergePdf();
   const outerRef = useRef<HTMLDivElement>(null);
@@ -697,15 +703,16 @@ export function Viewer({
   }, []);
 
   // ── Jump to page ─────────────────────────────────────────────────────────
-  // All pages are always in the DOM — simple scrollIntoView works perfectly.
   const jumpToPage = useCallback((index: number) => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const target = container.querySelector<HTMLElement>(`[data-page-index="${index}"]`);
-    if (target) {
-      const top = target.offsetTop - 24;
-      container.scrollTo({ top, behavior: settings.smoothScrolling ? 'smooth' : 'auto' });
-    }
+    if (!target) return;
+    // Use getBoundingClientRect for reliable position regardless of offsetParent chain
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 24;
+    container.scrollTo({ top: Math.max(0, scrollTop), behavior: settings.smoothScrolling ? 'smooth' : 'auto' });
   }, [scrollContainerRef, settings.smoothScrolling]);
 
   // Expose to parent (used by nib-state scrollToPage, search navigation, citations)

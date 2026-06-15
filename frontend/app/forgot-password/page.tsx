@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
       </header>
 
       <main className="relative z-10 my-auto flex w-full justify-center py-6">
-        <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-8 backdrop-blur-md shadow-2xl">
+        <div className="w-full max-w-[440px] rounded-2xl border border-white/10 bg-white/[0.01] p-5 sm:p-8 backdrop-blur-md shadow-2xl">
           {sent ? (
             <div className="text-center py-2">
               <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)]">

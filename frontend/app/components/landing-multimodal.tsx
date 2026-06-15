@@ -4,9 +4,9 @@ export function LandingMultimodal() {
   return (
     <>
       {/* -- Multimodal -- */}
-      <section className="py-[100px] px-8" style={{ background: 'linear-gradient(180deg,transparent,rgba(255,255,255,0.012))' }}>
+      <section className="py-16 md:py-[100px] px-4 sm:px-8" style={{ background: 'linear-gradient(180deg,transparent,rgba(255,255,255,0.012))' }}>
         <div style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
-          <div className="grid gap-16 items-center" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="grid gap-10 md:gap-16 items-center grid-cols-1 md:grid-cols-2">
             <div>
               <div className="text-[12.5px] font-medium tracking-[0.06em] uppercase mb-3.5" style={{ color: 'var(--accent-text)' }}>Multimodal by design</div>
               <h2 className="font-medium tracking-[-0.02em] m-0 mb-[18px] text-left" style={{ fontFamily: 'var(--font-doc)', fontSize: 'clamp(30px,4vw,48px)', lineHeight: 1.1, textWrap: 'balance' } as React.CSSProperties}>
@@ -42,7 +42,7 @@ export function LandingMultimodal() {
                   <div
                     key={i}
                     className="grid gap-3.5 items-center px-[22px] py-[11px] text-[13.5px]"
-                    style={{ gridTemplateColumns: '88px 1fr auto', borderTop: i === 0 ? 'none' : '1px solid var(--border-faint)' }}
+                    style={{ gridTemplateColumns: '72px 1fr auto', borderTop: i === 0 ? 'none' : '1px solid var(--border-faint)' }}
                   >
                     <span className={`text-[10px] font-bold tracking-[0.06em] px-[7px] py-[3px] rounded-[4px] text-center ${row.tagCls}`}>{row.tag}</span>
                     <span className="overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontFamily: 'var(--font-doc)', fontSize: 14.5, color: 'var(--text)' }}>{row.name}</span>
