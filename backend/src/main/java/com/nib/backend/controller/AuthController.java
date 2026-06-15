@@ -10,6 +10,7 @@ import com.nib.backend.service.AuthService.AuthServiceResult;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +28,15 @@ public class AuthController {
 
     /** 7 days in seconds */
     private static final int COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
+    /**
+     * When the frontend and API live on different sites (e.g. Vercel + Render), the auth
+     * cookie must be {@code SameSite=None; Secure} or the browser won't send it on API
+     * calls. Set {@code app.cookie.cross-site=true} in production. Defaults to false so
+     * local http://localhost dev keeps working (Secure is rejected on plain HTTP).
+     */
+    @Value("${app.cookie.cross-site:false}")
+    private boolean cookieCrossSite;
 
     @PostMapping("/register")
     public ResponseEntity<Map<String, String>> register(
@@ -113,7 +123,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        response.addHeader("Set-Cookie", "token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+        response.addHeader("Set-Cookie", "token=; Path=/; HttpOnly; " + cookieAttributes() + " Max-Age=0");
         return ResponseEntity.noContent().build();
     }
 
@@ -121,10 +131,18 @@ public class AuthController {
 
     private void setTokenCookie(HttpServletResponse response, String token) {
         // Set the cookie via the raw header so we can include SameSite (Jakarta Cookie
-        // API doesn't support SameSite yet). No Secure flag so it works over
-        // http://localhost in all browsers (Firefox & Safari reject Secure on plain HTTP).
+        // API doesn't support SameSite yet).
         response.addHeader("Set-Cookie",
-                String.format("token=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d",
-                        token, COOKIE_MAX_AGE));
+                String.format("token=%s; Path=/; HttpOnly; %s Max-Age=%d",
+                        token, cookieAttributes(), COOKIE_MAX_AGE));
+    }
+
+    /**
+     * Cross-site (prod): {@code SameSite=None; Secure} so the cookie is sent on API calls
+     * from a different origin. Same-site (local dev): {@code SameSite=Lax} with no Secure
+     * flag, since browsers reject Secure cookies over plain http://localhost.
+     */
+    private String cookieAttributes() {
+        return cookieCrossSite ? "SameSite=None; Secure;" : "SameSite=Lax;";
     }
 }
