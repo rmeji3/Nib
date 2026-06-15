@@ -32,7 +32,7 @@ export function LandingMultimodal() {
               </ul>
             </div>
 
-            <div className="overflow-hidden rounded-[14px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-faint)', boxShadow: '0 30px 60px -30px rgba(0,0,0,0.6)' }}>
+            <div className="overflow-hidden rounded-[14px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-faint)', boxShadow: 'var(--shadow-window)' }}>
               <div className="px-[22px] py-[18px] flex flex-col gap-0.5" style={{ borderBottom: '1px solid var(--border-faint)', background: 'rgba(255,255,255,0.014)' }}>
                 <span className="text-sm font-semibold">Block-level provenance</span>
                 <span className="text-[12.5px]" style={{ color: 'var(--text-faint)' }}>What Nib stores for every page</span>

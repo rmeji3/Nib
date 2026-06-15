@@ -56,6 +56,8 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 | `POST` | `/api/v1/auth/register` |
 | `POST` | `/api/v1/auth/google` |
 | `POST` | `/api/v1/auth/resend-verification` |
+| `POST` | `/api/v1/auth/forgot-password` |
+| `POST` | `/api/v1/auth/reset-password` |
 | `POST` | `/api/v1/auth/authenticate` |
 | `POST` | `/api/v1/auth/logout` |
 
@@ -214,12 +216,14 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 - [`CostDashboardResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CostDashboardResponse.java)
 - [`CreateCollectionRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/CreateCollectionRequest.java)
 - [`DocumentResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/DocumentResponse.java)
+- [`ForgotPasswordRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ForgotPasswordRequest.java)
 - [`GroundingVerificationDto`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/GroundingVerificationDto.java)
 - [`IngestionIssueDto`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/IngestionIssueDto.java)
 - [`IngestionStatusResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/IngestionStatusResponse.java)
 - [`PagedResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/PagedResponse.java)
 - [`RegisterRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/RegisterRequest.java)
 - [`RenameRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/RenameRequest.java)
+- [`ResetPasswordRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/ResetPasswordRequest.java)
 - [`TestRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/TestRequest.java)
 - [`TestResponse`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/TestResponse.java)
 - [`UserSettingsRequest`](file:////Users/rmeji/Desktop/Coding/Nib/backend/src/main/java/com/nib/backend/dto/UserSettingsRequest.java)
@@ -234,6 +238,7 @@ We follow the standard Controller-Service-Repository layers pattern under `com.n
 This section is maintained by AI coding agents to track architectural updates, entity changes, or pattern adjustments. When adding new endpoints or entities, append an entry to the log below.
 
 ### Log
+- **2026-06-14**: Added forgot/reset password flow. `User` gains `passwordResetToken`/`passwordResetTokenExpiry` (+ `UserRepository.findByPasswordResetToken`). New endpoints (permitAll via `/api/v1/auth/**`): `POST /api/v1/auth/forgot-password` (`ForgotPasswordRequest`) → `AuthService.requestPasswordReset` issues a 1-hour token and emails a reset link via `EmailService.sendPasswordResetEmail`; it no-ops for unknown emails and for Google-only accounts, and the controller always returns a generic 200 so registered emails aren't leaked. `POST /api/v1/auth/reset-password` (`ResetPasswordRequest`: token + min-6 password) → `AuthService.resetPassword` validates token/expiry, sets the new encoded password, clears the token, and marks `emailVerified=true` (a successful reset proves email ownership). Invalid/expired tokens throw `IllegalArgumentException` (HTTP 400, `BAD_REQUEST`). No new dependencies.
 - **2026-06-14**: Added real Google OAuth (replacing the frontend mock). `User` gains `provider` ("credentials"/"google", default grandfathers existing rows) and a unique `googleId`. New `GoogleOAuthClient` exchanges the frontend's GIS popup **auth code** server-to-server at `https://oauth2.googleapis.com/token` (using `google.client-id`/`google.client-secret`, `redirect_uri=postmessage`), decodes the returned `id_token`, and checks the `aud` claim. `AuthService.authenticateWithGoogle(code)` finds-or-creates the user (links Google to a pre-existing email account, marks `emailVerified=true`, assigns a random unusable password so the NOT-NULL password column is untouched) and issues the normal JWT cookie. New endpoint `POST /api/v1/auth/google` (permitAll via `/api/v1/auth/**`). Config: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. No new Maven dependency (uses Jackson + `RestClient`).
 - **2026-06-14**: Made account-deletion purges retryable + admin-triggerable. `User.deletionRequestedAt` durably marks an account whose purge is pending (set in `requestDeletion`, cleared only when the purge deletes the user row). `AccountDeletionRunner.purge` now retries `purgeOnce` up to 3× with linear backoff before giving up. A `@Scheduled` sweep (`AccountDeletionSweep`, every 15 min after 5 min delay; `@EnableScheduling` added to `AsyncConfig`) re-queues any still-marked accounts via `AccountDeletionService.retryPendingDeletions()` (idempotent). New admin endpoint `POST /api/v1/admin/retry-account-deletions` (`AdminController`) does the same on demand, guarded by an `X-Admin-Token` header matching `app.admin-token` (unset ⇒ all admin requests 403; path is permitAll in `SecurityConfig` since the controller enforces the token). Covered by `AccountDeletionServiceTest` (3 tests).
 - **2026-06-14**: Added full account deletion with background data purge. `DELETE /api/v1/users/me` → `AccountDeletionService.requestDeletion` synchronously cancels the Stripe subscription immediately (`StripeService.cancelSubscriptionImmediately`), locks the account (`emailVerified=false` so `isEnabled()` is false), and clears the auth cookie — the user gets instant confirmation. The heavy erase runs on a new `deletionExecutor` thread pool via `AccountDeletionRunner.purge(@Async)`, deleting all rows in FK-safe order (embeddings → answer_cache → content_blocks → ingestion_jobs → collection_documents → answer_audits/chat_message_feedback/chat_messages/chat_sessions/cost_usage_events → collections → documents → users) and then the Supabase storage objects (`SupabaseStorageService.deleteFiles`). Async method lives in a separate component so Spring's proxy applies. (`processed_stripe_events` is not user-scoped and is intentionally left.)

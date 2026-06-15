@@ -14,9 +14,14 @@ export function LandingHero() {
       <header className="relative w-full pt-[60px] pb-20">
         {/* Glow blobs */}
         <div className="absolute overflow-hidden pointer-events-none z-0" style={{ inset: '-40px 0 0' }} aria-hidden>
-          <div className="absolute rounded-full mix-blend-screen" style={{ width: 720, height: 720, filter: 'blur(120px)', opacity: 0.32, background: 'radial-gradient(circle,var(--accent-glow-a),transparent 60%)', top: -200, left: -160 }} />
-          <div className="absolute rounded-full mix-blend-screen" style={{ width: 720, height: 720, filter: 'blur(120px)', opacity: 0.28, background: 'radial-gradient(circle,var(--accent-glow-b),transparent 60%)', top: -120, right: -200 }} />
-          <div className="absolute rounded-full mix-blend-screen" style={{ width: 720, height: 720, filter: 'blur(120px)', opacity: 0.22, background: 'radial-gradient(circle,var(--accent-glow-c),transparent 60%)', top: 240, left: '30%' }} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 760, height: 760, filter: 'blur(110px)', background: 'radial-gradient(circle,var(--accent-glow-a),transparent 60%)', top: -220, left: -180, '--hero-glow-min': 0.32, '--hero-glow-max': 0.62, '--hero-glow-dur': '20s', '--hero-glow-delay': '0s', '--hero-drift-x': '360px', '--hero-drift-y': '240px', '--hero-drift-y2': '90px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 760, height: 760, filter: 'blur(110px)', background: 'radial-gradient(circle,var(--accent-glow-b),transparent 60%)', top: -140, right: -220, '--hero-glow-min': 0.28, '--hero-glow-max': 0.56, '--hero-glow-dur': '24s', '--hero-glow-delay': '-6s', '--hero-drift-x': '-420px', '--hero-drift-y': '300px', '--hero-drift-y2': '-130px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 700, height: 700, filter: 'blur(110px)', background: 'radial-gradient(circle,var(--accent-glow-d),transparent 60%)', top: 180, left: '8%', '--hero-glow-min': 0.24, '--hero-glow-max': 0.52, '--hero-glow-dur': '27s', '--hero-glow-delay': '-12s', '--hero-drift-x': '440px', '--hero-drift-y': '-260px', '--hero-drift-y2': '200px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 660, height: 660, filter: 'blur(110px)', background: 'radial-gradient(circle,var(--accent-glow-e),transparent 60%)', top: 200, right: '6%', '--hero-glow-min': 0.2, '--hero-glow-max': 0.46, '--hero-glow-dur': '22s', '--hero-glow-delay': '-9s', '--hero-drift-x': '-340px', '--hero-drift-y': '-220px', '--hero-drift-y2': '180px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 620, height: 620, filter: 'blur(120px)', background: 'radial-gradient(circle,var(--accent-glow-f),transparent 60%)', top: 60, left: '38%', '--hero-glow-min': 0.18, '--hero-glow-max': 0.42, '--hero-glow-dur': '26s', '--hero-glow-delay': '-4s', '--hero-drift-x': '320px', '--hero-drift-y': '340px', '--hero-drift-y2': '-240px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 640, height: 640, filter: 'blur(115px)', background: 'radial-gradient(circle,var(--accent-glow-g),transparent 60%)', top: -80, left: '20%', '--hero-glow-min': 0.2, '--hero-glow-max': 0.48, '--hero-glow-dur': '23s', '--hero-glow-delay': '-15s', '--hero-drift-x': '-300px', '--hero-drift-y': '280px', '--hero-drift-y2': '-160px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 600, height: 600, filter: 'blur(115px)', background: 'radial-gradient(circle,var(--accent-glow-h),transparent 60%)', top: 120, right: '24%', '--hero-glow-min': 0.18, '--hero-glow-max': 0.44, '--hero-glow-dur': '29s', '--hero-glow-delay': '-18s', '--hero-drift-x': '380px', '--hero-drift-y': '-300px', '--hero-drift-y2': '220px' } as React.CSSProperties} />
+          <div className="hero-glow-blob absolute rounded-full mix-blend-screen" style={{ width: 580, height: 580, filter: 'blur(120px)', background: 'radial-gradient(circle,var(--accent-glow-i),transparent 60%)', top: -160, right: '34%', '--hero-glow-min': 0.16, '--hero-glow-max': 0.4, '--hero-glow-dur': '31s', '--hero-glow-delay': '-7s', '--hero-drift-x': '-360px', '--hero-drift-y': '320px', '--hero-drift-y2': '-200px' } as React.CSSProperties} />
         </div>
 
         <div className="px-8" style={{ maxWidth: 'var(--maxw)', margin: '0 auto' }}>
@@ -53,7 +58,7 @@ export function LandingHero() {
               style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border)',
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.04),0 50px 100px -40px rgba(0,0,0,0.7),0 24px 60px -24px rgba(120,130,200,0.18)',
+                boxShadow: 'var(--shadow-window)',
                 transform: 'rotateX(2deg)',
                 transformOrigin: 'center top',
               }}

@@ -75,7 +75,7 @@ export function LandingShowcase() {
               </div>
 
               {/* Visual mockup for Row 1 */}
-              <div className="relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-2xl flex flex-col justify-between overflow-hidden animate-float">
+              <div className="relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col justify-between overflow-hidden animate-float">
                 {/* Simulated scan line */}
                 <div className="absolute left-0 w-full h-[2px] bg-[var(--accent)] shadow-[0_0_10px_var(--accent)] opacity-60 animate-scan z-50 pointer-events-none" />
                 
@@ -126,7 +126,7 @@ export function LandingShowcase() {
             {/* Row 2: Citations you can click */}
             <div id="how" className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
               {/* Visual mockup for Row 2 (the interactive Citation cards) */}
-              <div className="order-2 md:order-1 relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-2xl flex flex-col justify-center overflow-hidden">
+              <div className="order-2 md:order-1 relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col justify-center overflow-hidden">
                 <div className="flex flex-col gap-4">
                   {/* Assistant response mockup */}
                   <div className="msg msg-assistant !max-w-full">
@@ -193,6 +193,7 @@ export function LandingShowcase() {
                         block={block}
                         sourceNumber={idx}
                         isActive={activeCite === idx}
+                        ringClassName="border-amber-500/60 bg-amber-500/5 text-amber-700"
                         onFocusBlock={() => setActiveCite(idx)}
                         onMouseLeave={() => setActiveCite(null)}
                       />
@@ -258,7 +259,7 @@ export function LandingShowcase() {
               </div>
 
               {/* Visual mockup for Row 3 */}
-              <div className="relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-2xl flex flex-col justify-between overflow-hidden animate-float" style={{ animationDelay: '1.5s' }}>
+              <div className="relative aspect-[4/3] w-full max-w-[480px] mx-auto rounded-xl border border-white/10 bg-[var(--bg-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col justify-between overflow-hidden animate-float" style={{ animationDelay: '1.5s' }}>
                 <div className="flex flex-col gap-3 h-full justify-center">
                   
                   {/* User query */}

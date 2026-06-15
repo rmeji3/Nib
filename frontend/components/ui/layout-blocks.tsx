@@ -8173,6 +8173,7 @@ export function OcrBlockButton({
   onClick,
   onMouseLeave,
   sourceNumber,
+  ringClassName,
 }: {
   block: OcrBlock
   isActive: boolean
@@ -8181,6 +8182,8 @@ export function OcrBlockButton({
   onMouseLeave?: () => void
   /** Matches inline citation chip number in chat source cards */
   sourceNumber?: number
+  /** Optional override for the active-state ring/glow classes */
+  ringClassName?: string
 }) {
   const style = BLOCK_STYLES[block.type] || BLOCK_STYLES["paragraph"]
 
@@ -8193,7 +8196,7 @@ export function OcrBlockButton({
       onClick={onClick}
       className={cn(
         "w-full rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        isActive && style.ring
+        isActive && (ringClassName || style.ring)
       )}
     >
       <div className="min-w-0">

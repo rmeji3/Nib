@@ -47,8 +47,10 @@ This is a live developer guide and project directory index for the Next.js front
 | `/document/[id]` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/[id]/page.tsx) |
 | `/document/uploading` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/document/uploading/page.tsx) |
 | `/file` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/file/page.tsx) |
+| `/forgot-password` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/forgot-password/page.tsx) |
 | `/home` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/home/page.tsx) |
 | `/privacy` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/privacy/page.tsx) |
+| `/reset-password` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/reset-password/page.tsx) |
 | `/security` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/security/page.tsx) |
 | `/settings` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/page.tsx) |
 | `/settings/pricing` | Page | [`page.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/app/settings/pricing/page.tsx) |
@@ -84,6 +86,7 @@ This is a live developer guide and project directory index for the Next.js front
 
 - [`blocks/layout-blocks-block.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/blocks/layout-blocks-block.tsx)
 - [`pdf-block-resizable-shell.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/pdf-block-resizable-shell.tsx)
+- [`ui/animated-theme-toggle.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/animated-theme-toggle.tsx)
 - [`ui/button.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/button.tsx)
 - [`ui/document-viewer-sidebar.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/document-viewer-sidebar.tsx)
 - [`ui/drawer.tsx`](file:////Users/rmeji/Desktop/Coding/Nib/frontend/components/ui/drawer.tsx)
@@ -109,6 +112,7 @@ This is a live developer guide and project directory index for the Next.js front
 This section is maintained by AI coding agents to track architectural updates, new dependencies, or pattern adjustments. When adding new capabilities, append an entry to the log below.
 
 ### Log
+- **2026-06-14**: Added forgot/reset password flow. The sign-in card's "Forgot password?" link now points to a new `app/forgot-password/page.tsx` (email input → `POST /api/v1/auth/forgot-password`, then a generic "check your email" confirmation that doesn't reveal whether the account exists). The reset email links to `app/reset-password/page.tsx` (reads `?token=`, new+confirm password fields with client-side match/length checks → `POST /api/v1/auth/reset-password`, success state links to `/signin`; handles missing-token state). Both pages reuse the existing auth visual style (NibLogo header, glass card, `var(--*)` tokens, serif headings).
 - **2026-06-14**: Replaced the simulated Google sign-in with real Google Identity Services. `auth-provider.tsx` now loads `https://accounts.google.com/gsi/client` on demand and runs the GIS popup **auth-code** flow (`google.accounts.oauth2.initCodeClient`, `ux_mode:'popup'`), POSTing the returned `code` to `POST /api/v1/auth/google` which sets the session cookie. Shared `handleAuthSuccess(data, provider)` now backs both credentials and Google sign-in (incl. the `nib_post_auth_intent==='pro'` → checkout redirect). Removed all mock state and the fake consent modal. Requires `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
 - **2026-06-14**: Wired the settings Danger-zone "Delete account" to the real `DELETE /api/v1/users/me` endpoint (`PrivacyTab` in `settings/page.tsx`). The confirm dialog now calls the backend (was an alert stub), shows a "Deleting…" state, and on success calls `signOut()` to clear local state and return to the landing page. Copy updated to note the subscription is canceled and all data is erased.
 - **2026-06-14**: Email-verification signup flow + landing "Go Pro" wiring. Landing `Professional` CTA renamed "Start 14-day trial" → **Go Pro** and is now a button (`landing-pricing.tsx`): logged-in → starts Stripe checkout (`create-checkout-session`, redirect); logged-out → stores `nib_post_auth_intent='pro'` and routes to `/signup`. `auth-provider` signup no longer auto-logs in (register returns `{message,email}`); `auth-card.tsx` shows a "Check your email" panel after signup with a Resend action. Sign-in now surfaces the backend error message (e.g. EMAIL_NOT_VERIFIED) and, if `nib_post_auth_intent==='pro'`, resumes checkout after login instead of going home. New `app/verify/page.tsx` confirms the token via `GET /api/v1/auth/verify` then links to `/signin`. Net flow: Go Pro (logged out) → signup → email confirm → sign in → checkout.

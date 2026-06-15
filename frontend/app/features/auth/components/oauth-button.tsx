@@ -14,10 +14,10 @@ export function OAuthButton({ provider, onClick, isLoading = false }: OAuthButto
       type="button"
       onClick={onClick}
       disabled={isLoading}
-      className="flex w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-[var(--bg-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text)] transition-all hover:bg-[var(--bg-hover)] hover:border-white/15 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
+      className="flex w-full items-center justify-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--text)] transition-all hover:bg-[var(--bg-hover)] hover:border-[var(--border-strong)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
     >
       {isLoading ? (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--text)]" />
       ) : (
         <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24">
           <path

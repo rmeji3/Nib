@@ -71,6 +71,13 @@ public class User implements UserDetails {
     @Column(name = "verification_token_expiry")
     private Instant verificationTokenExpiry;
 
+    // Password reset. Issued when a user requests a reset; cleared once consumed.
+    @Column(name = "password_reset_token")
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_token_expiry")
+    private Instant passwordResetTokenExpiry;
+
     // Set when the user requests account deletion. The row survives only until the
     // background purge finishes; a non-null value means a purge is pending/retryable.
     @Column(name = "deletion_requested_at")

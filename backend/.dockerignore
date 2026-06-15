@@ -1,0 +1,7 @@
+target/
+*.log
+.env
+.env.properties
+.git/
+.idea/
+*.iml

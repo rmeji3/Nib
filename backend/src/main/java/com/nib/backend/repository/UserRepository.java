@@ -16,6 +16,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
     Optional<User> findByStripeCustomerId(String stripeCustomerId);
     Optional<User> findByVerificationToken(String verificationToken);
+    Optional<User> findByPasswordResetToken(String passwordResetToken);
     Optional<User> findByGoogleId(String googleId);
     java.util.List<User> findByDeletionRequestedAtIsNotNull();
 
